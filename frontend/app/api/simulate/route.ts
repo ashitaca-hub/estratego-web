@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error } = await supabase.rpc("simulate_next_round", {
+  const { error } = await supabase.rpc("simulate_full_tournament", {
     tourney_id,
   });
 
