@@ -9,7 +9,7 @@ import Link from "next/link";
 
 /**
  * Estratego Web App – MVP
- * Bracket UI (R16 → QF → SF → Final) + Simulación + Prematch dialog
+ * Bracket UI dinámico (R64 → R32 → R16 → QF → SF → Final)
  */
 
 // -------------------- Types --------------------
@@ -22,7 +22,7 @@ export type Player = {
 
 export type Match = {
   id: string;
-  round: "R16" | "QF" | "SF" | "F";
+  round: "R64" | "R32" | "R16" | "QF" | "SF" | "F";
   top: Player;
   bottom: Player;
   winnerId?: string;
@@ -54,9 +54,8 @@ const MOCK: Bracket = {
   ],
 };
 
-// -------------------- Helpers --------------------
-const byRound = (matches: Match[], round: Match["round"]) =>
-  matches.filter((m) => m.round === round);
+// -------------------- Constantes --------------------
+const ROUND_ORDER: Match["round"][] = ["R64", "R32", "R16", "QF", "SF", "F"];
 
 // -------------------- UI Components --------------------
 function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
@@ -69,17 +68,11 @@ function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
       <CardContent className="p-3">
         <div className="text-xs text-gray-500 mb-2">{m.round}</div>
         <div className={`flex items-center justify-between text-sm ${winnerBadge === "TOP" ? "font-semibold" : ""}`}>
-          <span>
-            {m.top.name}
-            {m.top.seed ? ` (${m.top.seed})` : ""}
-          </span>
+          <span>{m.top.name}{m.top.seed ? ` (${m.top.seed})` : ""}</span>
           {winnerBadge === "TOP" && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">Ganador</span>}
         </div>
         <div className={`flex items-center justify-between text-sm ${winnerBadge === "BOT" ? "font-semibold" : ""}`}>
-          <span>
-            {m.bottom.name}
-            {m.bottom.seed ? ` (${m.bottom.seed})` : ""}
-          </span>
+          <span>{m.bottom.name}{m.bottom.seed ? ` (${m.bottom.seed})` : ""}</span>
           {winnerBadge === "BOT" && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">Ganador</span>}
         </div>
       </CardContent>
@@ -96,15 +89,7 @@ function Column({ title, children }: React.PropsWithChildren<{ title: string }>)
   );
 }
 
-function PrematchDialog({
-  open,
-  onOpenChange,
-  match,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  match?: Match | null;
-}) {
+function PrematchDialog({ open, onOpenChange, match }: { open: boolean; onOpenChange: (v: boolean) => void; match?: Match | null }) {
   if (!match) return null;
   const { top, bottom } = match;
   const deeplink = `/prematch?playerA=${encodeURIComponent(top.name)}&playerB=${encodeURIComponent(bottom.name)}&tid=2025-usa-cincy`;
@@ -112,9 +97,7 @@ function PrematchDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            Prematch: {top.name} vs {bottom.name}
-          </DialogTitle>
+          <DialogTitle className="text-xl">Prematch: {top.name} vs {bottom.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <div className="text-gray-600">Torneo: ATP Cincinnati 2025 · Pista: hard</div>
@@ -159,20 +142,23 @@ export default function EstrategoBracketApp() {
     load();
   }, []);
 
-  const r16 = useMemo(() => bracket?.matches ? byRound(bracket.matches, "R16").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
-  const qf = useMemo(() => bracket?.matches ? byRound(bracket.matches, "QF").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
-  const sf = useMemo(() => bracket?.matches ? byRound(bracket.matches, "SF").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
-  const f = useMemo(() => bracket?.matches ? byRound(bracket.matches, "F").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
+  // Agrupar partidos por ronda dinámicamente
+  const grouped = useMemo(() => {
+    if (!bracket?.matches) return {};
+    const g: Record<string, Match[]> = {};
+    for (const r of ROUND_ORDER) {
+      g[r] = bracket.matches.filter(m => m.round === r).sort((a, b) => a.id.localeCompare(b.id));
+    }
+    return g;
+  }, [bracket]);
 
   const onSimulate = async () => {
     if (!bracket) return;
-
     await fetch("/api/simulate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tourney_id: bracket.tourney_id }),
     });
-
     const res = await fetch("/api/tournament/2025-329");
     const data: Bracket = await res.json();
     setBracket(data);
@@ -201,13 +187,20 @@ export default function EstrategoBracketApp() {
 
       <div className="overflow-x-auto">
         <div className="flex gap-6">
-          <Column title="R16">{r16.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />)}</Column>
-          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
-          <Column title="QF">{qf.length ? qf.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
-          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
-          <Column title="SF">{sf.length ? sf.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
-          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
-          <Column title="Final">{f.length ? f.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
+          {ROUND_ORDER.map((round, i) =>
+            grouped[round]?.length ? (
+              <React.Fragment key={round}>
+                <Column title={round}>
+                  {grouped[round].map(m => (
+                    <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
+                  ))}
+                </Column>
+                {i < ROUND_ORDER.length - 1 && (
+                  <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
+                )}
+              </React.Fragment>
+            ) : null
+          )}
         </div>
       </div>
 
