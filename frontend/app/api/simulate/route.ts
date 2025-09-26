@@ -13,7 +13,7 @@ type Match = {
 };
 
 type Bracket = {
-  tournamentId: string;
+  tourney_id: string;
   event: string;
   surface: string;
   drawSize: number;
