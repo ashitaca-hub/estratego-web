@@ -8,8 +8,7 @@ import { ChevronRight, Play } from "lucide-react";
 import Link from "next/link";
 
 /**
- * Estratego Web App – MVP (single-file demo)
- * ------------------------------------------------------
+ * Estratego Web App – MVP
  * Bracket UI (R16 → QF → SF → Final) + Simulación + Prematch dialog
  */
 
@@ -59,19 +58,6 @@ const MOCK: Bracket = {
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
 
-function nextRound(prev: Match["round"]): Match["round"] {
-  switch (prev) {
-    case "R16":
-      return "QF";
-    case "QF":
-      return "SF";
-    case "SF":
-      return "F";
-    default:
-      return "F";
-  }
-}
-
 // -------------------- UI Components --------------------
 function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
   const winnerBadge = m.winnerId ? (m.winnerId === m.top.id ? "TOP" : "BOT") : null;
@@ -82,35 +68,19 @@ function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
     >
       <CardContent className="p-3">
         <div className="text-xs text-gray-500 mb-2">{m.round}</div>
-        <div
-          className={`flex items-center justify-between text-sm ${
-            winnerBadge === "TOP" ? "font-semibold" : ""
-          }`}
-        >
+        <div className={`flex items-center justify-between text-sm ${winnerBadge === "TOP" ? "font-semibold" : ""}`}>
           <span>
             {m.top.name}
             {m.top.seed ? ` (${m.top.seed})` : ""}
           </span>
-          {winnerBadge === "TOP" && (
-            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
-              Ganador
-            </span>
-          )}
+          {winnerBadge === "TOP" && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">Ganador</span>}
         </div>
-        <div
-          className={`flex items-center justify-between text-sm ${
-            winnerBadge === "BOT" ? "font-semibold" : ""
-          }`}
-        >
+        <div className={`flex items-center justify-between text-sm ${winnerBadge === "BOT" ? "font-semibold" : ""}`}>
           <span>
             {m.bottom.name}
             {m.bottom.seed ? ` (${m.bottom.seed})` : ""}
           </span>
-          {winnerBadge === "BOT" && (
-            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
-              Ganador
-            </span>
-          )}
+          {winnerBadge === "BOT" && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">Ganador</span>}
         </div>
       </CardContent>
     </Card>
@@ -137,9 +107,7 @@ function PrematchDialog({
 }) {
   if (!match) return null;
   const { top, bottom } = match;
-  const deeplink = `/prematch?playerA=${encodeURIComponent(
-    top.name
-  )}&playerB=${encodeURIComponent(bottom.name)}&tid=2025-usa-cincy`;
+  const deeplink = `/prematch?playerA=${encodeURIComponent(top.name)}&playerB=${encodeURIComponent(bottom.name)}&tid=2025-usa-cincy`;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -149,18 +117,12 @@ function PrematchDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          <div className="text-gray-600">
-            Torneo: ATP Cincinnati 2025 · Pista: hard
-          </div>
+          <div className="text-gray-600">Torneo: ATP Cincinnati 2025 · Pista: hard</div>
           <div className="rounded-xl border p-3">
-            <div className="text-xs text-gray-500 mb-2">
-              Qué verás en el detalle
-            </div>
+            <div className="text-xs text-gray-500 mb-2">Qué verás en el detalle</div>
             <ul className="list-disc pl-5 space-y-1">
               <li>Prob. implícitas y cuotas (p ↔ 1/p).</li>
-              <li>
-                Señales HIST: ranking, forma, H2H, superficie, defensa puntos.
-              </li>
+              <li>Señales HIST: ranking, forma, H2H, superficie, defensa puntos.</li>
               <li>Badges: Top3, YTD ≥80/90%, etc.</li>
             </ul>
           </div>
@@ -168,9 +130,7 @@ function PrematchDialog({
             <Button asChild>
               <Link href={deeplink}>Abrir prematch</Link>
             </Button>
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cerrar
-            </Button>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>Cerrar</Button>
           </div>
         </div>
       </DialogContent>
@@ -199,37 +159,10 @@ export default function EstrategoBracketApp() {
     load();
   }, []);
 
-  const r16 = useMemo(
-    () =>
-      bracket?.matches
-        ? byRound(bracket.matches, "R16").sort((a, b) => a.id.localeCompare(b.id))
-        : [],
-    [bracket]
-  );
-
-  const qf = useMemo(
-    () =>
-      bracket?.matches
-        ? byRound(bracket.matches, "QF").sort((a, b) => a.id.localeCompare(b.id))
-        : [],
-    [bracket]
-  );
-
-  const sf = useMemo(
-    () =>
-      bracket?.matches
-        ? byRound(bracket.matches, "SF").sort((a, b) => a.id.localeCompare(b.id))
-        : [],
-    [bracket]
-  );
-
-  const f = useMemo(
-    () =>
-      bracket?.matches
-        ? byRound(bracket.matches, "F").sort((a, b) => a.id.localeCompare(b.id))
-        : [],
-    [bracket]
-  );
+  const r16 = useMemo(() => bracket?.matches ? byRound(bracket.matches, "R16").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
+  const qf = useMemo(() => bracket?.matches ? byRound(bracket.matches, "QF").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
+  const sf = useMemo(() => bracket?.matches ? byRound(bracket.matches, "SF").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
+  const f = useMemo(() => bracket?.matches ? byRound(bracket.matches, "F").sort((a, b) => a.id.localeCompare(b.id)) : [], [bracket]);
 
   const onSimulate = async () => {
     if (!bracket) return;
@@ -259,9 +192,7 @@ export default function EstrategoBracketApp() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
-          <p className="text-sm text-gray-600">
-            Draw {bracket.drawSize} · Superficie: {bracket.surface}
-          </p>
+          <p className="text-sm text-gray-600">Draw {bracket.drawSize} · Superficie: {bracket.surface}</p>
         </div>
         <Button className="rounded-2xl" onClick={onSimulate}>
           <Play className="w-4 h-4 mr-2" /> Simular
@@ -270,47 +201,13 @@ export default function EstrategoBracketApp() {
 
       <div className="overflow-x-auto">
         <div className="flex gap-6">
-          <Column title="R16">
-            {r16.map((m) => (
-              <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
-            ))}
-          </Column>
-          <div className="flex items-center">
-            <ChevronRight className="text-gray-400" />
-          </div>
-          <Column title="QF">
-            {qf.length ? (
-              qf.map((m) => (
-                <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
-              ))
-            ) : (
-              <EmptyRound />
-            )}
-          </Column>
-          <div className="flex items-center">
-            <ChevronRight className="text-gray-400" />
-          </div>
-          <Column title="SF">
-            {sf.length ? (
-              sf.map((m) => (
-                <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
-              ))
-            ) : (
-              <EmptyRound />
-            )}
-          </Column>
-          <div className="flex items-center">
-            <ChevronRight className="text-gray-400" />
-          </div>
-          <Column title="Final">
-            {f.length ? (
-              f.map((m) => (
-                <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
-              ))
-            ) : (
-              <EmptyRound />
-            )}
-          </Column>
+          <Column title="R16">{r16.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />)}</Column>
+          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
+          <Column title="QF">{qf.length ? qf.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
+          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
+          <Column title="SF">{sf.length ? sf.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
+          <div className="flex items-center"><ChevronRight className="text-gray-400" /></div>
+          <Column title="Final">{f.length ? f.map((m) => <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />) : <EmptyRound />}</Column>
         </div>
       </div>
 
@@ -320,9 +217,5 @@ export default function EstrategoBracketApp() {
 }
 
 function EmptyRound() {
-  return (
-    <div className="text-xs text-gray-500 italic px-1">
-      (esperando simulación)
-    </div>
-  );
+  return <div className="text-xs text-gray-500 italic px-1">(esperando simulación)</div>;
 }

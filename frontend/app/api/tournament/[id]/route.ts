@@ -28,7 +28,8 @@ type Bracket = {
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  // 👇 tipamos context como any para evitar conflicto con el tipo Promise<{id:string}>
+  context: any
 ) {
   const { id } = context.params;
 
