@@ -1,17 +1,34 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
-// aquí va todo tu código de PrematchPage tal cual lo tenías...
+// ---------------- Types ----------------
+type Extras = {
+  display_p?: string;
+  display_o?: string;
+  country_p?: string; // ISO-2
+  country_o?: string; // ISO-2
+  rank_p?: number | null;
+  rank_o?: number | null;
+  ytd_wr_p?: number | null; // 0..1
+  ytd_wr_o?: number | null; // 0..1
+};
+
+type PrematchResp = {
+  prob_player: number;
+  tournament?: { name?: string; surface?: string; bucket?: string; month?: number };
+  extras?: Extras;
+};
+
 export default function PrematchInner() {
   const sp = useSearchParams();
   const playerA = sp.get("playerA") || "Player A";
   const playerB = sp.get("playerB") || "Player B";
   const tid = sp.get("tid") || "unknown";
 
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<PrematchResp | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -22,7 +39,7 @@ export default function PrematchInner() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ playerA, playerB, tournamentId: tid }),
       });
-      const j = await res.json();
+      const j: PrematchResp = await res.json();
       setData(j);
       setLoading(false);
     };
@@ -35,9 +52,11 @@ export default function PrematchInner() {
         Prematch: {playerA} vs {playerB}
       </h1>
       {loading && <div>Cargando…</div>}
-      {data && <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>}
+      {data && (
+        <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>
+      )}
       <Button asChild variant="secondary" className="mt-6">
-        <a href="/">← Volver al bracket</a>
+        <Link href="/">← Volver al bracket</Link>
       </Button>
     </div>
   );
