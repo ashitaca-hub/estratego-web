@@ -1,24 +1,54 @@
-**Contenido:**
+# ==========================
+# Estratego Monorepo Ignore
+# ==========================
 
-```gitignore
-# Node (Next.js)
+# --- Node (Next.js frontend) ---
 /frontend/node_modules
 /frontend/.next
 /frontend/.env
 /frontend/.env.local
+/frontend/.env.production
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/pnpm-debug.log*
+/frontend/package-lock.json
+/frontend/yarn.lock
 
-# Python (Flask)
+# --- Python (Flask backend) ---
 /backend/__pycache__/
 /backend/env/
 /backend/.venv/
 /backend/.env
+/backend/*.pyc
+/backend/*.pyo
+/backend/*.pyd
 
-# General
-.DS_Store
-.env
-*.log
+# --- Database / SQL ---
 *.sqlite3
 
-# VSCode
+# --- Git repos anidados ---
+estratego-clean/
+
+# --- General ---
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.env
+.env.*
+
+# --- IDE / Editors ---
 .vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+
+# --- Build / Cache ---
+dist/
+build/
+.cache/
+coverage/
+
 
