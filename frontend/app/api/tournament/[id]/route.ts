@@ -28,10 +28,9 @@ type Bracket = {
 
 export async function GET(
   request: NextRequest,
-  // 👇 tipamos context como any para evitar conflicto con el tipo Promise<{id:string}>
-  context: any
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
 
   // 1. Torneo
   const { data: hdr, error: e1 } = await supabase
