@@ -1,6 +1,0 @@
-{
-  "/api/simulate/route": "app/api/simulate/route.js",
-  "/api/tournament/[id]/route": "app/api/tournament/[id]/route.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/page": "app/page.js"
-}
