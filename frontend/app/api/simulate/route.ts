@@ -6,7 +6,7 @@ type Player = { id: string; name: string; seed?: number; country?: string };
 
 type Match = {
   id: string;
-  round: "R16" | "QF" | "SF" | "F";
+  round: "R64" | "R32" | "R16" | "QF" | "SF" | "F";
   top: Player;
   bottom: Player;
   winnerId?: string;
@@ -69,21 +69,46 @@ export async function POST(req: Request) {
   const { tourney_id } = await req.json();
 
   if (!tourney_id) {
-    return new Response(
-      JSON.stringify({ error: "Missing tourney_id" }),
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ error: "Missing tourney_id" }), {
+      status: 400,
+    });
   }
 
-  const { error } = await supabase.rpc("simulate_full_tournament", {
+  // 1. Verificar si ya existen partidos en draw_matches
+  const { data: existing, error: checkError } = await supabase
+    .from("draw_matches")
+    .select("id")
+    .eq("tourney_id", tourney_id)
+    .limit(1);
+
+  if (checkError) {
+    return new Response(JSON.stringify({ error: checkError.message }), {
+      status: 500,
+    });
+  }
+
+  // 2. Si no hay partidos, construirlos con build_draw_matches
+  if (!existing || existing.length === 0) {
+    const { error: buildError } = await supabase.rpc("build_draw_matches", {
+      tourney_id,
+    });
+
+    if (buildError) {
+      return new Response(JSON.stringify({ error: buildError.message }), {
+        status: 500,
+      });
+    }
+  }
+
+  // 3. Simular todo el torneo
+  const { error: simError } = await supabase.rpc("simulate_full_tournament", {
     tourney_id,
   });
 
-  if (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500 }
-    );
+  if (simError) {
+    return new Response(JSON.stringify({ error: simError.message }), {
+      status: 500,
+    });
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 });
