@@ -56,12 +56,9 @@ export async function GET(
     });
   }
 
-  const list = [...(rawRows ?? [])].sort((a, b) => {
-  const aMatch = a.id.match(/\d+$/);
-  const bMatch = b.id.match(/\d+$/);
-  const aNum = aMatch ? parseInt(aMatch[0], 10) : 0;
-  const bNum = bMatch ? parseInt(bMatch[0], 10) : 0;
-  return aNum - bNum;
+const list = [...(rawRows ?? [])].sort((a, b) => {
+  const getNumericId = (id: string) => parseInt(id.split("-")[1], 10);
+  return getNumericId(a.id) - getNumericId(b.id);
 });
 
   const ids = Array.from(
