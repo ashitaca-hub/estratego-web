@@ -57,8 +57,10 @@ export async function GET(
   }
 
   const list = [...(rawRows ?? [])].sort((a, b) => {
-  const aNum = parseInt(a.id.split("-")[1], 10);
-  const bNum = parseInt(b.id.split("-")[1], 10);
+  const aMatch = a.id.match(/\d+$/);
+  const bMatch = b.id.match(/\d+$/);
+  const aNum = aMatch ? parseInt(aMatch[0], 10) : 0;
+  const bNum = bMatch ? parseInt(bMatch[0], 10) : 0;
   return aNum - bNum;
 });
 
