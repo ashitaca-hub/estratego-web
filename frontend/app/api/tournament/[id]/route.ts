@@ -32,7 +32,6 @@ export async function GET(
 ) {
   const { id } = await context.params;
 
-  // 1. Torneo
   const { data: hdr, error: e1 } = await supabase
     .from("tournaments")
     .select("tourney_id,name,surface,draw_size")
@@ -46,7 +45,6 @@ export async function GET(
     );
   }
 
-  // 2. Partidos
   const { data: rows, error: e2 } = await supabase
     .from("draw_matches")
     .select("id,round,top_id,bot_id,winner_id")
@@ -61,14 +59,13 @@ export async function GET(
 
   const list = rows ?? [];
 
-  // 3. Recolectar IDs de jugadores únicos
   const ids = Array.from(
     new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
   );
 
   const { data: plist, error: e3 } = await supabase
-    .from("players_min")
-    .select("player_id,name,country")
+    .from("players_min") // <- cambiado de players_official a players_min
+    .select("player_id,name")
     .in("player_id", ids);
 
   if (e3) {
@@ -80,7 +77,6 @@ export async function GET(
   const pmap = new Map<string, (typeof plist)[number]>();
   (plist ?? []).forEach((p) => pmap.set(p.player_id, p));
 
-  // 4. Armar lista de partidos
   const matches: Match[] = list.map((row) => {
     const tp = row.top_id ? pmap.get(row.top_id) : null;
     const bp = row.bot_id ? pmap.get(row.bot_id) : null;
@@ -88,13 +84,11 @@ export async function GET(
     const top: Player = {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
-      country: tp?.country ?? undefined,
     };
 
     const bottom: Player = {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
-      country: bp?.country ?? undefined,
     };
 
     return {
