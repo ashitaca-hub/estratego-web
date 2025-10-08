@@ -45,11 +45,10 @@ export async function GET(
     );
   }
 
-  const { data: rows, error: e2 } = await supabase
+  const { data: rawRows, error: e2 } = await supabase
     .from("draw_matches")
     .select("id,round,top_id,bot_id,winner_id")
-    .eq("tourney_id", id)
-    .order("id", { ascending: true });
+    .eq("tourney_id", id);
 
   if (e2) {
     return new Response(JSON.stringify({ error: e2.message }), {
@@ -57,7 +56,11 @@ export async function GET(
     });
   }
 
-  const list = rows ?? [];
+  const list = [...(rawRows ?? [])].sort((a, b) => {
+  const aNum = parseInt(a.id.split("-")[1], 10);
+  const bNum = parseInt(b.id.split("-")[1], 10);
+  return aNum - bNum;
+});
 
   const ids = Array.from(
     new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
