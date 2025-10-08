@@ -67,7 +67,7 @@ export async function GET(
   );
 
   const { data: plist, error: e3 } = await supabase
-    .from("players_dim")
+    .from("players_official")
     .select("player_id,name,country")
     .in("player_id", ids);
 
