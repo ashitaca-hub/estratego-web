@@ -190,8 +190,8 @@ export default function EstrategoBracketApp() {
     setBracket(data);
   };
 
-  const onReset = async () => {
-  if (!bracket) return;
+const onReset = async () => {
+  if (!bracket?.tourney_id) return;
 
   await fetch("/api/reset", {
     method: "POST",
@@ -199,6 +199,7 @@ export default function EstrategoBracketApp() {
     body: JSON.stringify({ tourney_id: bracket.tourney_id }),
   });
 
+  // Volvemos a cargar el torneo desde el backend
   const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
   const data: Bracket = await res.json();
   setBracket(data);
