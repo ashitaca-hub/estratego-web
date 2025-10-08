@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const tourney_id = body.tourney_id ?? "2025-747";
+  const tourney_id = body.tourney_id ?? "2025-329";
 
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -18,7 +18,10 @@ export async function POST(request: Request) {
       `${SUPABASE_URL}/rest/v1/draw_matches?tourney_id=eq.${tourney_id}`,
       {
         method: "DELETE",
-        headers,
+        headers: {
+          ...headers,
+          Prefer: "return=representation",
+        },
       }
     );
     const delText = await delRes.text();
