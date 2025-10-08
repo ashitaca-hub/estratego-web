@@ -190,6 +190,20 @@ export default function EstrategoBracketApp() {
     setBracket(data);
   };
 
+  const onReset = async () => {
+  if (!bracket) return;
+
+  await fetch("/api/reset", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tourney_id: bracket.tourney_id }),
+  });
+
+  const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
+  const data: Bracket = await res.json();
+  setBracket(data);
+};
+
   function onOpenPrematch(m: Match) {
     setPmMatch(m);
     setPmOpen(true);
@@ -208,9 +222,14 @@ export default function EstrategoBracketApp() {
             Draw {bracket.drawSize} · Superficie: {bracket.surface}
           </p>
         </div>
-        <Button className="rounded-2xl" onClick={onSimulate}>
-          <Play className="w-4 h-4 mr-2" /> Simular
-        </Button>
+          <div className="flex gap-2">
+            <Button className="rounded-2xl" onClick={onSimulate}>
+              <Play className="w-4 h-4 mr-2" /> Simular
+            </Button>
+            <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
+              Resetear
+            </Button>
+          </div>
       </div>
 
       <div className="overflow-x-auto">
