@@ -170,7 +170,11 @@ export default function EstrategoBracketApp() {
     const map: Record<string, Match[]> = {};
     for (const r of rounds) {
       map[r] = bracket?.matches
-        ? byRound(bracket.matches, r).sort((a, b) => a.id.localeCompare(b.id))
+        ? byRound(bracket.matches, r).sort((a, b) => {
+            const numA = parseInt(a.id.split("-")[1]);
+            const numB = parseInt(b.id.split("-")[1]);
+            return numA - numB;
+          })
         : [];
     }
     return map;
