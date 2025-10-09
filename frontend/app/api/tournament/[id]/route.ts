@@ -19,7 +19,7 @@ type Match = {
 };
 
 type Bracket = {
-  tournamentId: string;
+  tourney_id: string;
   event: string;
   surface: string;
   drawSize: number;
@@ -103,7 +103,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   });
 
   const bracket: Bracket = {
-    tournamentId: hdr.tourney_id,
+    tourney_id: hdr.tourney_id,
     event: hdr.name,
     surface: hdr.surface,
     drawSize: hdr.draw_size,
