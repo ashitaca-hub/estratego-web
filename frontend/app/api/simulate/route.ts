@@ -12,17 +12,11 @@ type Match = {
   winnerId?: string;
 };
 
-type Bracket = {
-  tourney_id: string;
-  event: string;
-  surface: string;
-  drawSize: number;
-  matches: Match[];
-};
+//type Bracket = {tourney_id: string; event: string; surface: string; drawSize: number; matches: Match[]; };
 
-function nextRound(r: Match["round"]): Match["round"] {
-  return r === "R16" ? "QF" : r === "QF" ? "SF" : r === "SF" ? "F" : "F";
-}
+//function nextRound(r: Match["round"]): Match["round"] {
+//  return r === "R16" ? "QF" : r === "QF" ? "SF" : r === "SF" ? "F" : "F";
+//}
 
 export async function POST(req: Request) {
   let tourney_id;

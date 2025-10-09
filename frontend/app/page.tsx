@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, Play } from "lucide-react";
 
-// -------------------- Types --------------------
 export type Player = {
   id: string;
   name: string;
@@ -30,11 +29,9 @@ export type Bracket = {
   matches: Match[];
 };
 
-// -------------------- Helpers --------------------
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
 
-// -------------------- UI Components --------------------
 function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
   const winnerBadge = m.winnerId ? (m.winnerId === m.top.id ? "TOP" : "BOT") : null;
   return (
@@ -88,15 +85,7 @@ function Column({ title, children }: React.PropsWithChildren<{ title: string }>)
   );
 }
 
-function PrematchDialog({
-  open,
-  onOpenChange,
-  match,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  match?: Match | null;
-}) {
+function PrematchDialog({ open, onOpenChange, match }: { open: boolean; onOpenChange: (v: boolean) => void; match?: Match | null; }) {
   if (!match) return null;
   const { top, bottom } = match;
   return (
@@ -108,13 +97,9 @@ function PrematchDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          <div className="text-gray-600">
-            Detalle de enfrentamiento prematch
-          </div>
+          <div className="text-gray-600">Detalle de enfrentamiento prematch</div>
           <div className="rounded-xl border p-3">
-            <div className="text-xs text-gray-500 mb-2">
-              Qué verás en el detalle
-            </div>
+            <div className="text-xs text-gray-500 mb-2">Qué verás en el detalle</div>
             <ul className="list-disc pl-5 space-y-1">
               <li>Historial del año y superficie.</li>
               <li>Ranking, motivación local y lesiones.</li>
@@ -132,7 +117,6 @@ function PrematchDialog({
   );
 }
 
-// -------------------- Main App --------------------
 export default function EstrategoBracketApp() {
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [pmOpen, setPmOpen] = useState(false);
@@ -153,7 +137,10 @@ export default function EstrategoBracketApp() {
     load();
   }, []);
 
-  const rounds: Match["round"][] = ["R64", "R32", "R16", "QF", "SF", "F"];
+  const rounds: Match["round"][] = useMemo(
+  () => ["R64", "R32", "R16", "QF", "SF", "F"],
+  []
+);
 
   const matchesByRound = useMemo(() => {
     const map: Record<string, Match[]> = {};
@@ -183,8 +170,8 @@ export default function EstrategoBracketApp() {
     }
 
     const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-    const data = (await res.json()) as Record<string, any>;
-    setBracket(data as Bracket);
+    const data = (await res.json()) as Bracket;
+    setBracket(data);
   };
 
   const onReset = async () => {
@@ -201,9 +188,31 @@ export default function EstrategoBracketApp() {
     setBracket(data);
   };
 
+  const fetchPrematch = async (m: Match) => {
+    if (!bracket) return;
+    try {
+      const res = await fetch("/api/prematch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          playerA_id: m.top.id,
+          playerB_id: m.bottom.id,
+          tourney_id: bracket.tourney_id,
+          year: 2025,
+        }),
+      });
+
+      const summary = await res.json();
+      console.log("🔍 Prematch summary:", summary);
+    } catch (err) {
+      console.error("❌ Error en prematch", err);
+    }
+  };
+
   function onOpenPrematch(m: Match) {
     setPmMatch(m);
     setPmOpen(true);
+    fetchPrematch(m);
   }
 
   if (!bracket) {
@@ -231,7 +240,7 @@ export default function EstrategoBracketApp() {
 
       <div className="overflow-x-auto">
         <div className="flex gap-6">
-          {rounds.map((r, idx) => (
+          {rounds.map((r: Match["round"], idx) => (
             <React.Fragment key={r}>
               <Column title={r}>
                 {matchesByRound[r].length ? (
@@ -258,9 +267,5 @@ export default function EstrategoBracketApp() {
 }
 
 function EmptyRound() {
-  return (
-    <div className="text-xs text-gray-500 italic px-1">
-      (esperando simulación)
-    </div>
-  );
+  return <div className="text-xs text-gray-500 italic px-1">(esperando simulación)</div>;
 }
