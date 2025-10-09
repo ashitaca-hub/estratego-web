@@ -65,6 +65,8 @@ function simulate(bracket: Bracket): Bracket {
   return copy;
 }
 
+// app/api/simulate/route.ts
+
 export async function POST(req: Request) {
   const { tourney_id } = await req.json();
 
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
     });
   }
 
-  // 1. Verificar si ya existen partidos en draw_matches
+  // Verificar que haya draw_matches (opcional)
   const { data: existing, error: checkError } = await supabase
     .from("draw_matches")
     .select("id")
@@ -87,10 +89,9 @@ export async function POST(req: Request) {
     });
   }
 
-  // 2. Si no hay partidos, construirlos con build_draw_matches
   if (!existing || existing.length === 0) {
     const { error: buildError } = await supabase.rpc("build_draw_matches", {
-      tourney_id,
+      p_tournament_id: tourney_id, // asegúrate que este es el nombre que espera esa función
     });
 
     if (buildError) {
@@ -100,9 +101,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. Simular todo el torneo
+  // Llamada correcta al RPC con el nombre de parámetro esperado
   const { error: simError } = await supabase.rpc("simulate_full_tournament", {
-    tourney_id,
+    p_tourney_id: tourney_id,
   });
 
   if (simError) {
