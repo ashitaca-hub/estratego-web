@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ChevronRight, Play } from "lucide-react";
 import Link from "next/link";
 
-// -------------------- Types --------------------
 export type Player = {
   id: string;
   name: string;
@@ -31,11 +30,9 @@ export type Bracket = {
   matches: Match[];
 };
 
-// -------------------- Helpers --------------------
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
 
-// -------------------- UI Components --------------------
 function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
   const winnerBadge = m.winnerId ? (m.winnerId === m.top.id ? "TOP" : "BOT") : null;
   return (
@@ -98,53 +95,29 @@ function PrematchDialog({
   onOpenChange: (v: boolean) => void;
   match?: Match | null;
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [prediction, setPrediction] = useState<null | {
-    probA: number;
-    probB: number;
-    favorite: string;
-    notes?: string[];
-  }>(null);
+  const [summary, setSummary] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!open || !match) return;
-
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      setPrediction(null);
-
-      try {
-        const res = await fetch("/api/prematch", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            playerA: match.top.name,
-            playerB: match.bottom.name,
-            tourney_id: "2025-329", // Si quieres hacerlo dinámico, pásalo como prop
-          }),
-        });
-
-        if (!res.ok) {
-          setError(`Error del servidor: ${res.status}`);
-          return;
-        }
-
+    if (!match) return;
+    const fetchPrematch = async () => {
+      const res = await fetch("/api/prematch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          playerA_id: match.top.id,
+          playerB_id: match.bottom.id,
+          tourney_id: "2025-329",
+        }),
+      });
+      if (res.ok) {
         const data = await res.json();
-        setPrediction(data);
-      } catch (err) {
-        setError("Error de red o backend no disponible.");
-      } finally {
-        setLoading(false);
+        setSummary(data);
       }
     };
-
-    load();
-  }, [open, match]);
+    fetchPrematch();
+  }, [match]);
 
   if (!match) return null;
-
   const { top, bottom } = match;
 
   return (
@@ -155,37 +128,15 @@ function PrematchDialog({
             Prematch: {top.name} vs {bottom.name}
           </DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4 text-sm">
-          {loading && <div className="text-gray-500">Cargando análisis…</div>}
-          {error && <div className="text-red-500">{error}</div>}
-
-          {prediction && (
-            <div className="space-y-2">
-              <div>
-                <strong>Probabilidades:</strong>
-                <div className="flex justify-between">
-                  <span>{top.name}: {(prediction.probA * 100).toFixed(1)}%</span>
-                  <span>{bottom.name}: {(prediction.probB * 100).toFixed(1)}%</span>
-                </div>
-              </div>
-              <div>
-                <strong>Favorito:</strong> {prediction.favorite}
-              </div>
-              {prediction.notes?.length && (
-                <div>
-                  <strong>Notas:</strong>
-                  <ul className="list-disc pl-5">
-                    {prediction.notes.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+        <div className="space-y-3 text-sm">
+          {summary ? (
+            <pre className="text-xs bg-gray-100 p-3 rounded-xl overflow-auto max-h-96">
+              {JSON.stringify(summary, null, 2)}
+            </pre>
+          ) : (
+            <div className="text-gray-500 italic">Cargando análisis…</div>
           )}
-
-          <div className="flex justify-end">
+          <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cerrar
             </Button>
@@ -196,8 +147,6 @@ function PrematchDialog({
   );
 }
 
-
-// -------------------- Main App --------------------
 export default function EstrategoBracketApp() {
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [pmOpen, setPmOpen] = useState(false);
@@ -218,10 +167,8 @@ export default function EstrategoBracketApp() {
     load();
   }, []);
 
-  // Definimos todas las rondas posibles
   const rounds: Match["round"][] = ["R64", "R32", "R16", "QF", "SF", "F"];
 
-  // Agrupamos los partidos por ronda
   const matchesByRound = useMemo(() => {
     const map: Record<string, Match[]> = {};
     for (const r of rounds) {
@@ -237,45 +184,28 @@ export default function EstrategoBracketApp() {
   }, [bracket]);
 
   const onSimulate = async () => {
-  if (!bracket) return;
+    if (!bracket) return;
+    await fetch("/api/simulate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tourney_id: bracket.tourney_id }),
+    });
+    const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
+    const data: Bracket = await res.json();
+    setBracket(data);
+  };
 
-  console.log("▶️ Simulando torneo con ID:", bracket.tourney_id);
-
-  const simRes = await fetch("/api/simulate", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tourney_id: bracket.tourney_id }),
-  });
-
-  if (!simRes.ok) {
-    console.error("❌ Error al simular torneo:", await simRes.text());
-    return;
-  }
-
-  // Re-cargar el bracket actualizado
-  const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-  const data: Bracket = await res.json();
-  console.log("✅ Bracket actualizado tras simular:", data);
-
-  // Forzamos nueva referencia para que React re-renderice
-  setBracket(data);
-};
-
-const onReset = async () => {
-  if (!bracket?.tourney_id) return;
-
-  await fetch("/api/reset", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tourney_id: bracket.tourney_id }),
-  });
-
-  // Volvemos a cargar el torneo desde el backend
-  const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-  const data: Bracket = await res.json();
-  console.log("Bracket tras reset:", data);
-  setBracket(data);
-};
+  const onReset = async () => {
+    if (!bracket?.tourney_id) return;
+    await fetch("/api/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tourney_id: bracket.tourney_id }),
+    });
+    const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
+    const data: Bracket = await res.json();
+    setBracket(data);
+  };
 
   function onOpenPrematch(m: Match) {
     setPmMatch(m);
@@ -295,14 +225,14 @@ const onReset = async () => {
             Draw {bracket.drawSize} · Superficie: {bracket.surface}
           </p>
         </div>
-          <div className="flex gap-2">
-            <Button className="rounded-2xl" onClick={onSimulate}>
-              <Play className="w-4 h-4 mr-2" /> Simular
-            </Button>
-            <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
-              Resetear
-            </Button>
-          </div>
+        <div className="flex gap-2">
+          <Button className="rounded-2xl" onClick={onSimulate}>
+            <Play className="w-4 h-4 mr-2" /> Simular
+          </Button>
+          <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
+            Resetear
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
