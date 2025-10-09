@@ -181,18 +181,29 @@ export default function EstrategoBracketApp() {
   }, [bracket]);
 
   const onSimulate = async () => {
-    if (!bracket) return;
+  if (!bracket) return;
 
-    await fetch("/api/simulate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tourney_id: bracket.tourney_id }),
-    });
+  console.log("▶️ Simulando torneo con ID:", bracket.tourney_id);
 
-    const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-    const data: Bracket = await res.json();
-    setBracket(data);
-  };
+  const simRes = await fetch("/api/simulate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tourney_id: bracket.tourney_id }),
+  });
+
+  if (!simRes.ok) {
+    console.error("❌ Error al simular torneo:", await simRes.text());
+    return;
+  }
+
+  // Re-cargar el bracket actualizado
+  const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
+  const data: Bracket = await res.json();
+  console.log("✅ Bracket actualizado tras simular:", data);
+
+  // Forzamos nueva referencia para que React re-renderice
+  setBracket({ ...data });
+};
 
 const onReset = async () => {
   if (!bracket?.tourney_id) return;
