@@ -98,11 +98,55 @@ function PrematchDialog({
   onOpenChange: (v: boolean) => void;
   match?: Match | null;
 }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [prediction, setPrediction] = useState<null | {
+    probA: number;
+    probB: number;
+    favorite: string;
+    notes?: string[];
+  }>(null);
+
+  useEffect(() => {
+    if (!open || !match) return;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      setPrediction(null);
+
+      try {
+        const res = await fetch("/api/prematch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            playerA: match.top.name,
+            playerB: match.bottom.name,
+            tourney_id: "2025-329", // Si quieres hacerlo dinámico, pásalo como prop
+          }),
+        });
+
+        if (!res.ok) {
+          setError(`Error del servidor: ${res.status}`);
+          return;
+        }
+
+        const data = await res.json();
+        setPrediction(data);
+      } catch (err) {
+        setError("Error de red o backend no disponible.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [open, match]);
+
   if (!match) return null;
+
   const { top, bottom } = match;
-  const deeplink = `/prematch?playerA=${encodeURIComponent(
-    top.name
-  )}&playerB=${encodeURIComponent(bottom.name)}&tid=2025-usa-cincy`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -111,26 +155,37 @@ function PrematchDialog({
             Prematch: {top.name} vs {bottom.name}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-sm">
-          <div className="text-gray-600">
-            Torneo: ATP Cincinnati 2025 · Pista: hard
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-xs text-gray-500 mb-2">
-              Qué verás en el detalle
+
+        <div className="space-y-4 text-sm">
+          {loading && <div className="text-gray-500">Cargando análisis…</div>}
+          {error && <div className="text-red-500">{error}</div>}
+
+          {prediction && (
+            <div className="space-y-2">
+              <div>
+                <strong>Probabilidades:</strong>
+                <div className="flex justify-between">
+                  <span>{top.name}: {(prediction.probA * 100).toFixed(1)}%</span>
+                  <span>{bottom.name}: {(prediction.probB * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+              <div>
+                <strong>Favorito:</strong> {prediction.favorite}
+              </div>
+              {prediction.notes?.length && (
+                <div>
+                  <strong>Notas:</strong>
+                  <ul className="list-disc pl-5">
+                    {prediction.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Prob. implícitas y cuotas (p ↔ 1/p).</li>
-              <li>
-                Señales HIST: ranking, forma, H2H, superficie, defensa puntos.
-              </li>
-              <li>Badges: Top3, YTD ≥80/90%, etc.</li>
-            </ul>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild>
-              <Link href={deeplink}>Abrir prematch</Link>
-            </Button>
+          )}
+
+          <div className="flex justify-end">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cerrar
             </Button>
@@ -140,6 +195,7 @@ function PrematchDialog({
     </Dialog>
   );
 }
+
 
 // -------------------- Main App --------------------
 export default function EstrategoBracketApp() {
