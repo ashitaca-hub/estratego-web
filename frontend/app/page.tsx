@@ -85,9 +85,72 @@ function Column({ title, children }: React.PropsWithChildren<{ title: string }>)
   );
 }
 
-function PrematchDialog({ open, onOpenChange, match }: { open: boolean; onOpenChange: (v: boolean) => void; match?: Match | null; }) {
+function PrematchDialog({
+  open,
+  onOpenChange,
+  match,
+  bracket,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  match?: Match | null;
+  bracket: Bracket;
+}) {
+  const [summary, setSummary] = useState<null | {
+    win_pct_year: number | null;
+    win_pct_surface: number | null;
+    current_rank: number | null;
+    h2h: {
+      total: number;
+      wins: number;
+      losses: number;
+      last_meeting: string | null;
+    };
+    home_advantage: boolean;
+    last_surface: string | null;
+    defends_round: string | null;
+    court_speed: number | null;
+  }>(null);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!match) return;
+    const fetchPrematch = async () => {
+      setLoading(true);
+      setError(null);
+      setSummary(null);
+      try {
+        const res = await fetch("/api/prematch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            playerA_id: match.top.id,
+            playerB_id: match.bottom.id,
+            tourney_id: bracket?.tourney_id,  // asegúrate bracket esté en alcance o pásalo como prop
+            year: new Date().getFullYear(),
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          setError(`Error del servidor: ${res.status} — ${text}`);
+        } else {
+          const data = await res.json();
+          setSummary(data);
+        }
+      } catch (err) {
+        setError("Error de red al intentar análisis prematch.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPrematch();
+  }, [match]);
+
   if (!match) return null;
   const { top, bottom } = match;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -96,17 +159,60 @@ function PrematchDialog({ open, onOpenChange, match }: { open: boolean; onOpenCh
             Prematch: {top.name} vs {bottom.name}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-sm">
-          <div className="text-gray-600">Detalle de enfrentamiento prematch</div>
-          <div className="rounded-xl border p-3">
-            <div className="text-xs text-gray-500 mb-2">Qué verás en el detalle</div>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Historial del año y superficie.</li>
-              <li>Ranking, motivación local y lesiones.</li>
-              <li>Score basado en datos históricos.</li>
-            </ul>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="space-y-4 text-sm">
+          {loading && <div className="text-gray-500">Cargando análisis…</div>}
+          {error && <div className="text-red-500">{error}</div>}
+
+          {summary && (
+            <div className="space-y-3">
+              <div>
+                <strong>% Victorias año:</strong>{" "}
+                {summary.win_pct_year != null
+                  ? `${summary.win_pct_year.toFixed(1)}%`
+                  : "N/A"}
+              </div>
+              <div>
+                <strong>% Victorias superficie:</strong>{" "}
+                {summary.win_pct_surface != null
+                  ? `${summary.win_pct_surface.toFixed(1)}%`
+                  : "N/A"}
+              </div>
+              <div>
+                <strong>Ranking actual:</strong>{" "}
+                {summary.current_rank != null
+                  ? summary.current_rank
+                  : "N/A"}
+              </div>
+              <div>
+                <strong>H2H:</strong> {summary.h2h.total} partidos —{" "}
+                {top.name}: {summary.h2h.wins}, {bottom.name}:{" "}
+                {summary.h2h.losses}
+                {summary.h2h.last_meeting
+                  ? ` • Último: ${summary.h2h.last_meeting}`
+                  : ""}
+              </div>
+              <div>
+                <strong>Ventaja local:</strong>{" "}
+                {summary.home_advantage ? "Sí" : "No"}
+              </div>
+              <div>
+                <strong>Última superficie jugada:</strong>{" "}
+                {summary.last_surface || "Desconocida"}
+              </div>
+              <div>
+                <strong>Defiende ronda:</strong>{" "}
+                {summary.defends_round || "Ninguna"}
+              </div>
+              <div>
+                <strong>Velocidad de pista:</strong>{" "}
+                {summary.court_speed != null
+                  ? summary.court_speed
+                  : "N/A"}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cerrar
             </Button>
@@ -116,6 +222,7 @@ function PrematchDialog({ open, onOpenChange, match }: { open: boolean; onOpenCh
     </Dialog>
   );
 }
+
 
 export default function EstrategoBracketApp() {
   const [bracket, setBracket] = useState<Bracket | null>(null);
@@ -261,7 +368,7 @@ export default function EstrategoBracketApp() {
         </div>
       </div>
 
-      <PrematchDialog open={pmOpen} onOpenChange={setPmOpen} match={pmMatch} />
+      <PrematchDialog open={pmOpen} onOpenChange={setPmOpen} match={pmMatch} bracket={bracket} />
     </div>
   );
 }
