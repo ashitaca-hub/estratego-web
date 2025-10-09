@@ -202,7 +202,7 @@ export default function EstrategoBracketApp() {
   console.log("✅ Bracket actualizado tras simular:", data);
 
   // Forzamos nueva referencia para que React re-renderice
-  setBracket({ ...data });
+  setBracket(data);
 };
 
 const onReset = async () => {
