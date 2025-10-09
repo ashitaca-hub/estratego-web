@@ -217,6 +217,7 @@ const onReset = async () => {
   // Volvemos a cargar el torneo desde el backend
   const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
   const data: Bracket = await res.json();
+  console.log("Bracket tras reset:", data);
   setBracket(data);
 };
 

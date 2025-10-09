@@ -37,12 +37,13 @@ export async function POST(request: Request) {
       body: JSON.stringify({ p_tournament_id: tourney_id }),
     });
     const rpcText = await rpcRes.text();
+    console.log("🔧 build_draw_matches RPC response:", rpcRes.status, rpcText);
     if (!rpcRes.ok) {
       console.error("Error en RPC build_draw_matches:", rpcRes.status, rpcText);
       return NextResponse.json({ error: rpcText, stage: "rpc" }, { status: 500 });
     }
 
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({ status: "ok" }, { status: 200 });
   } catch (err) {
     console.error("Excepción en /api/reset:", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
