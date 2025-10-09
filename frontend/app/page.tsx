@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, Play } from "lucide-react";
-import Link from "next/link";
 
+// -------------------- Types --------------------
 export type Player = {
   id: string;
   name: string;
@@ -30,9 +30,11 @@ export type Bracket = {
   matches: Match[];
 };
 
+// -------------------- Helpers --------------------
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
 
+// -------------------- UI Components --------------------
 function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
   const winnerBadge = m.winnerId ? (m.winnerId === m.top.id ? "TOP" : "BOT") : null;
   return (
@@ -95,31 +97,8 @@ function PrematchDialog({
   onOpenChange: (v: boolean) => void;
   match?: Match | null;
 }) {
-  const [summary, setSummary] = useState<any | null>(null);
-
-  useEffect(() => {
-    if (!match) return;
-    const fetchPrematch = async () => {
-      const res = await fetch("/api/prematch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          playerA_id: match.top.id,
-          playerB_id: match.bottom.id,
-          tourney_id: "2025-329",
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data);
-      }
-    };
-    fetchPrematch();
-  }, [match]);
-
   if (!match) return null;
   const { top, bottom } = match;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -129,13 +108,19 @@ function PrematchDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          {summary ? (
-            <pre className="text-xs bg-gray-100 p-3 rounded-xl overflow-auto max-h-96">
-              {JSON.stringify(summary, null, 2)}
-            </pre>
-          ) : (
-            <div className="text-gray-500 italic">Cargando análisis…</div>
-          )}
+          <div className="text-gray-600">
+            Detalle de enfrentamiento prematch
+          </div>
+          <div className="rounded-xl border p-3">
+            <div className="text-xs text-gray-500 mb-2">
+              Qué verás en el detalle
+            </div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Historial del año y superficie.</li>
+              <li>Ranking, motivación local y lesiones.</li>
+              <li>Score basado en datos históricos.</li>
+            </ul>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cerrar
@@ -147,6 +132,7 @@ function PrematchDialog({
   );
 }
 
+// -------------------- Main App --------------------
 export default function EstrategoBracketApp() {
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [pmOpen, setPmOpen] = useState(false);
@@ -181,27 +167,35 @@ export default function EstrategoBracketApp() {
         : [];
     }
     return map;
-  }, [bracket]);
+  }, [bracket, rounds]);
 
   const onSimulate = async () => {
     if (!bracket) return;
-    await fetch("/api/simulate", {
+    const simRes = await fetch("/api/simulate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tourney_id: bracket.tourney_id }),
     });
+
+    if (!simRes.ok) {
+      console.error("❌ Error al simular torneo:", await simRes.text());
+      return;
+    }
+
     const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-    const data: Bracket = await res.json();
-    setBracket(data);
+    const data = (await res.json()) as Record<string, any>;
+    setBracket(data as Bracket);
   };
 
   const onReset = async () => {
     if (!bracket?.tourney_id) return;
+
     await fetch("/api/reset", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tourney_id: bracket.tourney_id }),
     });
+
     const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
     const data: Bracket = await res.json();
     setBracket(data);
