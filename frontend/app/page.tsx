@@ -121,6 +121,11 @@ function PrematchDialog({
       setLoading(true);
       setError(null);
       setSummary(null);
+      console.log("📦 PrematchDialog payload", {
+          playerA_id: typeof match.top.id,
+          playerB_id: typeof match.bottom.id,
+          tourney_id: typeof bracket?.tourney_id,
+        });
       try {
         const res = await fetch("/api/prematch", {
           method: "POST",
