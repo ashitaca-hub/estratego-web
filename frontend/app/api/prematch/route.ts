@@ -12,6 +12,13 @@ export async function POST(req: Request) {
     });
   }
 
+  console.log("🪵 Llamando get_prematch_summary con:", {
+  player_a_id: playerA_id,
+  player_b_id: playerB_id,
+  p_tourney_id: tourney_id,
+  p_year: year,
+});
+
   const { data, error } = await supabase.rpc("get_prematch_summary", {
     player_a_id: playerA_id,
     player_b_id: playerB_id,
