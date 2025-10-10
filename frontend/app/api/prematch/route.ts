@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const { data, error } = await supabase.rpc("get_prematch_summary", {
     player_a_id: playerA_id,
     player_b_id: playerB_id,
-    p_tourney_id: tourney_id,
+    p_tourney_id: String(tourney_id),
     p_year: year,
   });
 
