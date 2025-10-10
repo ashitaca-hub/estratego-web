@@ -302,8 +302,8 @@ export default function EstrategoBracketApp() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          playerA_id: m.top.id,
-          playerB_id: m.bottom.id,
+          playerA_id: parseInt(m.top.id, 10),
+          playerB_id: parseInt(m.bottom.id, 10),
           tourney_id: String(bracket.tourney_id),
           year: 2025,
         }),
