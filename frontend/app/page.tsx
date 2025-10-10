@@ -295,19 +295,24 @@ export default function EstrategoBracketApp() {
     setBracket(data);
   };
 
-  const fetchPrematch = async (m: Match) => {
-    if (!bracket) return;
-    try {
-      const res = await fetch("/api/prematch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          playerA_id: parseInt(m.top.id, 10),
-          playerB_id: parseInt(m.bottom.id, 10),
-          tourney_id: String(bracket.tourney_id),
-          year: 2025,
-        }),
-      });
+ const fetchPrematch = async (m: Match) => {
+  if (!bracket) return;
+
+  const payload = {
+    playerA_id: parseInt(m.top.id, 10),
+    playerB_id: parseInt(m.bottom.id, 10),
+    tourney_id: String(bracket.tourney_id),
+    year: 2025,
+  };
+
+  console.log("📦 Payload prematch:", payload);
+
+  try {
+    const res = await fetch("/api/prematch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
       const summary = await res.json();
       console.log("🔍 Prematch summary:", summary);
