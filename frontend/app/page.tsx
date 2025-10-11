@@ -117,23 +117,31 @@ function PrematchDialog({
 
   useEffect(() => {
     if (!match) return;
+    const playerAId = Number.parseInt(match.top.id, 10);
+    const playerBId = Number.parseInt(match.bottom.id, 10);
+
+    if (Number.isNaN(playerAId) || Number.isNaN(playerBId)) {
+      setSummary(null);
+      setError("Esperando a que se definan ambos jugadores para el prematch.");
+      return;
+    }
     const fetchPrematch = async () => {
       setLoading(true);
       setError(null);
       setSummary(null);
       console.log("📦 PrematchDialog payload", {
-          playerA_id: typeof match.top.id,
-          playerB_id: typeof match.bottom.id,
-          tourney_id: typeof bracket?.tourney_id,
-        });
+        playerA_id: playerAId,
+        playerB_id: playerBId,
+        tourney_id: bracket?.tourney_id,
+      });
       try {
         const res = await fetch("/api/prematch", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            playerA_id: match.top.id,
-            playerB_id: match.bottom.id,
-            tourney_id: bracket?.tourney_id,  // asegúrate bracket esté en alcance o pásalo como prop
+            playerA_id: playerAId,
+            playerB_id: playerBId,
+            tourney_id: bracket?.tourney_id, // asegúrate bracket esté en alcance o pásalo como prop
             year: new Date().getFullYear(),
           }),
         });
@@ -145,13 +153,14 @@ function PrematchDialog({
           setSummary(data);
         }
       } catch (err) {
+        console.error("❌ Error de red al obtener prematch", err);
         setError("Error de red al intentar análisis prematch.");
       } finally {
         setLoading(false);
       }
     };
     fetchPrematch();
-  }, [match]);
+  }, [match, bracket]);
 
   if (!match) return null;
   const { top, bottom } = match;
@@ -300,24 +309,35 @@ export default function EstrategoBracketApp() {
     setBracket(data);
   };
 
- const fetchPrematch = async (m: Match) => {
-  if (!bracket) return;
+  const fetchPrematch = async (m: Match) => {
+    if (!bracket) return;
 
-  const payload = {
-    playerA_id: parseInt(m.top.id, 10),
-    playerB_id: parseInt(m.bottom.id, 10),
-    tourney_id: String(bracket.tourney_id),
-    year: 2025,
-  };
+    const playerAId = Number.parseInt(m.top.id, 10);
+    const playerBId = Number.parseInt(m.bottom.id, 10);
 
-  console.log("📦 Payload prematch:", payload);
+    if (Number.isNaN(playerAId) || Number.isNaN(playerBId)) {
+      console.info("⏭️ Prematch omitido: jugadores sin definir", {
+        top: m.top.id,
+        bottom: m.bottom.id,
+      });
+      return;
+    }
 
-  try {
-    const res = await fetch("/api/prematch", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const payload = {
+      playerA_id: playerAId,
+      playerB_id: playerBId,
+      tourney_id: bracket.tourney_id,
+      year: new Date().getFullYear(),
+    };
+
+    console.log("📦 Payload prematch:", payload);
+
+    try {
+      const res = await fetch("/api/prematch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const summary = await res.json();
       console.log("🔍 Prematch summary:", summary);

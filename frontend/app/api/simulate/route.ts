@@ -2,16 +2,6 @@
 export const dynamic = "force-dynamic";
 import { supabase } from "@/lib/supabase";
 
-type Player = { id: string; name: string; seed?: number; country?: string };
-
-type Match = {
-  id: string;
-  round: "R64" | "R32" | "R16" | "QF" | "SF" | "F";
-  top: Player;
-  bottom: Player;
-  winnerId?: string;
-};
-
 //type Bracket = {tourney_id: string; event: string; surface: string; drawSize: number; matches: Match[]; };
 
 //function nextRound(r: Match["round"]): Match["round"] {
