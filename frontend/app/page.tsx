@@ -119,7 +119,13 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const data = raw as Record<string, unknown> | null;
   const playerA = data?.playerA ?? {};
   const playerB = data?.playerB ?? {};
-  const h2h = data?.h2h ?? {};
+  type RawH2h = {
+    wins?: unknown;
+    losses?: unknown;
+    last_meeting?: unknown;
+  };
+
+  const h2h = (data?.h2h ?? {}) as RawH2h;
   const meta = data?.meta ?? data ?? {};
 
   const asNumber = (value: unknown): number | null => {
@@ -154,7 +160,7 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
       wins,
       losses,
       total: wins + losses,
-      last_meeting: h2h?.last_meeting ?? null,
+      last_meeting: typeof h2h?.last_meeting === "string" ? h2h.last_meeting : null,
     },
     last_surface: typeof meta?.last_surface === "string" ? meta.last_surface : null,
     defends_round: typeof meta?.defends_round === "string" ? meta.defends_round : null,
