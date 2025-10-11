@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, Play } from "lucide-react";
+import {
+  WinProbabilityOrb,
+  getWinProbabilitySummary,
+} from "@/components/prematch/win-probability-orb";
 
 export type Player = {
   id: string;
@@ -94,6 +98,7 @@ type PlayerPrematchStats = {
 };
 
 type PrematchSummary = {
+  prob_player: number | null;
   playerA: PlayerPrematchStats;
   playerB: PlayerPrematchStats;
   h2h: {
@@ -153,6 +158,7 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const losses = asNumber(h2h?.losses) ?? 0;
 
   return {
+    prob_player: asNumber(data?.prob_player ?? data?.probability),
     playerA: buildPlayer(playerA),
     playerB: buildPlayer(playerB),
     h2h: {
@@ -197,12 +203,12 @@ function StatRow({
   playerB: string;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm">
-      <div className="text-gray-800">{playerA}</div>
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500 text-center">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm text-slate-200">
+      <div>{playerA}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 text-center">
         {label}
       </div>
-      <div className="text-right text-gray-800">{playerB}</div>
+      <div className="text-right">{playerB}</div>
     </div>
   );
 }
@@ -270,124 +276,134 @@ function PrematchDialog({
     fetchPrematch();
   }, [match, bracket]);
 
+  const probability = summary?.prob_player ?? null;
+  const { percent, percentOpponent } = useMemo(
+    () => getWinProbabilitySummary(probability),
+    [probability],
+  );
+
   if (!match) return null;
   const { top, bottom } = match;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-3xl border border-slate-800 bg-slate-950/95 text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-xl">
             Prematch: {top.name} vs {bottom.name}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 text-sm">
-          {loading && <div className="text-gray-500">Cargando análisis…</div>}
-          {error && <div className="text-red-500">{error}</div>}
+        <div className="space-y-5 text-sm">
+          {loading && <div className="text-slate-400">Cargando análisis…</div>}
+          {error && <div className="text-red-400">{error}</div>}
 
           {summary && (
             <div className="space-y-6">
-              <section className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="flex flex-col items-center gap-10 md:flex-row md:items-start md:justify-center">
+                <WinProbabilityOrb
+                  label={top.name}
+                  value={probability}
+                  description="El rojo intenso y las chispas indican a este jugador llegando en modo imparable."
+                />
+                <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
+                <WinProbabilityOrb
+                  label={bottom.name}
+                  value={probability != null ? 1 - probability : null}
+                  description="Si el azul glaciar domina, el modelo anticipa un partido cuesta arriba para este jugador."
+                />
+              </div>
+
+              <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <h3 className="text-base font-semibold text-slate-100">Resumen rápido</h3>
+                <p className="text-sm text-slate-300">
+                  Nuestro modelo otorga a <strong>{top.name}</strong> una probabilidad de victoria del{' '}
+                  <strong>{percent !== null ? `${percent}%` : '—'}</strong>, dejando para <strong>{bottom.name}</strong>{' '}
+                  el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : '—'}</strong>.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Observa el brillo: cuando una esfera se incendia en rojos ardientes, habla de inercia ganadora; si domina el hielo, el pulso llega congelado.
+                </p>
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70">
+                <div className="border-b border-slate-800/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Comparativa de jugadores
                 </div>
-                <div className="rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700">
-                    <div>{top.name}</div>
-                    <div className="text-xs uppercase tracking-wide text-gray-500 text-center">
-                      vs
-                    </div>
-                    <div className="text-right">{bottom.name}</div>
-                  </div>
-                  <div className="divide-y divide-gray-200">
-                    <StatRow
-                      label="% año"
-                      playerA={formatPct(summary.playerA.win_pct_year)}
-                      playerB={formatPct(summary.playerB.win_pct_year)}
-                    />
-                    <StatRow
-                      label="% superficie"
-                      playerA={formatPct(summary.playerA.win_pct_surface)}
-                      playerB={formatPct(summary.playerB.win_pct_surface)}
-                    />
-                    <StatRow
-                      label="Ranking"
-                      playerA={formatRank(summary.playerA.ranking)}
-                      playerB={formatRank(summary.playerB.ranking)}
-                    />
-                    <StatRow
-                      label="Últimos días"
-                      playerA={formatDays(summary.playerA.days_since_last)}
-                      playerB={formatDays(summary.playerB.days_since_last)}
-                    />
-                    <StatRow
-                      label="Ventaja local"
-                      playerA={formatBool(summary.playerA.home_advantage)}
-                      playerB={formatBool(summary.playerB.home_advantage)}
-                    />
-                  </div>
+                <div className="divide-y divide-slate-800/60">
+                  <StatRow
+                    label="% año"
+                    playerA={formatPct(summary.playerA.win_pct_year)}
+                    playerB={formatPct(summary.playerB.win_pct_year)}
+                  />
+                  <StatRow
+                    label="% superficie"
+                    playerA={formatPct(summary.playerA.win_pct_surface)}
+                    playerB={formatPct(summary.playerB.win_pct_surface)}
+                  />
+                  <StatRow
+                    label="Ranking"
+                    playerA={formatRank(summary.playerA.ranking)}
+                    playerB={formatRank(summary.playerB.ranking)}
+                  />
+                  <StatRow
+                    label="Últimos días"
+                    playerA={formatDays(summary.playerA.days_since_last)}
+                    playerB={formatDays(summary.playerB.days_since_last)}
+                  />
+                  <StatRow
+                    label="Ventaja local"
+                    playerA={formatBool(summary.playerA.home_advantage)}
+                    playerB={formatBool(summary.playerB.home_advantage)}
+                  />
                 </div>
               </section>
 
               <section className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 p-4 bg-gradient-to-br from-gray-50 to-white">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Head to head
-                  </div>
-                  <div className="mt-2 flex items-baseline justify-between">
+                <div className="space-y-3 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950/80 via-slate-900/60 to-slate-950/80 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Head to head</div>
+                  <div className="flex items-baseline justify-between">
                     <div>
-                      <div className="text-2xl font-semibold text-gray-800">
+                      <div className="text-2xl font-semibold text-slate-100">
                         {summary.h2h.wins} - {summary.h2h.losses}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Total {summary.h2h.total} partido{summary.h2h.total === 1 ? "" : "s"}
+                      <div className="text-xs text-slate-400">
+                        Total {summary.h2h.total} partido{summary.h2h.total === 1 ? '' : 's'}
                       </div>
                     </div>
-                    <div className="rounded-full bg-gray-900/5 px-3 py-1 text-xs font-medium text-gray-600">
-                      {top.name.split(" ")[0]} / {bottom.name.split(" ")[0]}
+                    <div className="rounded-full border border-slate-800/80 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300">
+                      {top.name.split(' ')[0]} / {bottom.name.split(' ')[0]}
                     </div>
                   </div>
-                  {summary.h2h.last_meeting && (
-                    <div className="mt-3 text-sm text-gray-600">
-                      Último duelo: <span className="font-medium">{summary.h2h.last_meeting}</span>
+                  {summary.h2h.last_meeting ? (
+                    <div className="text-sm text-slate-300">
+                      Último duelo: <span className="font-medium text-slate-100">{summary.h2h.last_meeting}</span>
                     </div>
+                  ) : (
+                    <div className="text-sm text-slate-500">Sin registro reciente</div>
                   )}
                 </div>
 
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Contexto
+                <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Contexto</div>
+                  <div className="space-y-2 text-sm text-slate-300">
+                    <div>
+                      Último torneo similar: <span className="font-medium text-slate-100">{summary.last_surface ?? 'Desconocido'}</span>
+                    </div>
+                    <div>
+                      Defiende puntos de: <span className="font-medium text-slate-100">{summary.defends_round ?? 'Ninguno'}</span>
+                    </div>
+                    <div>
+                      Velocidad estimada de la pista: {summary.court_speed != null ? summary.court_speed : 'N/A'}
+                    </div>
                   </div>
-                  <dl className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div className="flex items-start justify-between gap-4">
-                      <dt className="text-gray-500">Última superficie</dt>
-                      <dd className="font-medium text-gray-800">
-                        {summary.last_surface || "Desconocida"}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-4">
-                      <dt className="text-gray-500">Defiende ronda</dt>
-                      <dd className="font-medium text-gray-800">
-                        {summary.defends_round || "Ninguna"}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-4">
-                      <dt className="text-gray-500">Velocidad de pista</dt>
-                      <dd className="font-medium text-gray-800">
-                        {summary.court_speed != null ? summary.court_speed : "N/A"}
-                      </dd>
-                    </div>
-                  </dl>
                 </div>
               </section>
             </div>
           )}
 
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cerrar
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} className="w-full">
+            Cerrar
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
