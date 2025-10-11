@@ -85,6 +85,103 @@ function Column({ title, children }: React.PropsWithChildren<{ title: string }>)
   );
 }
 
+type PlayerPrematchStats = {
+  win_pct_year: number | null;
+  win_pct_surface: number | null;
+  ranking: number | null;
+  home_advantage: boolean | null;
+  days_since_last: number | null;
+};
+
+type PrematchSummary = {
+  playerA: PlayerPrematchStats;
+  playerB: PlayerPrematchStats;
+  h2h: {
+    total: number;
+    wins: number;
+    losses: number;
+    last_meeting: string | null;
+  };
+  last_surface: string | null;
+  defends_round: string | null;
+  court_speed: number | null;
+};
+
+const defaultPlayerStats: PlayerPrematchStats = {
+  win_pct_year: null,
+  win_pct_surface: null,
+  ranking: null,
+  home_advantage: null,
+  days_since_last: null,
+};
+
+const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
+  const data = raw as Record<string, unknown> | null;
+  const playerA = data?.playerA ?? {};
+  const playerB = data?.playerB ?? {};
+  const h2h = data?.h2h ?? {};
+  const meta = data?.meta ?? data ?? {};
+
+  const asNumber = (value: unknown): number | null => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const buildPlayer = (p: Record<string, unknown> | null | undefined): PlayerPrematchStats => ({
+    win_pct_year: asNumber(p?.win_pct_year),
+    win_pct_surface: asNumber(p?.win_pct_surface),
+    ranking: asNumber(p?.ranking),
+    home_advantage:
+      typeof p?.home_advantage === "boolean"
+        ? p.home_advantage
+        : typeof p?.home_advantage === "string"
+        ? p.home_advantage.toLowerCase() === "true"
+        : null,
+    days_since_last: asNumber(p?.days_since_last),
+  });
+
+  const wins = asNumber(h2h?.wins) ?? 0;
+  const losses = asNumber(h2h?.losses) ?? 0;
+
+  return {
+    playerA: { ...defaultPlayerStats, ...buildPlayer(playerA) },
+    playerB: { ...defaultPlayerStats, ...buildPlayer(playerB) },
+    h2h: {
+      wins,
+      losses,
+      total: wins + losses,
+      last_meeting: h2h?.last_meeting ?? null,
+    },
+    last_surface: typeof meta?.last_surface === "string" ? meta.last_surface : null,
+    defends_round: typeof meta?.defends_round === "string" ? meta.defends_round : null,
+    court_speed: asNumber(meta?.court_speed),
+  };
+};
+
+function formatPct(value: number | null) {
+  if (value == null) return "N/A";
+  return `${value.toFixed(1)}%`;
+}
+
+function formatRank(value: number | null) {
+  if (value == null) return "N/A";
+  return `#${value}`;
+}
+
+function formatBool(value: boolean | null) {
+  if (value == null) return "N/A";
+  return value ? "Sí" : "No";
+}
+
+function formatDays(value: number | null) {
+  if (value == null) return "N/A";
+  return `${value} días`;
+}
+
 function PrematchDialog({
   open,
   onOpenChange,
@@ -96,21 +193,7 @@ function PrematchDialog({
   match?: Match | null;
   bracket: Bracket;
 }) {
-  const [summary, setSummary] = useState<null | {
-    win_pct_year: number | null;
-    win_pct_surface: number | null;
-    current_rank: number | null;
-    h2h: {
-      total: number;
-      wins: number;
-      losses: number;
-      last_meeting: string | null;
-    };
-    home_advantage: boolean;
-    last_surface: string | null;
-    defends_round: string | null;
-    court_speed: number | null;
-  }>(null);
+  const [summary, setSummary] = useState<PrematchSummary | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +233,7 @@ function PrematchDialog({
           setError(`Error del servidor: ${res.status} — ${text}`);
         } else {
           const data = await res.json();
-          setSummary(data);
+          setSummary(normalizePrematchSummary(data));
         }
       } catch (err) {
         console.error("❌ Error de red al obtener prematch", err);
@@ -181,21 +264,19 @@ function PrematchDialog({
             <div className="space-y-3">
               <div>
                 <strong>% Victorias año:</strong>{" "}
-                {summary.win_pct_year != null
-                  ? `${summary.win_pct_year.toFixed(1)}%`
-                  : "N/A"}
+                {`${top.name}: ${formatPct(summary.playerA.win_pct_year)} · ${bottom.name}: ${formatPct(summary.playerB.win_pct_year)}`}
               </div>
               <div>
                 <strong>% Victorias superficie:</strong>{" "}
-                {summary.win_pct_surface != null
-                  ? `${summary.win_pct_surface.toFixed(1)}%`
-                  : "N/A"}
+                {`${top.name}: ${formatPct(summary.playerA.win_pct_surface)} · ${bottom.name}: ${formatPct(summary.playerB.win_pct_surface)}`}
               </div>
               <div>
                 <strong>Ranking actual:</strong>{" "}
-                {summary.current_rank != null
-                  ? summary.current_rank
-                  : "N/A"}
+                {`${top.name}: ${formatRank(summary.playerA.ranking)} · ${bottom.name}: ${formatRank(summary.playerB.ranking)}`}
+              </div>
+              <div>
+                <strong>Días desde el último partido:</strong>{" "}
+                {`${top.name}: ${formatDays(summary.playerA.days_since_last)} · ${bottom.name}: ${formatDays(summary.playerB.days_since_last)}`}
               </div>
               <div>
                 <strong>H2H:</strong> {summary.h2h.total} partidos —{" "}
@@ -207,7 +288,7 @@ function PrematchDialog({
               </div>
               <div>
                 <strong>Ventaja local:</strong>{" "}
-                {summary.home_advantage ? "Sí" : "No"}
+                {`${top.name}: ${formatBool(summary.playerA.home_advantage)} · ${bottom.name}: ${formatBool(summary.playerB.home_advantage)}`}
               </div>
               <div>
                 <strong>Última superficie jugada:</strong>{" "}
