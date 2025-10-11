@@ -25,45 +25,114 @@ type PrematchResp = {
 type WinProbabilityOrbProps = {
   label: string;
   value: number | null | undefined;
+  description?: string;
 };
 
-function WinProbabilityOrb({ label, value }: WinProbabilityOrbProps) {
-  const clamped = useMemo(() => {
+function WinProbabilityOrb({ label, value, description }: WinProbabilityOrbProps) {
+  const { clamped, percent, displayPercent, hasValue } = useMemo(() => {
     if (typeof value !== "number" || Number.isNaN(value)) {
-      return 0;
+      return { clamped: 0, percent: 0, displayPercent: "—", hasValue: false } as const;
     }
-    return Math.min(1, Math.max(0, value));
+    const normalized = Math.min(1, Math.max(0, value));
+    const computedPercent = Math.round(normalized * 100);
+    return {
+      clamped: normalized,
+      percent: computedPercent,
+      displayPercent: `${computedPercent}%`,
+      hasValue: true,
+    } as const;
   }, [value]);
 
-  const percent = Math.round(clamped * 100);
-  const fillDegree = clamped * 360;
-  const hue = 210 - 210 * clamped; // 0 => rojo (hot), 210 => azul (cold)
-  const fillColor = `hsl(${hue} 85% 56%)`;
-  const glowColor = `hsla(${hue} 85% 56% / 0.45)`;
-  const temperatureLabel = percent >= 66 ? "🔥 Hot" : percent <= 33 ? "🧊 Cold" : "🌤 Warm";
+  const theme = clamped >= 0.5 ? "heat" : "ice";
+  const intensity = hasValue ? (theme === "heat" ? clamped : 1 - clamped) : 0;
+  const fillDegree = hasValue ? clamped * 360 : 0;
+
+  const fillColor = useMemo(() => {
+    if (theme === "heat") {
+      return `hsl(${18 - intensity * 6} 92% ${56 - intensity * 14}%)`;
+    }
+    return `hsl(${205 + intensity * 18} 82% ${62 + intensity * 8}%)`;
+  }, [intensity, theme]);
+
+  const trackColor = theme === "heat" ? "rgba(100, 116, 139, 0.32)" : "rgba(30, 58, 138, 0.28)";
+  const glowColor =
+    theme === "heat"
+      ? `rgba(255, 95, 0, ${0.5 + intensity * 0.45})`
+      : `rgba(56, 189, 248, ${0.45 + intensity * 0.45})`;
+
+  const auraGradient = useMemo(() => {
+    if (theme === "heat") {
+      return [
+        `radial-gradient(circle at 30% 22%, rgba(255, 255, 255, ${0.18 + intensity * 0.28}) 0%, transparent 45%)`,
+        `radial-gradient(circle at 70% 18%, rgba(255, 158, 10, ${0.32 + intensity * 0.4}) 0%, transparent 60%)`,
+        `radial-gradient(circle at 60% 78%, rgba(255, 45, 85, ${0.28 + intensity * 0.32}) 0%, transparent 65%)`,
+      ].join(", ");
+    }
+    return [
+      `radial-gradient(circle at 28% 24%, rgba(255, 255, 255, ${0.16 + intensity * 0.24}) 0%, transparent 45%)`,
+      `radial-gradient(circle at 68% 30%, rgba(56, 189, 248, ${0.3 + intensity * 0.42}) 0%, transparent 62%)`,
+      `radial-gradient(circle at 55% 80%, rgba(14, 165, 233, ${0.28 + intensity * 0.32}) 0%, transparent 65%)`,
+    ].join(", ");
+  }, [intensity, theme]);
+
+  const temperatureLabel = useMemo(() => {
+    if (!hasValue) return "Sin datos";
+    if (clamped >= 0.92) return "🔥 En llamas";
+    if (clamped >= 0.78) return "🔥 Muy caliente";
+    if (clamped >= 0.62) return "🌤 Favorable";
+    if (clamped >= 0.45) return "⚖️ Parejo";
+    if (clamped >= 0.28) return "🧊 Fresco";
+    if (clamped >= 0.12) return "❄️ Frío";
+    return "🧊 Congelado";
+  }, [clamped, hasValue]);
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div
-        className="relative flex h-44 w-44 items-center justify-center rounded-full transition-all"
-        style={{
-          background: `conic-gradient(${fillColor} ${fillDegree}deg, rgba(148, 163, 184, 0.25) ${fillDegree}deg)`,
-          boxShadow: `0 0 35px -8px ${glowColor}, inset 0 0 18px -6px ${glowColor}`,
-        }}
-        aria-label={`${label}: ${percent}%`}
-        role="img"
-      >
-        <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-slate-950/70 backdrop-blur">
-          <span className="text-xs font-medium uppercase tracking-widest text-slate-400">{label}</span>
-          <span className="text-3xl font-semibold text-slate-100">{percent}%</span>
+    <div className="flex flex-col items-center gap-5 text-center">
+      <div className="relative h-48 w-48" aria-label={`${label}: ${displayPercent}`} role="img">
+        <div
+          className="absolute inset-[-18%] rounded-full opacity-80 blur-2xl transition-all duration-700"
+          style={{
+            background: auraGradient,
+            filter: `blur(${22 + intensity * 14}px)`,
+          }}
+        />
+        <div className="absolute inset-0 rounded-full bg-slate-950/70 shadow-[0_18px_46px_-20px_rgba(15,23,42,0.9)]" />
+        <div
+          className="absolute inset-[12px] rounded-full border border-white/10"
+          style={{
+            background: `conic-gradient(${fillColor} ${fillDegree}deg, ${trackColor} ${fillDegree}deg)`,
+            boxShadow: `0 0 ${32 + intensity * 36}px -10px ${glowColor}, inset 0 0 ${18 + intensity * 18}px -6px ${glowColor}`,
+          }}
+        />
+        <div className="absolute inset-[40px] rounded-full bg-slate-950/80 shadow-inner shadow-slate-950/60 backdrop-blur-sm" />
+        <div className="absolute inset-[46px] flex flex-col items-center justify-center gap-1 rounded-full">
+          <span className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-slate-400">
+            Win %
+          </span>
+          <span className="text-lg font-semibold text-slate-200">{label}</span>
+          <span className="text-4xl font-bold text-slate-50">{displayPercent}</span>
           <span className="text-sm font-semibold" style={{ color: fillColor }}>
             {temperatureLabel}
           </span>
         </div>
       </div>
-      <p className="max-w-[12rem] text-center text-xs text-slate-500">
-        Cuanto más alto el porcentaje, más intenso brilla la esfera.
-      </p>
+
+      <div className="flex w-48 flex-col gap-2">
+        <div className="h-2 overflow-hidden rounded-full border border-white/5 bg-slate-900/80 shadow-inner">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${hasValue ? percent : 0}%`,
+              background: `linear-gradient(90deg, ${glowColor}, ${fillColor})`,
+              boxShadow: `0 0 ${12 + intensity * 18}px ${glowColor}`,
+            }}
+          />
+        </div>
+        <p className="text-xs text-slate-400">
+          {description ??
+            "La intensidad del color refleja qué tan encendido o helado llega el jugador al duelo."}
+        </p>
+      </div>
     </div>
   );
 }
@@ -142,8 +211,20 @@ export default function PrematchInner() {
       {error && <div className="mb-6 text-sm text-red-400">{error}</div>}
 
       {data && (
-        <div className="grid gap-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg md:grid-cols-[auto,1fr]">
-          <WinProbabilityOrb label={`Victoria ${playerA}`} value={probability} />
+        <div className="space-y-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg xl:grid xl:grid-cols-[minmax(0,360px),1fr] xl:gap-10 xl:space-y-0">
+          <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-center lg:justify-center xl:flex-col">
+            <WinProbabilityOrb
+              label={playerA}
+              value={probability}
+              description="Si la barra se enciende en rojos intensos, el modelo ve a este jugador casi imparable."
+            />
+            <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent lg:block xl:hidden" />
+            <WinProbabilityOrb
+              label={playerB}
+              value={probability !== null ? 1 - probability : null}
+              description="Cuando domina el hielo, la lectura es que este jugador llega con el partido cuesta arriba."
+            />
+          </div>
 
           <div className="space-y-5">
             <section className="space-y-3">
@@ -156,8 +237,9 @@ export default function PrematchInner() {
                 el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : "—"}</strong>.
               </p>
               <p className="text-xs text-slate-400">
-                Los tonos cálidos indican una confianza mayor en el triunfo de {playerA}, mientras que los
-                tonos fríos sugieren un escenario más favorable para {playerB}.
+                Las esferas combinan brillo y textura para representar el clima del partido: cuando un lado
+                se cubre de rojos y destellos, el favorito está &ldquo;en llamas&rdquo;; si domina el azul glaciar, el
+                panorama luce mucho más helado.
               </p>
             </section>
 
