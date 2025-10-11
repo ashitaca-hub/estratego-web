@@ -3,6 +3,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import {
+  WinProbabilityOrb,
+  getWinProbabilitySummary,
+} from "@/components/prematch/win-probability-orb";
 
 // ---------------- Types ----------------
 type Extras = {
@@ -21,52 +25,6 @@ type PrematchResp = {
   tournament?: { name?: string; surface?: string; bucket?: string; month?: number };
   extras?: Extras;
 };
-
-type WinProbabilityOrbProps = {
-  label: string;
-  value: number | null | undefined;
-};
-
-function WinProbabilityOrb({ label, value }: WinProbabilityOrbProps) {
-  const clamped = useMemo(() => {
-    if (typeof value !== "number" || Number.isNaN(value)) {
-      return 0;
-    }
-    return Math.min(1, Math.max(0, value));
-  }, [value]);
-
-  const percent = Math.round(clamped * 100);
-  const fillDegree = clamped * 360;
-  const hue = 210 - 210 * clamped; // 0 => rojo (hot), 210 => azul (cold)
-  const fillColor = `hsl(${hue} 85% 56%)`;
-  const glowColor = `hsla(${hue} 85% 56% / 0.45)`;
-  const temperatureLabel = percent >= 66 ? "🔥 Hot" : percent <= 33 ? "🧊 Cold" : "🌤 Warm";
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div
-        className="relative flex h-44 w-44 items-center justify-center rounded-full transition-all"
-        style={{
-          background: `conic-gradient(${fillColor} ${fillDegree}deg, rgba(148, 163, 184, 0.25) ${fillDegree}deg)`,
-          boxShadow: `0 0 35px -8px ${glowColor}, inset 0 0 18px -6px ${glowColor}`,
-        }}
-        aria-label={`${label}: ${percent}%`}
-        role="img"
-      >
-        <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-slate-950/70 backdrop-blur">
-          <span className="text-xs font-medium uppercase tracking-widest text-slate-400">{label}</span>
-          <span className="text-3xl font-semibold text-slate-100">{percent}%</span>
-          <span className="text-sm font-semibold" style={{ color: fillColor }}>
-            {temperatureLabel}
-          </span>
-        </div>
-      </div>
-      <p className="max-w-[12rem] text-center text-xs text-slate-500">
-        Cuanto más alto el porcentaje, más intenso brilla la esfera.
-      </p>
-    </div>
-  );
-}
 
 export default function PrematchInner() {
   const sp = useSearchParams();
@@ -129,8 +87,10 @@ export default function PrematchInner() {
   }, [playerAIdParam, playerBIdParam, tourneyIdParam, yearParam]);
 
   const probability = data?.prob_player ?? null;
-  const percent = probability !== null ? Math.round(Math.max(0, Math.min(1, probability)) * 100) : null;
-  const percentOpponent = percent !== null ? 100 - percent : null;
+  const { percent, percentOpponent } = useMemo(
+    () => getWinProbabilitySummary(probability),
+    [probability],
+  );
 
   return (
     <div className="min-h-screen bg-slate-950/40 p-6 text-slate-100 md:p-10">
@@ -142,8 +102,20 @@ export default function PrematchInner() {
       {error && <div className="mb-6 text-sm text-red-400">{error}</div>}
 
       {data && (
-        <div className="grid gap-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg md:grid-cols-[auto,1fr]">
-          <WinProbabilityOrb label={`Victoria ${playerA}`} value={probability} />
+        <div className="space-y-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg xl:grid xl:grid-cols-[minmax(0,360px),1fr] xl:gap-10 xl:space-y-0">
+          <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-center lg:justify-center xl:flex-col">
+            <WinProbabilityOrb
+              label={playerA}
+              value={probability}
+              description="Si la barra se enciende en rojos intensos, el modelo ve a este jugador casi imparable."
+            />
+            <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent lg:block xl:hidden" />
+            <WinProbabilityOrb
+              label={playerB}
+              value={probability !== null ? 1 - probability : null}
+              description="Cuando domina el hielo, la lectura es que este jugador llega con el partido cuesta arriba."
+            />
+          </div>
 
           <div className="space-y-5">
             <section className="space-y-3">
@@ -156,8 +128,9 @@ export default function PrematchInner() {
                 el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : "—"}</strong>.
               </p>
               <p className="text-xs text-slate-400">
-                Los tonos cálidos indican una confianza mayor en el triunfo de {playerA}, mientras que los
-                tonos fríos sugieren un escenario más favorable para {playerB}.
+                Las esferas combinan brillo y textura para representar el clima del partido: cuando un lado
+                se cubre de rojos y destellos, el favorito está &ldquo;en llamas&rdquo;; si domina el azul glaciar, el
+                panorama luce mucho más helado.
               </p>
             </section>
 
