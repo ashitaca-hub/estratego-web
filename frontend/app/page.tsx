@@ -107,34 +107,25 @@ type PrematchSummary = {
   court_speed: number | null;
 };
 
-const defaultPlayerStats: PlayerPrematchStats = {
-  win_pct_year: null,
-  win_pct_surface: null,
-  ranking: null,
-  home_advantage: null,
-  days_since_last: null,
-};
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return null;
-};
-
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
+  const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return null;
+  };
+
   const data = asRecord(raw);
-  const playerA = asRecord(data?.["playerA"]);
-  const playerB = asRecord(data?.["playerB"]);
+  const playerA = asRecord(data?.playerA) ?? null;
+  const playerB = asRecord(data?.playerB) ?? null;
   type RawH2h = {
     wins?: unknown;
     losses?: unknown;
     last_meeting?: unknown;
   };
 
-  const h2h = (asRecord(data?.["h2h"]) ?? {}) as RawH2h;
-  const metaSource = asRecord(data?.["meta"]) ?? data;
-  const meta = asRecord(metaSource) ?? ({} as Record<string, unknown>);
+  const h2h = (asRecord(data?.h2h) as RawH2h | null) ?? ({} as RawH2h);
+  const meta = (asRecord(data?.meta) ?? data ?? {}) as Record<string, unknown>;
 
   const asNumber = (value: unknown): number | null => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -162,8 +153,8 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const losses = asNumber(h2h?.losses) ?? 0;
 
   return {
-    playerA: { ...defaultPlayerStats, ...buildPlayer(playerA) },
-    playerB: { ...defaultPlayerStats, ...buildPlayer(playerB) },
+    playerA: buildPlayer(playerA),
+    playerB: buildPlayer(playerB),
     h2h: {
       wins,
       losses,
@@ -194,6 +185,26 @@ function formatBool(value: boolean | null) {
 function formatDays(value: number | null) {
   if (value == null) return "N/A";
   return `${value} días`;
+}
+
+function StatRow({
+  label,
+  playerA,
+  playerB,
+}: {
+  label: string;
+  playerA: string;
+  playerB: string;
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm">
+      <div className="text-gray-800">{playerA}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-gray-500 text-center">
+        {label}
+      </div>
+      <div className="text-right text-gray-800">{playerB}</div>
+    </div>
+  );
 }
 
 function PrematchDialog({
@@ -275,49 +286,100 @@ function PrematchDialog({
           {error && <div className="text-red-500">{error}</div>}
 
           {summary && (
-            <div className="space-y-3">
-              <div>
-                <strong>% Victorias año:</strong>{" "}
-                {`${top.name}: ${formatPct(summary.playerA.win_pct_year)} · ${bottom.name}: ${formatPct(summary.playerB.win_pct_year)}`}
-              </div>
-              <div>
-                <strong>% Victorias superficie:</strong>{" "}
-                {`${top.name}: ${formatPct(summary.playerA.win_pct_surface)} · ${bottom.name}: ${formatPct(summary.playerB.win_pct_surface)}`}
-              </div>
-              <div>
-                <strong>Ranking actual:</strong>{" "}
-                {`${top.name}: ${formatRank(summary.playerA.ranking)} · ${bottom.name}: ${formatRank(summary.playerB.ranking)}`}
-              </div>
-              <div>
-                <strong>Días desde el último partido:</strong>{" "}
-                {`${top.name}: ${formatDays(summary.playerA.days_since_last)} · ${bottom.name}: ${formatDays(summary.playerB.days_since_last)}`}
-              </div>
-              <div>
-                <strong>H2H:</strong> {summary.h2h.total} partidos —{" "}
-                {top.name}: {summary.h2h.wins}, {bottom.name}:{" "}
-                {summary.h2h.losses}
-                {summary.h2h.last_meeting
-                  ? ` • Último: ${summary.h2h.last_meeting}`
-                  : ""}
-              </div>
-              <div>
-                <strong>Ventaja local:</strong>{" "}
-                {`${top.name}: ${formatBool(summary.playerA.home_advantage)} · ${bottom.name}: ${formatBool(summary.playerB.home_advantage)}`}
-              </div>
-              <div>
-                <strong>Última superficie jugada:</strong>{" "}
-                {summary.last_surface || "Desconocida"}
-              </div>
-              <div>
-                <strong>Defiende ronda:</strong>{" "}
-                {summary.defends_round || "Ninguna"}
-              </div>
-              <div>
-                <strong>Velocidad de pista:</strong>{" "}
-                {summary.court_speed != null
-                  ? summary.court_speed
-                  : "N/A"}
-              </div>
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Comparativa de jugadores
+                </div>
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700">
+                    <div>{top.name}</div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 text-center">
+                      vs
+                    </div>
+                    <div className="text-right">{bottom.name}</div>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    <StatRow
+                      label="% año"
+                      playerA={formatPct(summary.playerA.win_pct_year)}
+                      playerB={formatPct(summary.playerB.win_pct_year)}
+                    />
+                    <StatRow
+                      label="% superficie"
+                      playerA={formatPct(summary.playerA.win_pct_surface)}
+                      playerB={formatPct(summary.playerB.win_pct_surface)}
+                    />
+                    <StatRow
+                      label="Ranking"
+                      playerA={formatRank(summary.playerA.ranking)}
+                      playerB={formatRank(summary.playerB.ranking)}
+                    />
+                    <StatRow
+                      label="Últimos días"
+                      playerA={formatDays(summary.playerA.days_since_last)}
+                      playerB={formatDays(summary.playerB.days_since_last)}
+                    />
+                    <StatRow
+                      label="Ventaja local"
+                      playerA={formatBool(summary.playerA.home_advantage)}
+                      playerB={formatBool(summary.playerB.home_advantage)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 p-4 bg-gradient-to-br from-gray-50 to-white">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Head to head
+                  </div>
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <div>
+                      <div className="text-2xl font-semibold text-gray-800">
+                        {summary.h2h.wins} - {summary.h2h.losses}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Total {summary.h2h.total} partido{summary.h2h.total === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    <div className="rounded-full bg-gray-900/5 px-3 py-1 text-xs font-medium text-gray-600">
+                      {top.name.split(" ")[0]} / {bottom.name.split(" ")[0]}
+                    </div>
+                  </div>
+                  {summary.h2h.last_meeting && (
+                    <div className="mt-3 text-sm text-gray-600">
+                      Último duelo: <span className="font-medium">{summary.h2h.last_meeting}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Contexto
+                  </div>
+                  <dl className="mt-3 space-y-2 text-sm text-gray-700">
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="text-gray-500">Última superficie</dt>
+                      <dd className="font-medium text-gray-800">
+                        {summary.last_surface || "Desconocida"}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="text-gray-500">Defiende ronda</dt>
+                      <dd className="font-medium text-gray-800">
+                        {summary.defends_round || "Ninguna"}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="text-gray-500">Velocidad de pista</dt>
+                      <dd className="font-medium text-gray-800">
+                        {summary.court_speed != null ? summary.court_speed : "N/A"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
             </div>
           )}
 
