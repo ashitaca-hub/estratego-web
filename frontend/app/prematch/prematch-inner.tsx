@@ -26,25 +26,61 @@ export default function PrematchInner() {
   const sp = useSearchParams();
   const playerA = sp.get("playerA") || "Player A";
   const playerB = sp.get("playerB") || "Player B";
-  const tid = sp.get("tid") || "unknown";
+  const tourneyIdParam = sp.get("tourney_id") || sp.get("tid");
+  const playerAIdParam = sp.get("playerA_id");
+  const playerBIdParam = sp.get("playerB_id");
+  const yearParam = sp.get("year");
 
   const [data, setData] = useState<PrematchResp | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
+      const playerAId = Number.parseInt(playerAIdParam ?? "", 10);
+      const playerBId = Number.parseInt(playerBIdParam ?? "", 10);
+      const year = yearParam ? Number.parseInt(yearParam, 10) : new Date().getFullYear();
+
+      if (!tourneyIdParam || Number.isNaN(playerAId) || Number.isNaN(playerBId) || Number.isNaN(year)) {
+        setError(
+          "Faltan parámetros válidos en la URL (playerA_id, playerB_id, tourney_id o year)."
+        );
+        setData(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
-      const res = await fetch("/api/prematch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ playerA, playerB, tournamentId: tid }),
-      });
-      const j: PrematchResp = await res.json();
-      setData(j);
-      setLoading(false);
+      setError(null);
+
+      try {
+        const res = await fetch("/api/prematch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            playerA_id: playerAId,
+            playerB_id: playerBId,
+            tourney_id: tourneyIdParam,
+            year,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Error ${res.status}: ${text}`);
+        }
+
+        const j: PrematchResp = await res.json();
+        setData(j);
+      } catch (err) {
+        setError((err as Error).message);
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
     };
     run();
-  }, [playerA, playerB, tid]);
+  }, [playerAIdParam, playerBIdParam, tourneyIdParam, yearParam]);
 
   return (
     <div className="min-h-screen p-6 md:p-10">
@@ -52,6 +88,7 @@ export default function PrematchInner() {
         Prematch: {playerA} vs {playerB}
       </h1>
       {loading && <div>Cargando…</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
       {data && (
         <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>
       )}
