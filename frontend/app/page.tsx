@@ -115,18 +115,26 @@ const defaultPlayerStats: PlayerPrematchStats = {
   days_since_last: null,
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+};
+
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
-  const data = raw as Record<string, unknown> | null;
-  const playerA = data?.playerA ?? {};
-  const playerB = data?.playerB ?? {};
+  const data = asRecord(raw);
+  const playerA = asRecord(data?.["playerA"]);
+  const playerB = asRecord(data?.["playerB"]);
   type RawH2h = {
     wins?: unknown;
     losses?: unknown;
     last_meeting?: unknown;
   };
 
-  const h2h = (data?.h2h ?? {}) as RawH2h;
-  const meta = data?.meta ?? data ?? {};
+  const h2h = (asRecord(data?.["h2h"]) ?? {}) as RawH2h;
+  const metaSource = asRecord(data?.["meta"]) ?? data;
+  const meta = asRecord(metaSource) ?? ({} as Record<string, unknown>);
 
   const asNumber = (value: unknown): number | null => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
