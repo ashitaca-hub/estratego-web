@@ -107,26 +107,25 @@ type PrematchSummary = {
   court_speed: number | null;
 };
 
-const defaultPlayerStats: PlayerPrematchStats = {
-  win_pct_year: null,
-  win_pct_surface: null,
-  ranking: null,
-  home_advantage: null,
-  days_since_last: null,
-};
-
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
-  const data = raw as Record<string, unknown> | null;
-  const playerA = data?.playerA ?? {};
-  const playerB = data?.playerB ?? {};
+  const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return null;
+  };
+
+  const data = asRecord(raw);
+  const playerA = asRecord(data?.playerA) ?? null;
+  const playerB = asRecord(data?.playerB) ?? null;
   type RawH2h = {
     wins?: unknown;
     losses?: unknown;
     last_meeting?: unknown;
   };
 
-  const h2h = (data?.h2h ?? {}) as RawH2h;
-  const meta = data?.meta ?? data ?? {};
+  const h2h = (asRecord(data?.h2h) as RawH2h | null) ?? ({} as RawH2h);
+  const meta = (asRecord(data?.meta) ?? data ?? {}) as Record<string, unknown>;
 
   const asNumber = (value: unknown): number | null => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -154,8 +153,8 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const losses = asNumber(h2h?.losses) ?? 0;
 
   return {
-    playerA: { ...defaultPlayerStats, ...buildPlayer(playerA) },
-    playerB: { ...defaultPlayerStats, ...buildPlayer(playerB) },
+    playerA: buildPlayer(playerA),
+    playerB: buildPlayer(playerB),
     h2h: {
       wins,
       losses,
