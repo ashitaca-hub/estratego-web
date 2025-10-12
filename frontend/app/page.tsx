@@ -293,14 +293,14 @@ function PrematchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden border border-slate-800 bg-slate-950/95 p-0 text-slate-100">
-        <div className="flex max-h-full flex-col">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] min-h-0 overflow-hidden border border-slate-800 bg-slate-950/95 p-0 text-slate-100 flex flex-col">
+        <div className="flex max-h-full min-h-0 flex-col">
           <DialogHeader className="px-6 pb-4 pt-6 text-left">
             <DialogTitle className="text-xl">
               Prematch: {top.name} vs {bottom.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex-1 overflow-y-auto px-6 pb-6 min-h-0">
             <div className="space-y-5 text-sm">
               {loading && <div className="text-slate-400">Cargando análisis…</div>}
               {error && <div className="text-red-400">{error}</div>}
