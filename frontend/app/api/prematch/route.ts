@@ -282,6 +282,37 @@ type PrematchRpcPayload = {
   p_year: number | string;
 };
 
+const extractYear = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/\d{4}/);
+    if (!match) return null;
+
+    const parsed = Number.parseInt(match[0], 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const toIsoYear = (value: unknown, fallbackYear: number): string | null => {
+  if (typeof value === "string") {
+    const timestamp = Date.parse(value);
+    if (!Number.isNaN(timestamp)) {
+      return new Date(timestamp).toISOString().slice(0, 10);
+    }
+  }
+
+  if (Number.isFinite(fallbackYear)) {
+    return `${fallbackYear}-01-01`;
+  }
+
+  return null;
+};
+
 const callExtendedPrematchSummary = async (payload: PrematchRpcPayload) => {
   console.log("🪵 Llamando get_extended_prematch_summary con:", payload);
 
@@ -292,7 +323,9 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { playerA_id, playerB_id, tourney_id, year } = body;
 
-  if (!playerA_id || !playerB_id || !tourney_id || !year) {
+  const normalizedYear = extractYear(year);
+
+  if (!playerA_id || !playerB_id || !tourney_id || normalizedYear === null) {
     return new Response(JSON.stringify({ error: "Missing parameters" }), {
       status: 400,
     });
@@ -302,22 +335,47 @@ export async function POST(req: Request) {
     player_a_id: playerA_id,
     player_b_id: playerB_id,
     p_tourney_id: String(tourney_id),
-    p_year: year,
+    p_year: normalizedYear,
   };
 
   let { data, error } = await callExtendedPrematchSummary(rpcPayload);
 
   if (error && error.message.includes("function pg_catalog.extract")) {
-    const isoYear = `${year}-01-01`;
-    console.warn("⚠️ Reintentando prematch con fecha ISO para evitar error de extract", {
-      originalYear: year,
-      isoYear,
-    });
+    const isoYear = toIsoYear(year, normalizedYear);
 
-    ({ data, error } = await callExtendedPrematchSummary({
-      ...rpcPayload,
-      p_year: isoYear,
-    }));
+    if (isoYear) {
+      console.warn(
+        "⚠️ Reintentando prematch con fecha ISO para evitar error de extract",
+        {
+          originalYear: year,
+          normalizedYear,
+          isoYear,
+        },
+      );
+
+      const retry = await callExtendedPrematchSummary({
+        ...rpcPayload,
+        p_year: isoYear,
+      });
+
+      if (!retry.error) {
+        data = retry.data;
+        error = null;
+      } else if (!retry.error.message.includes("invalid input syntax for type integer")) {
+        // Solo remplazamos el error original si el reintento devolvió un mensaje distinto;
+        // de lo contrario, conservamos el error inicial para facilitar el diagnóstico.
+        data = retry.data;
+        error = retry.error;
+      } else {
+        console.warn(
+          "⚠️ Reintento con fecha ISO rechazado por el RPC (esperaba entero)",
+          {
+            isoYear,
+            retryError: retry.error.message,
+          },
+        );
+      }
+    }
   }
 
   if (error) {
