@@ -298,15 +298,25 @@ const extractYear = (value: unknown): number | null => {
   return null;
 };
 
-const toIsoYear = (value: unknown, fallbackYear: number): string | null => {
-  if (typeof value === "string") {
-    const timestamp = Date.parse(value);
-    if (!Number.isNaN(timestamp)) {
-      return new Date(timestamp).toISOString().slice(0, 10);
-    }
-  }
+const isoFromString = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
 
-  if (Number.isFinite(fallbackYear)) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (!/[\-\/T]/.test(trimmed)) return null;
+
+  const timestamp = Date.parse(trimmed);
+  if (Number.isNaN(timestamp)) return null;
+
+  return new Date(timestamp).toISOString().slice(0, 10);
+};
+
+const toIsoYear = (value: unknown, fallbackYear?: number): string | null => {
+  const fromString = isoFromString(value);
+  if (fromString) return fromString;
+
+  if (typeof fallbackYear === "number" && Number.isFinite(fallbackYear)) {
     return `${fallbackYear}-01-01`;
   }
 
@@ -324,53 +334,75 @@ export async function POST(req: Request) {
   const { playerA_id, playerB_id, tourney_id, year } = body;
 
   const normalizedYear = extractYear(year);
+  const isoYearFromInput = isoFromString(year);
+  const fallbackIsoYear = toIsoYear(year, normalizedYear ?? undefined);
 
-  if (!playerA_id || !playerB_id || !tourney_id || normalizedYear === null) {
+  const preferIso = isoYearFromInput !== null;
+
+  const primaryYear: number | string | null = preferIso
+    ? isoYearFromInput
+    : normalizedYear ?? fallbackIsoYear;
+
+  if (!playerA_id || !playerB_id || !tourney_id || primaryYear === null) {
     return new Response(JSON.stringify({ error: "Missing parameters" }), {
       status: 400,
     });
   }
 
+  const alternateYear: number | string | null = preferIso
+    ? normalizedYear
+    : isoYearFromInput ?? (fallbackIsoYear !== primaryYear ? fallbackIsoYear : null);
+
   const rpcPayload: PrematchRpcPayload = {
     player_a_id: playerA_id,
     player_b_id: playerB_id,
     p_tourney_id: String(tourney_id),
-    p_year: normalizedYear,
+    p_year: primaryYear,
   };
 
   let { data, error } = await callExtendedPrematchSummary(rpcPayload);
 
-  if (error && error.message.includes("function pg_catalog.extract")) {
-    const isoYear = toIsoYear(year, normalizedYear);
+  if (error && alternateYear !== null) {
+    const retryCondition = preferIso
+      ? error.message.includes("invalid input syntax for type integer")
+      : error.message.includes("function pg_catalog.extract");
 
-    if (isoYear) {
+    if (retryCondition) {
       console.warn(
-        "⚠️ Reintentando prematch con fecha ISO para evitar error de extract",
+        preferIso
+          ? "⚠️ Reintentando prematch con año entero tras rechazo del ISO"
+          : "⚠️ Reintentando prematch con fecha ISO para evitar error de extract",
         {
           originalYear: year,
           normalizedYear,
-          isoYear,
+          isoYear: fallbackIsoYear,
+          alternateYear,
         },
       );
 
       const retry = await callExtendedPrematchSummary({
         ...rpcPayload,
-        p_year: isoYear,
+        p_year: alternateYear,
       });
 
       if (!retry.error) {
         data = retry.data;
         error = null;
-      } else if (!retry.error.message.includes("invalid input syntax for type integer")) {
+      } else if (
+        (preferIso && !retry.error.message.includes("function pg_catalog.extract")) ||
+        (!preferIso && !retry.error.message.includes("invalid input syntax for type integer"))
+      ) {
         // Solo remplazamos el error original si el reintento devolvió un mensaje distinto;
         // de lo contrario, conservamos el error inicial para facilitar el diagnóstico.
         data = retry.data;
         error = retry.error;
       } else {
         console.warn(
-          "⚠️ Reintento con fecha ISO rechazado por el RPC (esperaba entero)",
+          preferIso
+            ? "⚠️ Reintento con año entero rechazado por el RPC"
+            : "⚠️ Reintento con fecha ISO rechazado por el RPC (esperaba entero)",
           {
-            isoYear,
+            alternateYear,
             retryError: retry.error.message,
           },
         );
