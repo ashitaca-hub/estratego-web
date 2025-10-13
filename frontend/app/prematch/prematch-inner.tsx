@@ -20,11 +20,117 @@ type Extras = {
   ytd_wr_o?: number | null; // 0..1
 };
 
-type PrematchResp = {
-  prob_player: number;
-  tournament?: { name?: string; surface?: string; bucket?: string; month?: number };
-  extras?: Extras;
+type PlayerSummary = {
+  win_pct_year?: number | null;
+  win_pct_surface?: number | null;
+  ranking?: number | null;
+  days_since_last?: number | null;
+  home_advantage?: boolean | null;
+  win_pct_month?: number | null;
+  win_pct_vs_top10?: number | null;
+  court_speed_score?: number | null;
+  win_score?: number | null;
+  win_probability?: number | null;
 };
+
+type H2HSummary = {
+  wins: number;
+  losses: number;
+  total: number;
+  last_meeting: string | null;
+};
+
+type TournamentSummary = {
+  name?: string | null;
+  surface?: string | null;
+  bucket?: string | null;
+  month?: number | null;
+};
+
+type PrematchResp = {
+  prob_player: number | null;
+  tournament?: TournamentSummary;
+  extras?: Extras;
+  playerA?: PlayerSummary;
+  playerB?: PlayerSummary;
+  h2h?: H2HSummary;
+  last_surface?: string | null;
+  defends_round?: string | null;
+  court_speed?: number | null;
+};
+
+const percentFromRatio = (value: number, decimals = 0) => {
+  const ratio = Math.abs(value) <= 1 ? value * 100 : value;
+  const formatted = Number(ratio.toFixed(decimals));
+  return `${formatted}%`;
+};
+
+const formatPercentage = (
+  value: number | null | undefined,
+  { decimals = 0 }: { decimals?: number } = {},
+) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  return percentFromRatio(value, decimals);
+};
+
+const formatDecimal = (
+  value: number | null | undefined,
+  { decimals = 1 }: { decimals?: number } = {},
+) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  return `${Number(value.toFixed(decimals))}`;
+};
+
+const formatPlayerMetric = (summary: PlayerSummary | undefined, key: keyof PlayerSummary) => {
+  if (!summary) return null;
+
+  const rawValue = summary[key];
+  if (rawValue === null || rawValue === undefined) return null;
+
+  switch (key) {
+    case "win_pct_year":
+    case "win_pct_surface":
+    case "win_pct_month":
+      return formatPercentage(rawValue as number, { decimals: 0 });
+    case "win_pct_vs_top10":
+      return formatPercentage(rawValue as number, { decimals: 1 });
+    case "win_probability":
+      return formatPercentage(rawValue as number, { decimals: 1 });
+    case "home_advantage":
+      return (rawValue as boolean) ? "Sí" : "No";
+    case "days_since_last": {
+      if (typeof rawValue !== "number") return null;
+      const rounded = Math.round(rawValue);
+      const unit = rounded === 1 ? "día" : "días";
+      return `${rounded} ${unit}`;
+    }
+    case "ranking":
+      return typeof rawValue === "number" ? `#${Math.round(rawValue)}` : null;
+    case "court_speed_score":
+      return formatDecimal(rawValue as number, { decimals: 1 });
+    case "win_score":
+      return formatDecimal(rawValue as number, { decimals: 2 });
+    default:
+      return typeof rawValue === "number" ? `${rawValue}` : null;
+  }
+};
+
+const playerMetricDescriptors: Array<{ key: keyof PlayerSummary; label: string }> = [
+  { key: "win_probability", label: "Probabilidad estimada de victoria" },
+  { key: "win_score", label: "Win score" },
+  { key: "win_pct_year", label: "% victorias en el año" },
+  { key: "win_pct_surface", label: "% victorias en la superficie" },
+  { key: "win_pct_month", label: "% victorias en el mes" },
+  { key: "win_pct_vs_top10", label: "% victorias vs Top 10" },
+  { key: "ranking", label: "Ranking" },
+  { key: "days_since_last", label: "Días desde el último partido" },
+  { key: "home_advantage", label: "Ventaja de local" },
+  { key: "court_speed_score", label: "Court speed score" },
+];
 
 export default function PrematchInner() {
   const sp = useSearchParams();
@@ -133,6 +239,49 @@ export default function PrematchInner() {
                 panorama luce mucho más helado.
               </p>
             </section>
+
+            {(data.playerA || data.playerB) && (
+              <section className="space-y-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                  Indicadores por jugador
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {[
+                    { label: playerA, summary: data.playerA },
+                    { label: playerB, summary: data.playerB },
+                  ].map(({ label, summary }, index) => {
+                    if (!summary) return null;
+
+                    const metrics = playerMetricDescriptors
+                      .map((descriptor) => {
+                        const formatted = formatPlayerMetric(summary, descriptor.key);
+                        if (formatted === null) return null;
+                        return { ...descriptor, value: formatted };
+                      })
+                      .filter(Boolean) as Array<{ key: keyof PlayerSummary; label: string; value: string }>;
+
+                    if (metrics.length === 0) return null;
+
+                    return (
+                      <div
+                        key={`${label}-${index}`}
+                        className="space-y-3 rounded-lg border border-slate-800/60 bg-slate-950/60 p-4"
+                      >
+                        <h4 className="text-base font-semibold text-slate-200">{label}</h4>
+                        <dl className="grid grid-cols-1 gap-3 text-sm text-slate-200">
+                          {metrics.map((metric) => (
+                            <div key={metric.key} className="space-y-1">
+                              <dt className="text-xs uppercase tracking-wide text-slate-400">{metric.label}</dt>
+                              <dd className="font-medium text-slate-100">{metric.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {data.tournament && (
               <section className="space-y-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">

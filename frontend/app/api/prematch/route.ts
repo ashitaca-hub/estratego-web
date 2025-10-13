@@ -8,6 +8,11 @@ type PlayerSummary = {
   ranking: number | null;
   home_advantage: boolean | null;
   days_since_last: number | null;
+  win_pct_month: number | null;
+  win_pct_vs_top10: number | null;
+  court_speed_score: number | null;
+  win_score: number | null;
+  win_probability: number | null;
 };
 
 type TournamentSummary = {
@@ -133,6 +138,34 @@ const buildPlayer = (
       asNumber(source[`${prefix}_days_since_last`]) ??
       asNumber(source[`days_since_last_${prefix}`]),
     );
+  const winPctMonth =
+    asNumber(playerRecord?.["win_pct_month"]) ??
+    getFromPrefixes((source, prefix) =>
+      asNumber(source[`${prefix}_win_pct_month`]) ?? asNumber(source[`win_pct_month_${prefix}`]),
+    );
+  const winPctVsTop10 =
+    asNumber(playerRecord?.["win_pct_vs_top10"]) ??
+    getFromPrefixes((source, prefix) =>
+      asNumber(source[`${prefix}_win_pct_vs_top10`]) ??
+      asNumber(source[`win_pct_vs_top10_${prefix}`]),
+    );
+  const courtSpeedScore =
+    asNumber(playerRecord?.["court_speed_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      asNumber(source[`${prefix}_court_speed_score`]) ??
+      asNumber(source[`court_speed_score_${prefix}`]),
+    );
+  const winScore =
+    asNumber(playerRecord?.["win_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      asNumber(source[`${prefix}_win_score`]) ?? asNumber(source[`win_score_${prefix}`]),
+    );
+  const winProbability =
+    asNumber(playerRecord?.["win_probability"]) ??
+    getFromPrefixes((source, prefix) =>
+      asNumber(source[`${prefix}_win_probability`]) ??
+      asNumber(source[`win_probability_${prefix}`]),
+    );
 
   return {
     win_pct_year: winPctYear,
@@ -140,6 +173,11 @@ const buildPlayer = (
     ranking,
     home_advantage: homeAdvantage,
     days_since_last: daysSinceLast,
+    win_pct_month: winPctMonth,
+    win_pct_vs_top10: winPctVsTop10,
+    court_speed_score: courtSpeedScore,
+    win_score: winScore,
+    win_probability: winProbability,
   };
 };
 
