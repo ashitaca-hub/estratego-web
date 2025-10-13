@@ -98,6 +98,21 @@ const formatTournamentMonth = (value: number | null | undefined) => {
   return `${capitalized} (${value})`;
 };
 
+const formatLastMeetingDate = (value: string | null | undefined) => {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) {
+    const formatter = new Intl.DateTimeFormat("es", { dateStyle: "long" });
+    return formatter.format(new Date(parsed));
+  }
+
+  return trimmed;
+};
+
 const formatPlayerMetric = (summary: PlayerSummary | undefined, key: keyof PlayerSummary) => {
   if (!summary) return null;
 
@@ -248,6 +263,49 @@ export default function PrematchInner() {
     return items;
   }, [data]);
 
+  const headToHeadDetails = useMemo(() => {
+    if (!data?.h2h) return [];
+
+    const toCount = (value: unknown): number =>
+      typeof value === "number" && Number.isFinite(value) ? value : 0;
+
+    const wins = toCount(data.h2h.wins);
+    const losses = toCount(data.h2h.losses);
+    const totalMatches =
+      typeof data.h2h.total === "number" && Number.isFinite(data.h2h.total)
+        ? data.h2h.total
+        : wins + losses;
+
+    const lastMeeting = formatLastMeetingDate(data.h2h.last_meeting);
+
+    const items: Array<{ label: string; value: string }> = [
+      { label: "Marcador", value: `${wins ?? 0} - ${losses ?? 0}` },
+      { label: "Total de partidos", value: `${totalMatches}` },
+    ];
+
+    if (lastMeeting) {
+      items.push({ label: "Último enfrentamiento", value: lastMeeting });
+    }
+
+    return items;
+  }, [data?.h2h]);
+
+  const contextDetails = useMemo(() => {
+    if (!data) return [];
+
+    const items: Array<{ label: string; value: string }> = [];
+
+    if (data.last_surface) {
+      items.push({ label: "Última superficie disputada", value: data.last_surface });
+    }
+
+    if (data.defends_round) {
+      items.push({ label: "Puntos a defender", value: data.defends_round });
+    }
+
+    return items;
+  }, [data]);
+
   return (
     <div className="min-h-screen bg-slate-950/40 p-6 text-slate-100 md:p-10">
       <h1 className="mb-8 text-3xl font-semibold">
@@ -340,6 +398,34 @@ export default function PrematchInner() {
                 </h3>
                 <dl className="grid grid-cols-1 gap-2 text-sm text-slate-200 md:grid-cols-2">
                   {tournamentDetails.map((item) => (
+                    <div key={`${item.label}-${item.value}`} className="space-y-1">
+                      <dt className="text-xs uppercase tracking-wide text-slate-400">{item.label}</dt>
+                      <dd className="font-medium text-slate-100">{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
+
+            {headToHeadDetails.length > 0 && (
+              <section className="space-y-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Head to head</h3>
+                <dl className="grid grid-cols-1 gap-2 text-sm text-slate-200 md:grid-cols-2">
+                  {headToHeadDetails.map((item) => (
+                    <div key={`${item.label}-${item.value}`} className="space-y-1">
+                      <dt className="text-xs uppercase tracking-wide text-slate-400">{item.label}</dt>
+                      <dd className="font-medium text-slate-100">{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
+
+            {contextDetails.length > 0 && (
+              <section className="space-y-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Contexto</h3>
+                <dl className="grid grid-cols-1 gap-2 text-sm text-slate-200 md:grid-cols-2">
+                  {contextDetails.map((item) => (
                     <div key={`${item.label}-${item.value}`} className="space-y-1">
                       <dt className="text-xs uppercase tracking-wide text-slate-400">{item.label}</dt>
                       <dd className="font-medium text-slate-100">{item.value}</dd>
