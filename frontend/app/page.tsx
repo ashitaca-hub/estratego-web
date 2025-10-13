@@ -14,6 +14,7 @@ import { ChevronRight, Play } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
+  normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
 
 export type Player = {
@@ -141,7 +142,12 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const asNumber = (value: unknown): number | null => {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
     if (typeof value === "string" && value.trim() !== "") {
-      const parsed = Number(value);
+      const match = value.trim().match(/-?\d+(?:[.,]\d+)?/);
+      if (!match) return null;
+      const normalized = match[0].includes(",") && !match[0].includes(".")
+        ? match[0].replace(",", ".")
+        : match[0].replace(/,/g, "");
+      const parsed = Number.parseFloat(normalized);
       return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
@@ -163,8 +169,26 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const wins = asNumber(h2h?.wins) ?? 0;
   const losses = asNumber(h2h?.losses) ?? 0;
 
+  const extras = asRecord(data?.extras) ?? null;
+
+  const probabilityCandidates: Array<number | null> = [
+    asNumber(data?.prob_player),
+    asNumber(data?.probability),
+    asNumber(playerA?.win_probability),
+    asNumber(extras?.display_p),
+  ];
+
+  let probability: number | null = null;
+  for (const candidate of probabilityCandidates) {
+    const normalized = normalizeProbabilityValue(candidate);
+    if (normalized !== null) {
+      probability = normalized;
+      break;
+    }
+  }
+
   return {
-    prob_player: asNumber(data?.prob_player ?? data?.probability),
+    prob_player: probability,
     playerA: buildPlayer(playerA),
     playerB: buildPlayer(playerB),
     h2h: {

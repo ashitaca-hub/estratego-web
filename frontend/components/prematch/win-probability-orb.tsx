@@ -8,12 +8,32 @@ export type WinProbabilityOrbProps = {
   description?: string;
 };
 
+export function normalizeProbabilityValue(
+  probability: number | null | undefined,
+): number | null {
+  if (probability === null || probability === undefined || Number.isNaN(probability)) {
+    return null;
+  }
+
+  const finite = Number(probability);
+  if (!Number.isFinite(finite)) return null;
+
+  const ratio = finite > 1 ? finite / 100 : finite;
+  if (Number.isNaN(ratio)) return null;
+
+  if (ratio < 0) return 0;
+  if (ratio > 1) return 1;
+
+  return ratio;
+}
+
 export function WinProbabilityOrb({ label, value, description }: WinProbabilityOrbProps) {
   const { clamped, percent, displayPercent, hasValue } = useMemo(() => {
-    if (typeof value !== "number" || Number.isNaN(value)) {
+    const normalized = normalizeProbabilityValue(value);
+    if (normalized === null) {
       return { clamped: 0, percent: 0, displayPercent: "—", hasValue: false } as const;
     }
-    const normalized = Math.min(1, Math.max(0, value));
+
     const computedPercent = Math.round(normalized * 100);
     return {
       clamped: normalized,
@@ -115,14 +135,14 @@ export function WinProbabilityOrb({ label, value, description }: WinProbabilityO
 }
 
 export function getWinProbabilitySummary(probability: number | null | undefined) {
-  if (typeof probability !== "number" || Number.isNaN(probability)) {
+  const normalized = normalizeProbabilityValue(probability);
+  if (normalized === null) {
     return {
       percent: null,
       percentOpponent: null,
     } as const;
   }
-  const clamped = Math.min(1, Math.max(0, probability));
-  const percent = Math.round(clamped * 100);
+  const percent = Math.round(normalized * 100);
   return {
     percent,
     percentOpponent: 100 - percent,
