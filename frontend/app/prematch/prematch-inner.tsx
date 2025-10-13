@@ -123,7 +123,7 @@ const formatPlayerMetric = (summary: PlayerSummary | undefined, key: keyof Playe
     case "win_pct_year":
     case "win_pct_surface":
     case "win_pct_month":
-      return formatPercentage(rawValue as number, { decimals: 0 });
+      return formatPercentage(rawValue as number, { decimals: 1 });
     case "win_pct_vs_top10":
       return formatPercentage(rawValue as number, { decimals: 1 });
     case "win_probability":
@@ -158,6 +158,11 @@ const playerMetricDescriptors: Array<{ key: keyof PlayerSummary; label: string }
   { key: "days_since_last", label: "Días desde el último partido" },
   { key: "home_advantage", label: "Ventaja de local" },
   { key: "court_speed_score", label: "Court speed score" },
+];
+
+const highlightedComparisonsDescriptors: Array<{ key: keyof PlayerSummary; label: string }> = [
+  { key: "win_pct_month", label: "% victorias en el mes" },
+  { key: "win_pct_vs_top10", label: "% victorias vs Top 10" },
 ];
 
 export default function PrematchInner() {
@@ -306,6 +311,33 @@ export default function PrematchInner() {
     return items;
   }, [data]);
 
+  const comparisonHighlights = useMemo(() => {
+    if (!data) return [];
+
+    return highlightedComparisonsDescriptors
+      .map(({ key, label }) => {
+        const formattedA = formatPlayerMetric(data.playerA, key);
+        const formattedB = formatPlayerMetric(data.playerB, key);
+
+        if (formattedA === null && formattedB === null) {
+          return null;
+        }
+
+        return {
+          key,
+          label,
+          playerA: formattedA ?? "—",
+          playerB: formattedB ?? "—",
+        };
+      })
+      .filter(Boolean) as Array<{
+        key: keyof PlayerSummary;
+        label: string;
+        playerA: string;
+        playerB: string;
+      }>;
+  }, [data]);
+
   return (
     <div className="min-h-screen bg-slate-950/40 p-6 text-slate-100 md:p-10">
       <h1 className="mb-8 text-3xl font-semibold">
@@ -387,6 +419,34 @@ export default function PrematchInner() {
                       </div>
                     );
                   })}
+                </div>
+              </section>
+            )}
+
+            {comparisonHighlights.length > 0 && (
+              <section className="space-y-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                  Comparativa de rachas
+                </h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {comparisonHighlights.map((metric) => (
+                    <div
+                      key={metric.key}
+                      className="space-y-3 rounded-lg border border-slate-800/60 bg-slate-950/60 p-4"
+                    >
+                      <div className="text-xs uppercase tracking-wide text-slate-400">{metric.label}</div>
+                      <div className="grid grid-cols-2 gap-3 text-sm text-slate-100">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">{playerA}</div>
+                          <div className="font-semibold text-slate-100">{metric.playerA}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">{playerB}</div>
+                          <div className="font-semibold text-slate-100">{metric.playerB}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
