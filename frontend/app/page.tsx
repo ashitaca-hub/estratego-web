@@ -99,6 +99,11 @@ function Column({ title, children }: React.PropsWithChildren<{ title: string }>)
 type PlayerPrematchStats = {
   win_pct_year: number | null;
   win_pct_surface: number | null;
+  win_pct_month: number | null;
+  win_pct_vs_top10: number | null;
+  court_speed_score: number | null;
+  win_score: number | null;
+  win_probability: number | null;
   ranking: number | null;
   home_advantage: boolean | null;
   days_since_last: number | null;
@@ -156,6 +161,11 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const buildPlayer = (p: Record<string, unknown> | null | undefined): PlayerPrematchStats => ({
     win_pct_year: asNumber(p?.win_pct_year),
     win_pct_surface: asNumber(p?.win_pct_surface),
+    win_pct_month: asNumber(p?.win_pct_month),
+    win_pct_vs_top10: asNumber(p?.win_pct_vs_top10),
+    court_speed_score: asNumber(p?.court_speed_score),
+    win_score: asNumber(p?.win_score),
+    win_probability: asNumber(p?.win_probability),
     ranking: asNumber(p?.ranking),
     home_advantage:
       typeof p?.home_advantage === "boolean"
@@ -205,7 +215,13 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
 
 function formatPct(value: number | null) {
   if (value == null) return "N/A";
-  return `${value.toFixed(1)}%`;
+  const ratio = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${ratio.toFixed(1)}%`;
+}
+
+function formatFloat(value: number | null, decimals = 1) {
+  if (value == null) return "N/A";
+  return `${Number(value).toFixed(decimals)}`;
 }
 
 function formatRank(value: number | null) {
@@ -371,6 +387,31 @@ function PrematchDialog({
                         label="% superficie"
                         playerA={formatPct(summary.playerA.win_pct_surface)}
                         playerB={formatPct(summary.playerB.win_pct_surface)}
+                      />
+                      <StatRow
+                        label="% mes"
+                        playerA={formatPct(summary.playerA.win_pct_month)}
+                        playerB={formatPct(summary.playerB.win_pct_month)}
+                      />
+                      <StatRow
+                        label="% vs Top 10"
+                        playerA={formatPct(summary.playerA.win_pct_vs_top10)}
+                        playerB={formatPct(summary.playerB.win_pct_vs_top10)}
+                      />
+                      <StatRow
+                        label="Win score"
+                        playerA={formatFloat(summary.playerA.win_score, 2)}
+                        playerB={formatFloat(summary.playerB.win_score, 2)}
+                      />
+                      <StatRow
+                        label="Prob. victoria"
+                        playerA={formatPct(summary.playerA.win_probability)}
+                        playerB={formatPct(summary.playerB.win_probability)}
+                      />
+                      <StatRow
+                        label="Court speed score"
+                        playerA={formatFloat(summary.playerA.court_speed_score, 1)}
+                        playerB={formatFloat(summary.playerB.court_speed_score, 1)}
                       />
                       <StatRow
                         label="Ranking"
