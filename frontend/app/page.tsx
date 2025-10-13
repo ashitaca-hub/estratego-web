@@ -185,7 +185,7 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     asNumber(data?.prob_player),
     asNumber(data?.probability),
     asNumber(playerA?.win_probability),
-    asNumber(extras?.display_p),
+    asNumber(extras?.ytd_wr_p),
   ];
 
   let probability: number | null = null;

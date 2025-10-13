@@ -455,13 +455,14 @@ const formatPrematchSummary = (raw: unknown): PrematchSummaryResponse => {
   const extras = parseExtras(baseRecord);
   const tournament = parseTournament(baseRecord);
 
+  // Priorizamos la probabilidad asociada explícitamente a playerA si existe,
+  // y evitamos usar campos de display (nombres) como fuente numérica.
   const probabilityCandidates: Array<number | null> = [
+    playerA.win_probability,
     asNumber(baseRecord["prob_player"]),
     asNumber(baseRecord["player_prob"]),
     asNumber(baseRecord["probability"]),
-    asNumber(baseRecord["display_p"]),
-    asNumber(extras?.display_p),
-    playerA.win_probability,
+    asNumber((extras as any)?.ytd_wr_p),
   ];
 
   let probability: number | null = null;
