@@ -364,7 +364,8 @@ export async function POST(req: Request) {
 
   if (error && alternateYear !== null) {
     const retryCondition = preferIso
-      ? error.message.includes("invalid input syntax for type integer")
+      ? error.message.includes("invalid input syntax for type integer") ||
+        error.message.includes("date/time field value out of range")
       : error.message.includes("function pg_catalog.extract");
 
     if (retryCondition) {
