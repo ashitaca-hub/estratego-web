@@ -60,10 +60,26 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 const asNumber = (value: unknown): number | null => {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
+    const match = value.trim().match(/-?\d+(?:[.,]\d+)?/);
+    if (!match) return null;
+    const normalized = match[0].includes(",") && !match[0].includes(".")
+      ? match[0].replace(",", ".")
+      : match[0].replace(/,/g, "");
+    const parsed = Number.parseFloat(normalized);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+const normalizeProbability = (value: number | null): number | null => {
+  if (value === null || Number.isNaN(value)) return null;
+
+  const ratio = value > 1 ? value / 100 : value;
+  if (!Number.isFinite(ratio)) return null;
+  if (ratio < 0) return 0;
+  if (ratio > 1) return 1;
+
+  return ratio;
 };
 
 const asBoolean = (value: unknown): boolean | null => {
@@ -288,15 +304,29 @@ const formatPrematchSummary = (raw: unknown): PrematchSummaryResponse => {
     asNumber(baseRecord["court_speed"]) ??
     asNumber(baseRecord["speed"]);
 
-  const tournament = parseTournament(baseRecord);
   const extras = parseExtras(baseRecord);
+  const tournament = parseTournament(baseRecord);
+
+  const probabilityCandidates: Array<number | null> = [
+    asNumber(baseRecord["prob_player"]),
+    asNumber(baseRecord["player_prob"]),
+    asNumber(baseRecord["probability"]),
+    asNumber(baseRecord["display_p"]),
+    asNumber(extras?.display_p),
+    playerA.win_probability,
+  ];
+
+  let probability: number | null = null;
+  for (const candidate of probabilityCandidates) {
+    const normalized = normalizeProbability(candidate);
+    if (normalized !== null) {
+      probability = normalized;
+      break;
+    }
+  }
 
   return {
-    prob_player:
-      asNumber(baseRecord["prob_player"]) ??
-      asNumber(baseRecord["player_prob"]) ??
-      asNumber(baseRecord["probability"]) ??
-      null,
+    prob_player: probability,
     playerA,
     playerB,
     h2h: {

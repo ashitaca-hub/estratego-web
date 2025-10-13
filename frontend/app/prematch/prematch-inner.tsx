@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
+  normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
 
 // ---------------- Types ----------------
@@ -192,7 +193,10 @@ export default function PrematchInner() {
     run();
   }, [playerAIdParam, playerBIdParam, tourneyIdParam, yearParam]);
 
-  const probability = data?.prob_player ?? null;
+  const probability = useMemo(
+    () => normalizeProbabilityValue(data?.prob_player),
+    [data?.prob_player],
+  );
   const { percent, percentOpponent } = useMemo(
     () => getWinProbabilitySummary(probability),
     [probability],
