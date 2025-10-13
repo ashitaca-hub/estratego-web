@@ -86,6 +86,18 @@ const formatDecimal = (
   return `${Number(value.toFixed(decimals))}`;
 };
 
+const formatTournamentMonth = (value: number | null | undefined) => {
+  if (value === null || value === undefined || Number.isNaN(value)) return null;
+  const normalized = value >= 1 && value <= 12 ? value - 1 : value;
+  if (!Number.isFinite(normalized)) return `${value}`;
+
+  const date = new Date(2020, normalized, 1);
+  const formatter = new Intl.DateTimeFormat("es", { month: "long" });
+  const monthName = formatter.format(date);
+  const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  return `${capitalized} (${value})`;
+};
+
 const formatPlayerMetric = (summary: PlayerSummary | undefined, key: keyof PlayerSummary) => {
   if (!summary) return null;
 
@@ -202,6 +214,40 @@ export default function PrematchInner() {
     [probability],
   );
 
+  const tournamentDetails = useMemo(() => {
+    if (!data) return [];
+
+    const items: Array<{ label: string; value: string }> = [];
+
+    if (data.tournament?.name) {
+      items.push({ label: "Nombre", value: data.tournament.name });
+    }
+    if (data.tournament?.surface) {
+      items.push({ label: "Superficie", value: data.tournament.surface });
+    }
+    if (data.tournament?.bucket) {
+      items.push({ label: "Categoría", value: data.tournament.bucket });
+    }
+    if (typeof data.tournament?.month === "number") {
+      const label = formatTournamentMonth(data.tournament.month);
+      items.push({ label: "Mes", value: label ?? `${data.tournament.month}` });
+    }
+    if (typeof data.court_speed === "number") {
+      const formatted = formatDecimal(data.court_speed, { decimals: 1 });
+      if (formatted) {
+        items.push({ label: "Court speed score del torneo", value: formatted });
+      }
+    }
+    if (data.last_surface) {
+      items.push({ label: "Última superficie disputada", value: data.last_surface });
+    }
+    if (data.defends_round) {
+      items.push({ label: "Puntos a defender", value: data.defends_round });
+    }
+
+    return items;
+  }, [data]);
+
   return (
     <div className="min-h-screen bg-slate-950/40 p-6 text-slate-100 md:p-10">
       <h1 className="mb-8 text-3xl font-semibold">
@@ -287,19 +333,19 @@ export default function PrematchInner() {
               </section>
             )}
 
-            {data.tournament && (
-              <section className="space-y-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+            {tournamentDetails.length > 0 && (
+              <section className="space-y-3 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                  Torneo
+                  Datos del torneo
                 </h3>
-                <ul className="text-sm text-slate-200">
-                  {data.tournament.name && <li>Nombre: {data.tournament.name}</li>}
-                  {data.tournament.surface && <li>Superficie: {data.tournament.surface}</li>}
-                  {data.tournament.bucket && <li>Categoria: {data.tournament.bucket}</li>}
-                  {typeof data.tournament.month === "number" && (
-                    <li>Mes: {data.tournament.month}</li>
-                  )}
-                </ul>
+                <dl className="grid grid-cols-1 gap-2 text-sm text-slate-200 md:grid-cols-2">
+                  {tournamentDetails.map((item) => (
+                    <div key={`${item.label}-${item.value}`} className="space-y-1">
+                      <dt className="text-xs uppercase tracking-wide text-slate-400">{item.label}</dt>
+                      <dd className="font-medium text-slate-100">{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </section>
             )}
 

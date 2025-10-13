@@ -103,6 +103,34 @@ const hasTruthyValue = (obj: Record<string, unknown>): boolean => {
   return Object.values(obj).some((value) => value !== null && value !== undefined);
 };
 
+const pickNumber = (
+  source: Record<string, unknown> | null | undefined,
+  keys: string[],
+): number | null => {
+  if (!source) return null;
+  for (const key of keys) {
+    const value = asNumber(source[key]);
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+  }
+  return null;
+};
+
+const pickBoolean = (
+  source: Record<string, unknown> | null | undefined,
+  keys: string[],
+): boolean | null => {
+  if (!source) return null;
+  for (const key of keys) {
+    const value = asBoolean(source[key]);
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+  }
+  return null;
+};
+
 const buildPlayer = (
   base: Record<string, unknown>,
   keys: string[],
@@ -127,60 +155,180 @@ const buildPlayer = (
   };
 
   const winPctYear =
-    asNumber(playerRecord?.["win_pct_year"]) ??
+    pickNumber(playerRecord, [
+      "win_pct_year",
+      "win_pct_season",
+      "ytd_win_pct",
+      "ytd_wr",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_pct_year`]) ?? asNumber(source[`win_pct_year_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_pct_year`,
+        `win_pct_year_${prefix}`,
+        `${prefix}_win_pct_season`,
+        `win_pct_season_${prefix}`,
+        `${prefix}_ytd_win_pct`,
+        `ytd_win_pct_${prefix}`,
+        `${prefix}_ytd_wr`,
+        `ytd_wr_${prefix}`,
+      ]),
     );
   const winPctSurface =
-    asNumber(playerRecord?.["win_pct_surface"]) ??
+    pickNumber(playerRecord, [
+      "win_pct_surface",
+      "surface_win_pct",
+      "surface_wr",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_pct_surface`]) ??
-      asNumber(source[`win_pct_surface_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_pct_surface`,
+        `win_pct_surface_${prefix}`,
+        `${prefix}_surface_win_pct`,
+        `surface_win_pct_${prefix}`,
+        `${prefix}_surface_wr`,
+        `surface_wr_${prefix}`,
+      ]),
     );
   const ranking =
-    asNumber(playerRecord?.["ranking"]) ??
+    pickNumber(playerRecord, ["ranking", "rank", "current_rank"]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_ranking`]) ?? asNumber(source[`ranking_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_ranking`,
+        `ranking_${prefix}`,
+        `${prefix}_rank`,
+        `rank_${prefix}`,
+        `${prefix}_current_rank`,
+        `current_rank_${prefix}`,
+      ]),
     );
   const homeAdvantage =
-    asBoolean(playerRecord?.["home_advantage"]) ??
+    pickBoolean(playerRecord, ["home_advantage", "is_home", "is_local"]) ??
     getFromPrefixes((source, prefix) =>
-      asBoolean(source[`${prefix}_home_advantage`]) ??
-      asBoolean(source[`home_advantage_${prefix}`]),
+      pickBoolean(source, [
+        `${prefix}_home_advantage`,
+        `home_advantage_${prefix}`,
+        `${prefix}_is_home`,
+        `is_home_${prefix}`,
+        `${prefix}_is_local`,
+        `is_local_${prefix}`,
+      ]),
     );
   const daysSinceLast =
-    asNumber(playerRecord?.["days_since_last"]) ??
+    pickNumber(playerRecord, [
+      "days_since_last",
+      "days_since_last_match",
+      "days_since_last_game",
+      "days_since_match",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_days_since_last`]) ??
-      asNumber(source[`days_since_last_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_days_since_last`,
+        `days_since_last_${prefix}`,
+        `${prefix}_days_since_last_match`,
+        `days_since_last_match_${prefix}`,
+        `${prefix}_days_since_match`,
+        `days_since_match_${prefix}`,
+      ]),
     );
   const winPctMonth =
-    asNumber(playerRecord?.["win_pct_month"]) ??
+    pickNumber(playerRecord, [
+      "win_pct_month",
+      "win_pct_this_month",
+      "win_pct_last_30",
+      "win_pct_30d",
+      "monthly_win_pct",
+      "last_30_wr",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_pct_month`]) ?? asNumber(source[`win_pct_month_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_pct_month`,
+        `win_pct_month_${prefix}`,
+        `${prefix}_win_pct_this_month`,
+        `win_pct_this_month_${prefix}`,
+        `${prefix}_win_pct_last_30`,
+        `win_pct_last_30_${prefix}`,
+        `${prefix}_win_pct_30d`,
+        `win_pct_30d_${prefix}`,
+        `${prefix}_monthly_win_pct`,
+        `monthly_win_pct_${prefix}`,
+        `${prefix}_last_30_wr`,
+        `last_30_wr_${prefix}`,
+      ]),
     );
   const winPctVsTop10 =
-    asNumber(playerRecord?.["win_pct_vs_top10"]) ??
+    pickNumber(playerRecord, [
+      "win_pct_vs_top10",
+      "win_pct_vs_top_10",
+      "win_pct_top10",
+      "top10_win_pct",
+      "pct_vs_top10",
+      "pct_vs_top_10",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_pct_vs_top10`]) ??
-      asNumber(source[`win_pct_vs_top10_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_pct_vs_top10`,
+        `win_pct_vs_top10_${prefix}`,
+        `${prefix}_win_pct_vs_top_10`,
+        `win_pct_vs_top_10_${prefix}`,
+        `${prefix}_win_pct_top10`,
+        `win_pct_top10_${prefix}`,
+        `${prefix}_top10_win_pct`,
+        `top10_win_pct_${prefix}`,
+        `${prefix}_pct_vs_top10`,
+        `pct_vs_top10_${prefix}`,
+        `${prefix}_pct_vs_top_10`,
+        `pct_vs_top_10_${prefix}`,
+      ]),
     );
   const courtSpeedScore =
-    asNumber(playerRecord?.["court_speed_score"]) ??
+    pickNumber(playerRecord, [
+      "court_speed_score",
+      "court_speed",
+      "court_speed_index",
+      "court_speed_rating",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_court_speed_score`]) ??
-      asNumber(source[`court_speed_score_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_court_speed_score`,
+        `court_speed_score_${prefix}`,
+        `${prefix}_court_speed`,
+        `court_speed_${prefix}`,
+        `${prefix}_court_speed_index`,
+        `court_speed_index_${prefix}`,
+        `${prefix}_court_speed_rating`,
+        `court_speed_rating_${prefix}`,
+      ]),
     );
   const winScore =
-    asNumber(playerRecord?.["win_score"]) ??
+    pickNumber(playerRecord, ["win_score", "win_rating", "win_index"]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_score`]) ?? asNumber(source[`win_score_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_score`,
+        `win_score_${prefix}`,
+        `${prefix}_win_rating`,
+        `win_rating_${prefix}`,
+        `${prefix}_win_index`,
+        `win_index_${prefix}`,
+      ]),
     );
   const winProbability =
-    asNumber(playerRecord?.["win_probability"]) ??
+    pickNumber(playerRecord, [
+      "win_probability",
+      "probability",
+      "win_prob",
+      "predicted_win_pct",
+    ]) ??
     getFromPrefixes((source, prefix) =>
-      asNumber(source[`${prefix}_win_probability`]) ??
-      asNumber(source[`win_probability_${prefix}`]),
+      pickNumber(source, [
+        `${prefix}_win_probability`,
+        `win_probability_${prefix}`,
+        `${prefix}_probability`,
+        `probability_${prefix}`,
+        `${prefix}_win_prob`,
+        `win_prob_${prefix}`,
+        `${prefix}_predicted_win_pct`,
+        `predicted_win_pct_${prefix}`,
+      ]),
     );
 
   return {
