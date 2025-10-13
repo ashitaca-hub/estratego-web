@@ -275,6 +275,19 @@ const formatPrematchSummary = (raw: unknown): PrematchSummaryResponse => {
   };
 };
 
+type PrematchRpcPayload = {
+  player_a_id: number;
+  player_b_id: number;
+  p_tourney_id: string;
+  p_year: number | string;
+};
+
+const callExtendedPrematchSummary = async (payload: PrematchRpcPayload) => {
+  console.log("🪵 Llamando get_extended_prematch_summary con:", payload);
+
+  return supabase.rpc("get_extended_prematch_summary", payload);
+};
+
 export async function POST(req: Request) {
   const body = await req.json();
   const { playerA_id, playerB_id, tourney_id, year } = body;
@@ -285,19 +298,27 @@ export async function POST(req: Request) {
     });
   }
 
-  console.log("🪵 Llamando get_extended_prematch_summary con:", {
-    player_a_id: playerA_id,
-    player_b_id: playerB_id,
-    p_tourney_id: tourney_id,
-    p_year: year,
-  });
-
-  const { data, error } = await supabase.rpc("get_extended_prematch_summary", {
+  const rpcPayload: PrematchRpcPayload = {
     player_a_id: playerA_id,
     player_b_id: playerB_id,
     p_tourney_id: String(tourney_id),
     p_year: year,
-  });
+  };
+
+  let { data, error } = await callExtendedPrematchSummary(rpcPayload);
+
+  if (error && error.message.includes("function pg_catalog.extract")) {
+    const isoYear = `${year}-01-01`;
+    console.warn("⚠️ Reintentando prematch con fecha ISO para evitar error de extract", {
+      originalYear: year,
+      isoYear,
+    });
+
+    ({ data, error } = await callExtendedPrematchSummary({
+      ...rpcPayload,
+      p_year: isoYear,
+    }));
+  }
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
