@@ -23,24 +23,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 1) Detectar ronda inicial según el tamaño del cuadro del torneo
-    const { data: tinfo, error: terr } = await supabaseAdmin
-      .from("tournaments")
-      .select("draw_size")
-      .eq("tourney_id", tourney_id)
-      .single();
+    // 1) Detectar ronda inicial directamente desde draw_matches existentes (más robusto)
+    const { data: roundsData, error: roundsErr } = await supabaseAdmin
+      .from("draw_matches")
+      .select("round")
+      .eq("tourney_id", tourney_id);
 
-    if (terr) {
-      console.error("Error leyendo tournaments.draw_size:", terr);
+    if (roundsErr) {
+      console.error("Error leyendo draw_matches(round):", roundsErr);
       return NextResponse.json(
-        { error: terr.message, stage: "meta" },
+        { error: roundsErr.message, stage: "read_rounds" },
         { status: 500 }
       );
     }
 
-    const size = Number(tinfo?.draw_size ?? 0);
-    const firstRound =
-      size >= 64 ? "R64" : size >= 32 ? "R32" : size >= 16 ? "R16" : size >= 8 ? "QF" : size >= 4 ? "SF" : "F";
+    const order = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
+    const present = new Set((roundsData ?? []).map((r: any) => r.round));
+    const firstRound = order.find((r) => present.has(r)) ?? "R32"; // fallback razonable
 
     // 2) Limpiar ganadores de la ronda inicial
     const { error: updError } = await supabaseAdmin
