@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -488,14 +489,22 @@ function PrematchDialog({
 
 
 export default function EstrategoBracketApp() {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const tParam = sp.get("t") || "2025-329";
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [pmOpen, setPmOpen] = useState(false);
   const [pmMatch, setPmMatch] = useState<Match | null>(null);
+  const [tidInput, setTidInput] = useState<string>(tParam);
+
+  useEffect(() => {
+    setTidInput(tParam);
+  }, [tParam]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/tournament/2025-329");
+        const res = await fetch(`/api/tournament/${tParam}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: Bracket = await res.json();
         setBracket(data);
@@ -505,7 +514,7 @@ export default function EstrategoBracketApp() {
       }
     };
     load();
-  }, []);
+  }, [tParam]);
 
   const rounds: Match["round"][] = useMemo(
   () => ["R64", "R32", "R16", "QF", "SF", "F"],
@@ -607,6 +616,25 @@ export default function EstrategoBracketApp() {
 
   return (
     <div className="min-h-screen p-6 md:p-10">
+      <form
+        className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3 md:flex-row md:items-center md:gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (tidInput && tidInput.trim()) {
+            router.push(`/?t=${encodeURIComponent(tidInput.trim())}`);
+          }
+        }}
+      >
+        <label className="text-xs font-medium text-slate-400 md:w-40">Seleccionar torneo (tourney_id)</label>
+        <input
+          className="w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-slate-700"
+          placeholder="p.ej., 2025-429"
+          value={tidInput}
+          onChange={(e) => setTidInput(e.target.value)}
+        />
+        <Button type="submit" className="md:ml-2">Cargar</Button>
+        <div className="text-xs text-slate-500 md:ml-auto">Actual: {tParam}</div>
+      </form>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
