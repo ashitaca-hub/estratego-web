@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -232,12 +232,12 @@ function formatRank(value: number | null) {
 
 function formatBool(value: boolean | null) {
   if (value == null) return "N/A";
-  return value ? "Sí" : "No";
+  return value ? "Si" : "No";
 }
 
 function formatDays(value: number | null) {
   if (value == null) return "N/A";
-  return `${value} días`;
+  return `${value} dias`;
 }
 
 function StatRow({
@@ -290,7 +290,7 @@ function PrematchDialog({
       setLoading(true);
       setError(null);
       setSummary(null);
-      console.log("📦 PrematchDialog payload", {
+      console.log("PrematchDialog payload", {
         playerA_id: playerAId,
         playerB_id: playerBId,
         tourney_id: bracket?.tourney_id,
@@ -302,20 +302,20 @@ function PrematchDialog({
           body: JSON.stringify({
             playerA_id: playerAId,
             playerB_id: playerBId,
-            tourney_id: bracket?.tourney_id, // asegúrate bracket esté en alcance o pásalo como prop
+            tourney_id: bracket?.tourney_id, // asegurate bracket este en alcance o pasalo como prop
             year: new Date().getFullYear(),
           }),
         });
         if (!res.ok) {
           const text = await res.text();
-          setError(`Error del servidor: ${res.status} — ${text}`);
+          setError(`Error del servidor: ${res.status} - ${text}`);
         } else {
           const data = await res.json();
           setSummary(normalizePrematchSummary(data));
         }
       } catch (err) {
-        console.error("❌ Error de red al obtener prematch", err);
-        setError("Error de red al intentar análisis prematch.");
+        console.error("Error de red al obtener prematch", err);
+        setError("Error de red al intentar analisis prematch.");
       } finally {
         setLoading(false);
       }
@@ -343,7 +343,7 @@ function PrematchDialog({
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-6 min-h-0">
             <div className="space-y-5 text-sm">
-              {loading && <div className="text-slate-400">Cargando análisis…</div>}
+              {loading && <div className="text-slate-400">Cargando analisis...</div>}
               {error && <div className="text-red-400">{error}</div>}
 
               {summary && (
@@ -363,11 +363,11 @@ function PrematchDialog({
                   </div>
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                    <h3 className="text-base font-semibold text-slate-100">Resumen rápido</h3>
+                    <h3 className="text-base font-semibold text-slate-100">Resumen rapido</h3>
                     <p className="text-sm text-slate-300">
                       Nuestro modelo otorga a <strong>{top.name}</strong> una probabilidad de victoria del{' '}
-                      <strong>{percent !== null ? `${percent}%` : '—'}</strong>, dejando para <strong>{bottom.name}</strong>{' '}
-                      el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : '—'}</strong>.
+                      <strong>{percent !== null ? `${percent}%` : '-'}</strong>, dejando para <strong>{bottom.name}</strong>{' '}
+                      el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : '-'}</strong>.
                     </p>
                     <p className="text-xs text-slate-400">
                       Observa el brillo: cuando una esfera se incendia en rojos ardientes, habla de inercia ganadora; si domina el hielo, el pulso llega congelado.
@@ -380,7 +380,7 @@ function PrematchDialog({
                     </div>
                     <div className="divide-y divide-slate-800/60">
                       <StatRow
-                        label="% año"
+                        label="% anio"
                         playerA={formatPct(summary.playerA.win_pct_year)}
                         playerB={formatPct(summary.playerB.win_pct_year)}
                       />
@@ -420,7 +420,7 @@ function PrematchDialog({
                         playerB={formatRank(summary.playerB.ranking)}
                       />
                       <StatRow
-                        label="Últimos días"
+                        label="Ultimos dias"
                         playerA={formatDays(summary.playerA.days_since_last)}
                         playerB={formatDays(summary.playerB.days_since_last)}
                       />
@@ -450,7 +450,7 @@ function PrematchDialog({
                       </div>
                       {summary.h2h.last_meeting ? (
                         <div className="text-sm text-slate-300">
-                          Último duelo: <span className="font-medium text-slate-100">{summary.h2h.last_meeting}</span>
+                          Ultimo duelo: <span className="font-medium text-slate-100">{summary.h2h.last_meeting}</span>
                         </div>
                       ) : (
                         <div className="text-sm text-slate-500">Sin registro reciente</div>
@@ -461,7 +461,7 @@ function PrematchDialog({
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Contexto</div>
                       <div className="space-y-2 text-sm text-slate-300">
                         <div>
-                          Último torneo similar: <span className="font-medium text-slate-100">{summary.last_surface ?? 'Desconocido'}</span>
+                          Ultimo torneo similar: <span className="font-medium text-slate-100">{summary.last_surface ?? 'Desconocido'}</span>
                         </div>
                         <div>
                           Defiende puntos de: <span className="font-medium text-slate-100">{summary.defends_round ?? 'Ninguno'}</span>
@@ -544,7 +544,7 @@ export function EstrategoBracketApp() {
     });
 
     if (!simRes.ok) {
-      console.error("❌ Error al simular torneo:", await simRes.text());
+      console.error("Error al simular torneo:", await simRes.text());
       return;
     }
 
@@ -574,7 +574,7 @@ export function EstrategoBracketApp() {
     const playerBId = Number.parseInt(m.bottom.id, 10);
 
     if (Number.isNaN(playerAId) || Number.isNaN(playerBId)) {
-      console.info("⏭️ Prematch omitido: jugadores sin definir", {
+      console.info("Prematch omitido: jugadores sin definir", {
         top: m.top.id,
         bottom: m.bottom.id,
       });
@@ -588,7 +588,7 @@ export function EstrategoBracketApp() {
       year: new Date().getFullYear(),
     };
 
-    console.log("📦 Payload prematch:", payload);
+    console.log("Payload prematch:", payload);
 
     try {
       const res = await fetch("/api/prematch", {
@@ -598,9 +598,9 @@ export function EstrategoBracketApp() {
       });
 
       const summary = await res.json();
-      console.log("🔍 Prematch summary:", summary);
+      console.log("Prematch summary:", summary);
     } catch (err) {
-      console.error("❌ Error en prematch", err);
+      console.error("Error en prematch", err);
     }
   };
 
@@ -611,7 +611,7 @@ export function EstrategoBracketApp() {
   }
 
   if (!bracket) {
-    return <div className="p-6 text-sm text-gray-600">Cargando torneo…</div>;
+    return <div className="p-6 text-sm text-gray-600">Cargando torneo...</div>;
   }
 
   return (
@@ -639,7 +639,7 @@ export function EstrategoBracketApp() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
           <p className="text-sm text-gray-600">
-            Draw {bracket.drawSize} · Superficie: {bracket.surface}
+            Draw {bracket.drawSize} - Superficie: {bracket.surface}
           </p>
         </div>
         <div className="flex gap-2">
@@ -681,13 +681,13 @@ export function EstrategoBracketApp() {
 }
 
 function EmptyRound() {
-  return <div className="text-xs text-gray-500 italic px-1">(esperando simulación)</div>;
+  return <div className="text-xs text-gray-500 italic px-1">(esperando simulacion)</div>;
 }
 
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-600">Cargando�</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">Cargando...</div>}>
       <EstrategoBracketApp />
     </Suspense>
   );
