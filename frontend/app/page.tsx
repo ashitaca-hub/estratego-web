@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -488,7 +488,7 @@ function PrematchDialog({
 }
 
 
-export default function EstrategoBracketApp() {
+export function EstrategoBracketApp() {
   const router = useRouter();
   const sp = useSearchParams();
   const tParam = sp.get("t") || "2025-329";
@@ -682,4 +682,13 @@ export default function EstrategoBracketApp() {
 
 function EmptyRound() {
   return <div className="text-xs text-gray-500 italic px-1">(esperando simulaciÃ³n)</div>;
+}
+
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">Cargando…</div>}>
+      <EstrategoBracketApp />
+    </Suspense>
+  );
 }
