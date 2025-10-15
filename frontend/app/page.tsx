@@ -240,6 +240,14 @@ function formatDays(value: number | null) {
   return `${value} dias`;
 }
 
+function decimalOdds(prob: number | null): string {
+  if (prob == null) return "-";
+  if (prob <= 0) return "-";
+  if (prob >= 1) return "-";
+  const d = 1 / prob;
+  return d.toFixed(2);
+}
+
 function StatRow({
   label,
   playerA,
@@ -329,6 +337,41 @@ function PrematchDialog({
     [probability],
   );
 
+  const oddsA = useMemo(() => decimalOdds(probability), [probability]);
+  const oddsB = useMemo(() => decimalOdds(probability != null ? 1 - probability : null), [probability]);
+
+  const highlight = useMemo(() => {
+    if (!summary) return null as null | { text: string };
+    const a = summary.playerA;
+    const b = summary.playerB;
+    type C = { key: keyof typeof a; label: string };
+    const cands: C[] = [
+      { key: "win_pct_month", label: "% victorias en el mes" },
+      { key: "win_pct_vs_top10", label: "% victorias vs Top 10" },
+    ];
+    let best: { label: string; a: number; b: number } | null = null;
+    for (const c of cands) {
+      const va = (a as any)?.[c.key];
+      const vb = (b as any)?.[c.key];
+      if (typeof va === "number" && typeof vb === "number") {
+        if (best === null || Math.abs(va - vb) > Math.abs(best.a - best.b)) {
+          best = { label: c.label, a: va, b: vb };
+        }
+      }
+    }
+    if (!best) return null;
+    const who = best.a > best.b ? "A" : best.b > best.a ? "B" : null;
+    if (!who) return null;
+    const left = formatPct(best.a);
+    const right = formatPct(best.b);
+    if (left === "N/A" || right === "N/A") return null;
+    const text =
+      who === "A"
+        ? `${top.name} destaca en ${best.label}: ${left} vs ${right}`
+        : `${bottom.name} destaca en ${best.label}: ${right} vs ${left}`;
+    return { text };
+  }, [summary]);
+
   if (!match) return null;
   const { top, bottom } = match;
 
@@ -369,9 +412,19 @@ function PrematchDialog({
                       <strong>{percent !== null ? `${percent}%` : '-'}</strong>, dejando para <strong>{bottom.name}</strong>{' '}
                       el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : '-'}</strong>.
                     </p>
-                    <p className="text-xs text-slate-400">
-                      Observa el brillo: cuando una esfera se incendia en rojos ardientes, habla de inercia ganadora; si domina el hielo, el pulso llega congelado.
-                    </p>
+                    <div className="grid grid-cols-2 gap-3 text-sm text-slate-200">
+                      <div className="rounded-md border border-slate-800/60 bg-slate-950/60 p-3">
+                        <div className="text-xs uppercase tracking-wide text-slate-400">Cuota (decimal)</div>
+                        <div className="font-semibold">{top.name}: {oddsA}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-800/60 bg-slate-950/60 p-3">
+                        <div className="text-xs uppercase tracking-wide text-slate-400">Cuota (decimal)</div>
+                        <div className="font-semibold">{bottom.name}: {oddsB}</div>
+                      </div>
+                    </div>
+                    {highlight?.text && (
+                      <div className="text-xs text-slate-300">Destacado: {highlight.text}</div>
+                    )}
                   </section>
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70">
