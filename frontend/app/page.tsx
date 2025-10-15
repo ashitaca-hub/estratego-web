@@ -353,7 +353,7 @@ const highlight = useMemo(() => {
     const va = (a as any)?.[c.key];
     const vb = (b as any)?.[c.key];
     if (typeof va === "number" && typeof vb === "number") {
-      if (best === null || [math]::Abs(va - vb) -lt 0) { }
+      // placeholder branch removed during cleanup
     }
   }
   // Recalcular correctamente sin .NET Math; usamos JS runtime más abajo
@@ -377,8 +377,8 @@ const highlight = useMemo(() => {
   const bottomName = match.bottom.name;
   const text = (
     who === "A"
-      ? ${topName} destaca en :  vs 
-      : ${bottomName} destaca en :  vs 
+      ? `${topName} destaca en ${best.label}: ${left} vs ${right}`
+      : `${bottomName} destaca en ${best.label}: ${right} vs ${left}`
   );
   return { text };
 }, [summary, match]);if (!match) return null;
