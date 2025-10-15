@@ -8,31 +8,62 @@ export async function GET(req: Request) {
   const limitParam = url.searchParams.get("limit");
   const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 100);
 
-  let query = supabase
+  // 1) Obtener todos los tourney_id presentes en draw_matches
+  const { data: dmRows, error: dmErr } = await supabase
+    .from("draw_matches")
+    .select("tourney_id");
+
+  if (dmErr) {
+    return new Response(JSON.stringify({ error: dmErr.message, stage: "draw_matches" }), { status: 500 });
+  }
+
+  const ids = Array.from(new Set((dmRows ?? []).map((r: any) => r.tourney_id).filter(Boolean)));
+
+  if (ids.length === 0) {
+    return new Response(JSON.stringify({ items: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  // 2) Cargar metadatos desde tournaments para esos ids
+  const { data: tmeta, error: tErr } = await supabase
     .from("tournaments")
     .select("tourney_id,name,surface,draw_size")
-    .limit(limit);
+    .in("tourney_id", ids);
 
-  if (q && q.trim()) {
-    // Busuqeda simple por nombre o tourney_id (ilike)
-    const like = `%${q.trim()}%`;
-    query = query.or(
-      `name.ilike.${like},tourney_id.ilike.${like}`
-    );
-  } else {
-    // Por defecto, ordenar por tourney_id descendente (YYYY-XXX)
-    query = query.order("tourney_id", { ascending: false });
+  if (tErr) {
+    return new Response(JSON.stringify({ error: tErr.message, stage: "tournaments" }), { status: 500 });
   }
 
-  const { data, error } = await query;
+  const metaMap = new Map<string, any>();
+  (tmeta ?? []).forEach((t) => metaMap.set(t.tourney_id, t));
 
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-  }
+  // 3) Construir lista enriquecida y filtrar por q si aplica
+  const enriched = ids
+    .map((id) => {
+      const m = metaMap.get(id);
+      return {
+        tourney_id: id,
+        name: m?.name ?? null,
+        surface: m?.surface ?? null,
+        draw_size: m?.draw_size ?? null,
+      };
+    })
+    // Orden por id descendente (YYYY-XXX)
+    .sort((a, b) => (a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0));
 
-  return new Response(JSON.stringify({ items: data ?? [] }), {
+  const needle = (q || "").trim().toLowerCase();
+  const filtered = needle
+    ? enriched.filter((t) =>
+        t.tourney_id.toLowerCase().includes(needle) || (t.name ? String(t.name).toLowerCase().includes(needle) : false),
+      )
+    : enriched;
+
+  const limited = filtered.slice(0, limit);
+
+  return new Response(JSON.stringify({ items: limited }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
 }
-
