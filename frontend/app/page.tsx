@@ -496,10 +496,33 @@ export function EstrategoBracketApp() {
   const [pmOpen, setPmOpen] = useState(false);
   const [pmMatch, setPmMatch] = useState<Match | null>(null);
   const [tidInput, setTidInput] = useState<string>(tParam);
+  const [listLoading, setListLoading] = useState(false);
+  const [tournaments, setTournaments] = useState<Array<{ tourney_id: string; name: string; surface?: string; draw_size?: number }>>([]);
 
   useEffect(() => {
     setTidInput(tParam);
   }, [tParam]);
+
+  // Load tournaments list (recent)
+  useEffect(() => {
+    const loadList = async () => {
+      setListLoading(true);
+      try {
+        const res = await fetch("/api/tournaments?limit=30");
+        if (res.ok) {
+          const j = await res.json();
+          setTournaments(Array.isArray(j.items) ? j.items : []);
+        } else {
+          setTournaments([]);
+        }
+      } catch {
+        setTournaments([]);
+      } finally {
+        setListLoading(false);
+      }
+    };
+    loadList();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -635,6 +658,31 @@ export function EstrategoBracketApp() {
         <Button type="submit" className="md:ml-2">Cargar</Button>
         <div className="text-xs text-slate-500 md:ml-auto">Actual: {tParam}</div>
       </form>
+
+      {/* Quick list of tournaments */}
+      <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Torneos recientes</div>
+        {listLoading ? (
+          <div className="text-xs text-slate-500">Cargando lista...</div>
+        ) : tournaments.length === 0 ? (
+          <div className="text-xs text-slate-500">Sin datos</div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {tournaments.map((t) => (
+              <button
+                key={t.tourney_id}
+                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900"
+                onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
+                type="button"
+                title={t.tourney_id}
+              >
+                <span className="truncate">{t.name || t.tourney_id}</span>
+                <span className="ml-2 text-xs text-slate-500">{t.tourney_id}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
