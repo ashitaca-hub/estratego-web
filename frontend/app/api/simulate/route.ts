@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     });
   }
 
-  // Tras simular, si no existen rondas posteriores, promueve ganadores y crea la siguiente ronda.
+  // Tras simular, promueve ganadores y crea/actualiza la siguiente ronda.
   try {
     const order = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
     const nextOf: Record<string, string | null> = {
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       F: null,
     };
 
-    // Leer rondas presentes
+    // Leer rondas presentes (incluye ids y ganadores)
     const { data: roundsRows, error: roundsErr } = await supabase
       .from("draw_matches")
       .select("id, round, winner_id")
@@ -90,10 +90,7 @@ export async function POST(req: Request) {
         const next = nextOf[r];
         if (!next) break;
 
-        const hasNext = roundsRows.some((row: any) => row.round === next);
-        if (hasNext) continue;
-
-        // Crear siguiente ronda a partir de ganadores de la ronda r
+        // Construir siguiente ronda a partir de ganadores de la ronda r
         const cur = roundsRows
           .filter((row: any) => row.round === r)
           .sort((a: any, b: any) => {
@@ -102,27 +99,26 @@ export async function POST(req: Request) {
             return na - nb;
           });
 
-        // Requerimos todos los ganadores definidos
-        if (cur.some((row: any) => !row.winner_id)) {
-          break;
-        }
-
-        const winners = cur.map((row: any) => row.winner_id as string);
-        const inserts = [] as Array<{ id: string; tourney_id: string; round: string; top_id: string; bot_id: string }>;
+        const winners = cur.map((row: any) => row.winner_id as string | null);
+        const upserts: Array<{ id: string; tourney_id: string; round: string; top_id: string; bot_id: string }> = [];
         for (let i = 0; i < winners.length; i += 2) {
           const top = winners[i];
-          const bot = winners[i + 1];
-          if (!top || !bot) break;
+          const bot = winners[i + 1] ?? null;
+          if (!top || !bot) continue; // solo creamos el cruce si ambos ganadores existen
           const matchNum = i / 2 + 1;
-          inserts.push({ id: `${next}-${matchNum}`, tourney_id, round: next, top_id: top, bot_id: bot });
+          upserts.push({ id: `${next}-${matchNum}`, tourney_id, round: next, top_id: top, bot_id: bot });
         }
 
-        if (inserts.length > 0) {
-          const { error: insErr } = await supabase.from("draw_matches").insert(inserts);
-          if (insErr) {
-            console.warn("No se pudieron crear emparejamientos de la siguiente ronda:", insErr.message);
+        if (upserts.length > 0) {
+          // upsert para crear o actualizar si ya existen placeholders
+          const { error: upErr } = await supabase
+            .from("draw_matches")
+            // @ts-ignore onConflict es pasado a PostgREST
+            .upsert(upserts, { onConflict: "tourney_id,id" });
+          if (upErr) {
+            console.warn("No se pudieron crear/actualizar emparejamientos de la siguiente ronda:", upErr.message);
           } else {
-            console.log(`Emparejamientos creados para ${next}:`, inserts.length);
+            console.log(`Emparejamientos listos para ${next}:`, upserts.length);
           }
         }
       }
