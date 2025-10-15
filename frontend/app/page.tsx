@@ -338,6 +338,7 @@ function PrematchDialog({
   );
 
   const oddsA = useMemo(() => decimalOdds(probability), [probability]);
+  const oddsB = useMemo(() => decimalOdds(probability != null ? 1 - probability : null), [probability]);
   
 const highlight = useMemo(() => {
   if (!summary || !match) return null as null | { text: string };
@@ -381,40 +382,9 @@ const highlight = useMemo(() => {
       : `${bottomName} destaca en ${best.label}: ${right} vs ${left}`
   );
   return { text };
-}, [summary, match]);if (!match) return null;
+}, [summary, match]);
+  if (!match) return null;
   const { top, bottom } = match;
-
-  const highlight = useMemo(() => {
-    if (!summary) return null as null | { text: string };
-    const a = summary.playerA;
-    const b = summary.playerB;
-    type C = { key: keyof typeof a; label: string };
-    const cands: C[] = [
-      { key: "win_pct_month", label: "% victorias en el mes" },
-      { key: "win_pct_vs_top10", label: "% victorias vs Top 10" },
-    ];
-    let best: { label: string; a: number; b: number } | null = null;
-    for (const c of cands) {
-      const va = (a as any)?.[c.key];
-      const vb = (b as any)?.[c.key];
-      if (typeof va === "number" && typeof vb === "number") {
-        if (best === null || Math.abs(va - vb) > Math.abs(best.a - best.b)) {
-          best = { label: c.label, a: va, b: vb };
-        }
-      }
-    }
-    if (!best) return null;
-    const who = best.a > best.b ? "A" : best.b > best.a ? "B" : null;
-    if (!who) return null;
-    const left = formatPct(best.a);
-    const right = formatPct(best.b);
-    if (left === "N/A" || right === "N/A") return null;
-    const text =
-      who === "A"
-        ? `${top.name} destaca en ${best.label}: ${left} vs ${right}`
-        : `${bottom.name} destaca en ${best.label}: ${right} vs ${left}`;
-    return { text };
-  }, [summary, top.name, bottom.name]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
