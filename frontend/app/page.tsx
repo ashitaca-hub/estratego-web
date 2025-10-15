@@ -340,6 +340,9 @@ function PrematchDialog({
   const oddsA = useMemo(() => decimalOdds(probability), [probability]);
   const oddsB = useMemo(() => decimalOdds(probability != null ? 1 - probability : null), [probability]);
 
+  if (!match) return null;
+  const { top, bottom } = match;
+
   const highlight = useMemo(() => {
     if (!summary) return null as null | { text: string };
     const a = summary.playerA;
@@ -370,10 +373,7 @@ function PrematchDialog({
         ? `${top.name} destaca en ${best.label}: ${left} vs ${right}`
         : `${bottom.name} destaca en ${best.label}: ${right} vs ${left}`;
     return { text };
-  }, [summary]);
-
-  if (!match) return null;
-  const { top, bottom } = match;
+  }, [summary, top.name, bottom.name]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
