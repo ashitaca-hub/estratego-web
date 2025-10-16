@@ -123,6 +123,10 @@ type PrematchSummary = {
   last_surface: string | null;
   defends_round: string | null;
   court_speed: number | null;
+  extras?: {
+    country_p?: string | null;
+    country_o?: string | null;
+  };
 };
 
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
@@ -211,6 +215,10 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     last_surface: typeof meta?.last_surface === "string" ? meta.last_surface : null,
     defends_round: typeof meta?.defends_round === "string" ? meta.defends_round : null,
     court_speed: asNumber(meta?.court_speed),
+    extras: {
+      country_p: typeof (extras as any)?.country_p === "string" ? String((extras as any).country_p) : null,
+      country_o: typeof (extras as any)?.country_o === "string" ? String((extras as any).country_o) : null,
+    },
   };
 };
 
