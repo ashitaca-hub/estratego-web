@@ -66,16 +66,30 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
   );
 
-  const [{ data: plist, error: e3 }, { data: entries, error: e4 }] = await Promise.all([
-    supabase
-      .from("players_min") // <- cambiado de players_official a players_min
-      .select("player_id,name")
-      .in("player_id", ids),
-    supabase
+  // Fetch players list
+  const pPromise = supabase
+    .from("players_min") // <- cambiado de players_official a players_min
+    .select("player_id,name")
+    .in("player_id", ids);
+
+  // Try to fetch entries including entry_type; if column doesn't exist, fallback without it
+  let entriesRes = await supabase
+    .from("draw_entries")
+    .select("player_id,seed,entry_type")
+    .eq("tourney_id", id)
+    .in("player_id", ids);
+
+  if (entriesRes.error && entriesRes.error.message?.toLowerCase().includes("entry_type")) {
+    entriesRes = await supabase
       .from("draw_entries")
-      .select("player_id,seed,entry_type")
+      .select("player_id,seed")
       .eq("tourney_id", id)
-      .in("player_id", ids),
+      .in("player_id", ids);
+  }
+
+  const [{ data: plist, error: e3 }, { data: entries, error: e4 }] = await Promise.all([
+    pPromise,
+    Promise.resolve(entriesRes),
   ]);
 
   if (e3 || e4) {
