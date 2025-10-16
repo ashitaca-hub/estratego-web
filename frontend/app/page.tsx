@@ -456,29 +456,56 @@ const highlight = useMemo(() => {
                         playerB={formatPct(summary.playerB.win_pct_year)}
                       />
                       <div className="px-4 pb-2">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="h-1.5 rounded-full bg-red-900/30">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${normalizeRatio01(summary.playerA.win_pct_year) * 100}%`,
-                                  background: `linear-gradient(90deg, rgba(239,68,68,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 100%)`,
-                                }}
-                              />
-                            </div>
+                        <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+                          {/* eje central */}
+                          <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-red-900/30" />
+
+                          {/* varilla izquierda (Player A) */}
+                          <div
+                            className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full"
+                            style={{
+                              width: `${normalizeRatio01(summary.playerA.win_pct_year) * 50}%`,
+                              background: `linear-gradient(90deg, rgba(127,29,29,0.3) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 100%)`,
+                            }}
+                          />
+                          {/* varilla derecha (Player B) */}
+                          <div
+                            className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full"
+                            style={{
+                              width: `${normalizeRatio01(summary.playerB.win_pct_year) * 50}%`,
+                              background: `linear-gradient(90deg, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(127,29,29,0.3) 100%)`,
+                            }}
+                          />
+
+                          {/* cabeza izquierda */}
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                            style={{ left: `calc(50% - ${normalizeRatio01(summary.playerA.win_pct_year) * 50}%)` }}
+                          >
+                            <div
+                              className="h-4 w-4 rounded-full border border-red-400/60"
+                              style={{
+                                background: `radial-gradient(circle, rgba(239,68,68,${0.25 + 0.55 * normalizeRatio01(summary.playerA.win_pct_year)}) 0%, rgba(127,29,29,0.2) 70%, transparent 100%)`,
+                              }}
+                            />
                           </div>
-                          <div>
-                            <div className="h-1.5 rounded-full bg-red-900/30">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${normalizeRatio01(summary.playerB.win_pct_year) * 100}%`,
-                                  background: `linear-gradient(90deg, rgba(239,68,68,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 100%)`,
-                                }}
-                              />
-                            </div>
+
+                          {/* cabeza derecha */}
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                            style={{ left: `calc(50% + ${normalizeRatio01(summary.playerB.win_pct_year) * 50}%)` }}
+                          >
+                            <div
+                              className="h-4 w-4 rounded-full border border-red-400/60"
+                              style={{
+                                background: `radial-gradient(circle, rgba(239,68,68,${0.25 + 0.55 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(127,29,29,0.2) 70%, transparent 100%)`,
+                              }}
+                            />
                           </div>
+                        </div>
+                        <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
+                          <div className="text-left">{formatPct(summary.playerA.win_pct_year)}</div>
+                          <div className="text-right">{formatPct(summary.playerB.win_pct_year)}</div>
                         </div>
                       </div>
                       <StatRow
