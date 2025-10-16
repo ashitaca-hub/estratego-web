@@ -126,9 +126,9 @@ export function WinProbabilityOrb({ label, value, description }: WinProbabilityO
             }}
           />
         </div>
-        <p className="text-xs text-slate-400">
-          {description ?? "La intensidad del color refleja qué tan encendido o helado llega el jugador al duelo."}
-        </p>
+        {description ? (
+          <p className="text-xs text-slate-400">{description}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -148,3 +148,4 @@ export function getWinProbabilitySummary(probability: number | null | undefined)
     percentOpponent: 100 - percent,
   } as const;
 }
+

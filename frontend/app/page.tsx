@@ -293,6 +293,16 @@ function rankBadge(rank: number | null) {
   return { label: `#${r}`, className: "bg-slate-700/20 text-slate-300 border border-slate-600/40" };
 }
 
+function isoToFlag(iso?: string | null) {
+  if (!iso) return "";
+  const code = iso.trim().toUpperCase();
+  if (code.length !== 2) return code;
+  const A = 0x1f1e6;
+  const a = "A".charCodeAt(0);
+  const chars = Array.from(code).map((c) => String.fromCodePoint(A + (c.charCodeAt(0) - a)));
+  return chars.join("");
+}
+
 function decimalOdds(prob: number | null): string {
   if (prob == null) return "-";
   if (prob <= 0) return "-";
@@ -460,8 +470,14 @@ const highlight = useMemo(() => {
                       <WinProbabilityOrb label={top.name} value={probability} />
                       {(() => {
                         const badge = rankBadge(summary?.playerA?.ranking ?? null);
+                        const flag = isoToFlag(summary?.extras?.country_p ?? null);
+                        const seed = match?.top?.seed;
                         return (
-                          <div className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}>{badge.label}</div>
+                          <div className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
+                            {flag && <span className="text-base leading-none">{flag}</span>}
+                            <span>{badge.label}</span>
+                            {typeof seed === "number" && Number.isFinite(seed) && <span className="text-[11px] opacity-80">Seed {seed}</span>}
+                          </div>
                         );
                       })()}
                     </div>
@@ -470,8 +486,14 @@ const highlight = useMemo(() => {
                       <WinProbabilityOrb label={bottom.name} value={probability != null ? 1 - probability : null} />
                       {(() => {
                         const badge = rankBadge(summary?.playerB?.ranking ?? null);
+                        const flag = isoToFlag(summary?.extras?.country_o ?? null);
+                        const seed = match?.bottom?.seed;
                         return (
-                          <div className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}>{badge.label}</div>
+                          <div className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
+                            {flag && <span className="text-base leading-none">{flag}</span>}
+                            <span>{badge.label}</span>
+                            {typeof seed === "number" && Number.isFinite(seed) && <span className="text-[11px] opacity-80">Seed {seed}</span>}
+                          </div>
                         );
                       })()}
                     </div>
