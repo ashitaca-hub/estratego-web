@@ -561,30 +561,103 @@ const highlight = useMemo(() => {
                         })()}
                       </div>
                       <StatRow
-                        label="% superficie"
-                        playerA={formatPct(summary.playerA.win_pct_surface)}
-                        playerB={formatPct(summary.playerB.win_pct_surface)}
-                      />
-                      <StatRow
                         label="% mes"
                         playerA={formatPct(summary.playerA.win_pct_month)}
                         playerB={formatPct(summary.playerB.win_pct_month)}
                       />
+                      {(() => {
+                        const rA = normalizeRatio01(summary.playerA.win_pct_month);
+                        const rB = normalizeRatio01(summary.playerB.win_pct_month);
+                        const sA = bandStyle(rA);
+                        const sB = bandStyle(rB);
+                        return (
+                          <div className="px-4 pb-2">
+                            <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+                              <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
+                              <div className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full" style={{ width: `${rA * 50}%`, background: `linear-gradient(90deg, ${sA.start} 0%, ${sA.end} 100%)` }} />
+                              <div className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full" style={{ width: `${rB * 50}%`, background: `linear-gradient(90deg, ${sB.start} 0%, ${sB.end} 100%)` }} />
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% - ${rA * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sA.border}`, background: `radial-gradient(circle, ${sA.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sA.showFire && <div className="absolute -left-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% + ${rB * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sB.border}`, background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                            </div>
+                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
+                              <div className="text-left">{formatPct(summary.playerA.win_pct_month)}</div>
+                              <div className="text-right">{formatPct(summary.playerB.win_pct_month)}</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <StatRow
+                        label="% superficie"
+                        playerA={formatPct(summary.playerA.win_pct_surface)}
+                        playerB={formatPct(summary.playerB.win_pct_surface)}
+                      />
+                      {(() => {
+                        const rA = normalizeRatio01(summary.playerA.win_pct_surface);
+                        const rB = normalizeRatio01(summary.playerB.win_pct_surface);
+                        const sA = bandStyle(rA);
+                        const sB = bandStyle(rB);
+                        return (
+                          <div className="px-4 pb-2">
+                            <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+                              <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
+                              <div className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full" style={{ width: `${rA * 50}%`, background: `linear-gradient(90deg, ${sA.start} 0%, ${sA.end} 100%)` }} />
+                              <div className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full" style={{ width: `${rB * 50}%`, background: `linear-gradient(90deg, ${sB.start} 0%, ${sB.end} 100%)` }} />
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% - ${rA * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sA.border}`, background: `radial-gradient(circle, ${sA.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sA.showFire && <div className="absolute -left-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% + ${rB * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sB.border}`, background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                            </div>
+                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
+                              <div className="text-left">{formatPct(summary.playerA.win_pct_surface)}</div>
+                              <div className="text-right">{formatPct(summary.playerB.win_pct_surface)}</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <StatRow
                         label="% vs Top 10"
                         playerA={formatPct(summary.playerA.win_pct_vs_top10)}
                         playerB={formatPct(summary.playerB.win_pct_vs_top10)}
                       />
-                      <StatRow
-                        label="Win score"
-                        playerA={formatFloat(summary.playerA.win_score, 2)}
-                        playerB={formatFloat(summary.playerB.win_score, 2)}
-                      />
-                      <StatRow
-                        label="Prob. victoria"
-                        playerA={formatPct(summary.playerA.win_probability)}
-                        playerB={formatPct(summary.playerB.win_probability)}
-                      />
+                      
+                      <StatRow label="Prob. victoria" playerA={formatPct(summary.playerA.win_probability)} playerB={formatPct(summary.playerB.win_probability)} />
+                      {(() => {
+                        const rA = normalizeRatio01(summary.playerA.win_probability);
+                        const rB = normalizeRatio01(summary.playerB.win_probability);
+                        const sA = bandStyle(rA);
+                        const sB = bandStyle(rB);
+                        return (
+                          <div className="px-4 pb-2">
+                            <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+                              <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
+                              <div className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full" style={{ width: `${rA * 50}%`, background: `linear-gradient(90deg, ${sA.start} 0%, ${sA.end} 100%)` }} />
+                              <div className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full" style={{ width: `${rB * 50}%`, background: `linear-gradient(90deg, ${sB.start} 0%, ${sB.end} 100%)` }} />
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% - ${rA * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sA.border}`, background: `radial-gradient(circle, ${sA.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sA.showFire && <div className="absolute -left-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `calc(50% + ${rB * 50}%)` }}>
+                                <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sB.border}`, background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
+                                {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
+                              </div>
+                            </div>
+                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
+                              <div className="text-left">{formatPct(summary.playerA.win_probability)}</div>
+                              <div className="text-right">{formatPct(summary.playerB.win_probability)}</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <StatRow
                         label="Court speed score"
                         playerA={formatFloat(summary.playerA.court_speed_score, 1)}
@@ -604,6 +677,11 @@ const highlight = useMemo(() => {
                         label="Ventaja local"
                         playerA={formatBool(summary.playerA.home_advantage)}
                         playerB={formatBool(summary.playerB.home_advantage)}
+                      />
+                      <StatRow
+                        label="Win score"
+                        playerA={formatFloat(summary.playerA.win_score, 2)}
+                        playerB={formatFloat(summary.playerB.win_score, 2)}
                       />
                     </div>
                   </section>
