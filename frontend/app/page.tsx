@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronRight, Play } from "lucide-react";
+import { ChevronRight, Play, Flame } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -247,6 +247,36 @@ function normalizeRatio01(value: number | null): number {
   return Math.min(1, Math.max(0, v));
 }
 
+function ytdBand(ratio01: number): "blue" | "green" | "orange" | "red" {
+  const p = ratio01 * 100;
+  if (p >= 80) return "red";
+  if (p >= 66) return "orange";
+  if (p >= 50) return "green";
+  return "blue";
+}
+
+function bandStyle(ratio01: number) {
+  const band = ytdBand(ratio01);
+  // RGB stops for bands
+  const map: Record<string, { start: [number, number, number]; end: [number, number, number] }> = {
+    blue: { start: [96, 165, 250], end: [37, 99, 235] },
+    green: { start: [34, 197, 94], end: [22, 163, 74] },
+    orange: { start: [245, 158, 11], end: [217, 119, 6] },
+    red: { start: [239, 68, 68], end: [220, 38, 38] },
+  };
+  const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
+  const alpha = clamp(0.35 + 0.65 * ratio01, 0.2, 0.95);
+  const headAlpha = clamp(0.25 + 0.55 * ratio01, 0.2, 0.95);
+  const toRgba = (rgb: [number, number, number], a: number) => `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`;
+  const sw = map[band];
+  const start = toRgba(sw.start, alpha);
+  const end = toRgba(sw.end, alpha);
+  const head = toRgba(sw.start, headAlpha);
+  const border = toRgba(sw.end, 0.6);
+  const showFire = band === "red";
+  return { start, end, head, border, showFire };
+}
+
 function decimalOdds(prob: number | null): string {
   if (prob == null) return "-";
   if (prob <= 0) return "-";
@@ -456,57 +486,79 @@ const highlight = useMemo(() => {
                         playerB={formatPct(summary.playerB.win_pct_year)}
                       />
                       <div className="px-4 pb-2">
-                        <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
-                          {/* eje central */}
-                          <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-red-900/30" />
+                        {(() => {
+                          const rA = normalizeRatio01(summary.playerA.win_pct_year);
+                          const rB = normalizeRatio01(summary.playerB.win_pct_year);
+                          const sA = bandStyle(rA);
+                          const sB = bandStyle(rB);
+                          return (
+                            <>
+                              <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+                                {/* eje central */}
+                                <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
 
-                          {/* varilla izquierda (Player A) */}
-                          <div
-                            className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full"
-                            style={{
-                              width: `${normalizeRatio01(summary.playerA.win_pct_year) * 50}%`,
-                              background: `linear-gradient(90deg, rgba(127,29,29,0.3) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 100%)`,
-                            }}
-                          />
-                          {/* varilla derecha (Player B) */}
-                          <div
-                            className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full"
-                            style={{
-                              width: `${normalizeRatio01(summary.playerB.win_pct_year) * 50}%`,
-                              background: `linear-gradient(90deg, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(127,29,29,0.3) 100%)`,
-                            }}
-                          />
+                                {/* varilla izquierda (Player A) */}
+                                <div
+                                  className="absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full"
+                                  style={{
+                                    width: `${rA * 50}%`,
+                                    background: `linear-gradient(90deg, ${sA.start} 0%, ${sA.end} 100%)`,
+                                  }}
+                                />
+                                {/* varilla derecha (Player B) */}
+                                <div
+                                  className="absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full"
+                                  style={{
+                                    width: `${rB * 50}%`,
+                                    background: `linear-gradient(90deg, ${sB.start} 0%, ${sB.end} 100%)`,
+                                  }}
+                                />
 
-                          {/* cabeza izquierda */}
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-                            style={{ left: `calc(50% - ${normalizeRatio01(summary.playerA.win_pct_year) * 50}%)` }}
-                          >
-                            <div
-                              className="h-4 w-4 rounded-full border border-red-400/60"
-                              style={{
-                                background: `radial-gradient(circle, rgba(239,68,68,${0.25 + 0.55 * normalizeRatio01(summary.playerA.win_pct_year)}) 0%, rgba(127,29,29,0.2) 70%, transparent 100%)`,
-                              }}
-                            />
-                          </div>
+                                {/* cabeza izquierda */}
+                                <div
+                                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                                  style={{ left: `calc(50% - ${rA * 50}%)` }}
+                                >
+                                  <div
+                                    className="h-4 w-4 rounded-full"
+                                    style={{
+                                      border: `1px solid ${sA.border}`,
+                                      background: `radial-gradient(circle, ${sA.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)`,
+                                    }}
+                                  />
+                                  {sA.showFire && (
+                                    <div className="absolute -left-4 top-1/2 -translate-y-1/2 text-red-500">
+                                      <Flame size={14} />
+                                    </div>
+                                  )}
+                                </div>
 
-                          {/* cabeza derecha */}
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-                            style={{ left: `calc(50% + ${normalizeRatio01(summary.playerB.win_pct_year) * 50}%)` }}
-                          >
-                            <div
-                              className="h-4 w-4 rounded-full border border-red-400/60"
-                              style={{
-                                background: `radial-gradient(circle, rgba(239,68,68,${0.25 + 0.55 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(127,29,29,0.2) 70%, transparent 100%)`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                          <div className="text-left">{formatPct(summary.playerA.win_pct_year)}</div>
-                          <div className="text-right">{formatPct(summary.playerB.win_pct_year)}</div>
-                        </div>
+                                {/* cabeza derecha */}
+                                <div
+                                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                                  style={{ left: `calc(50% + ${rB * 50}%)` }}
+                                >
+                                  <div
+                                    className="h-4 w-4 rounded-full"
+                                    style={{
+                                      border: `1px solid ${sB.border}`,
+                                      background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)`,
+                                    }}
+                                  />
+                                  {sB.showFire && (
+                                    <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500">
+                                      <Flame size={14} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
+                                <div className="text-left">{formatPct(summary.playerA.win_pct_year)}</div>
+                                <div className="text-right">{formatPct(summary.playerB.win_pct_year)}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                       <StatRow
                         label="% superficie"
