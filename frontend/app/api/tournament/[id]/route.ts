@@ -73,7 +73,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       .in("player_id", ids),
     supabase
       .from("draw_entries")
-      .select("player_id,seed,entry_type")
+      .select("player_id,seed")
       .eq("tourney_id", id)
       .in("player_id", ids),
   ]);
@@ -98,7 +98,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
       seed: tentry?.seed ?? undefined,
-      entryType: tentry?.entry_type ?? null,
+      entryType: null,
     };
 
     const bentry = row.bot_id ? emap.get(row.bot_id) : null;
@@ -106,7 +106,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
       seed: bentry?.seed ?? undefined,
-      entryType: bentry?.entry_type ?? null,
+      entryType: null,
     };
 
     return {
