@@ -240,6 +240,13 @@ function formatDays(value: number | null) {
   return `${value} dias`;
 }
 
+function normalizeRatio01(value: number | null): number {
+  if (value == null || Number.isNaN(value as any)) return 0;
+  const v = Math.abs(value as number) <= 1 ? Number(value) : Number(value) / 100;
+  if (!Number.isFinite(v)) return 0;
+  return Math.min(1, Math.max(0, v));
+}
+
 function decimalOdds(prob: number | null): string {
   if (prob == null) return "-";
   if (prob <= 0) return "-";
@@ -444,10 +451,36 @@ const highlight = useMemo(() => {
                     </div>
                     <div className="divide-y divide-slate-800/60">
                       <StatRow
-                        label="% anio"
+                        label="YTD"
                         playerA={formatPct(summary.playerA.win_pct_year)}
                         playerB={formatPct(summary.playerB.win_pct_year)}
                       />
+                      <div className="px-4 pb-2">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="h-1.5 rounded-full bg-red-900/30">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${normalizeRatio01(summary.playerA.win_pct_year) * 100}%`,
+                                  background: `linear-gradient(90deg, rgba(239,68,68,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerA.win_pct_year)}) 100%)`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="h-1.5 rounded-full bg-red-900/30">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${normalizeRatio01(summary.playerB.win_pct_year) * 100}%`,
+                                  background: `linear-gradient(90deg, rgba(239,68,68,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 0%, rgba(220,38,38,${0.35 + 0.65 * normalizeRatio01(summary.playerB.win_pct_year)}) 100%)`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <StatRow
                         label="% superficie"
                         playerA={formatPct(summary.playerA.win_pct_surface)}
