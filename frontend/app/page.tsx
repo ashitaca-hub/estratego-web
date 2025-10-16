@@ -487,7 +487,7 @@ const highlight = useMemo(() => {
                         );
                       })()}
                       {(() => {
-                        const chips: Array<JSX.Element> = [];
+                        const chips: any[] = [];
                         const flag = isoToFlag(summary?.extras?.country_p ?? null);
                         if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
                         const seed = match?.top?.seed;
@@ -520,7 +520,7 @@ const highlight = useMemo(() => {
                         );
                       })()}
                       {(() => {
-                        const chips: Array<JSX.Element> = [];
+                        const chips: any[] = [];
                         const flag = isoToFlag(summary?.extras?.country_o ?? null);
                         if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
                         const seed = match?.bottom?.seed;
