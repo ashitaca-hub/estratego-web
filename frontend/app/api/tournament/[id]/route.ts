@@ -89,13 +89,13 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
         .eq("tourney_id", id)
         .in("player_id", ids);
       e4 = fallback.error;
-      entries = (fallback.data as any[]) ?? [];
+      entries = Array.isArray(fallback.data) ? (fallback.data as any[]) : [];
     } else {
       e4 = entriesAttempt.error;
-      entries = (entriesAttempt.data as any[]) ?? [];
+      entries = Array.isArray(entriesAttempt.data) ? (entriesAttempt.data as any[]) : [];
     }
   } else {
-    entries = (entriesAttempt.data as any[]) ?? [];
+    entries = Array.isArray(entriesAttempt.data) ? (entriesAttempt.data as any[]) : [];
   }
 
   const { data: plist, error: e3 } = await pPromise;
