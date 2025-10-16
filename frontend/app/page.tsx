@@ -22,6 +22,7 @@ export type Player = {
   id: string;
   name: string;
   seed?: number | null;
+  entryType?: string | null;
   country?: string;
 };
 
@@ -478,15 +479,32 @@ const highlight = useMemo(() => {
                       <WinProbabilityOrb label={top.name} value={probability} />
                       {(() => {
                         const badge = rankBadge(summary?.playerA?.ranking ?? null);
-                        const flag = isoToFlag(summary?.extras?.country_p ?? null);
                         const seed = match?.top?.seed;
                         return (
-                          <div className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
-                            {flag && <span className="text-base leading-none">{flag}</span>}
+                          <div className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
                             <span>{badge.label}</span>
-                            {typeof seed === "number" && Number.isFinite(seed) && <span className="text-[11px] opacity-80">Seed {seed}</span>}
                           </div>
                         );
+                      })()}
+                      {(() => {
+                        const chips: Array<JSX.Element> = [];
+                        const flag = isoToFlag(summary?.extras?.country_p ?? null);
+                        if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
+                        const seed = match?.top?.seed;
+                        if (typeof seed === "number" && Number.isFinite(seed)) {
+                          chips.push(
+                            <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
+                          );
+                        }
+                        const et = match?.top?.entryType?.toUpperCase();
+                        if (et === 'Q' || et === 'WC') {
+                          chips.push(
+                            <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
+                          );
+                        }
+                        return chips.length ? (
+                          <div className="flex items-center gap-2">{chips}</div>
+                        ) : null;
                       })()}
                     </div>
                     <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
@@ -494,15 +512,32 @@ const highlight = useMemo(() => {
                       <WinProbabilityOrb label={bottom.name} value={probability != null ? 1 - probability : null} />
                       {(() => {
                         const badge = rankBadge(summary?.playerB?.ranking ?? null);
-                        const flag = isoToFlag(summary?.extras?.country_o ?? null);
                         const seed = match?.bottom?.seed;
                         return (
-                          <div className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
-                            {flag && <span className="text-base leading-none">{flag}</span>}
+                          <div className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
                             <span>{badge.label}</span>
-                            {typeof seed === "number" && Number.isFinite(seed) && <span className="text-[11px] opacity-80">Seed {seed}</span>}
                           </div>
                         );
+                      })()}
+                      {(() => {
+                        const chips: Array<JSX.Element> = [];
+                        const flag = isoToFlag(summary?.extras?.country_o ?? null);
+                        if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
+                        const seed = match?.bottom?.seed;
+                        if (typeof seed === "number" && Number.isFinite(seed)) {
+                          chips.push(
+                            <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
+                          );
+                        }
+                        const et = match?.bottom?.entryType?.toUpperCase();
+                        if (et === 'Q' || et === 'WC') {
+                          chips.push(
+                            <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
+                          );
+                        }
+                        return chips.length ? (
+                          <div className="flex items-center gap-2">{chips}</div>
+                        ) : null;
                       })()}
                     </div>
                   </div>

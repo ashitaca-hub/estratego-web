@@ -7,6 +7,7 @@ type Player = {
   id: string;
   name: string;
   seed?: number;
+  entryType?: string | null;
   country?: string;
 };
 
@@ -65,32 +66,47 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
   );
 
-  const { data: plist, error: e3 } = await supabase
-    .from("players_min") // <- cambiado de players_official a players_min
-    .select("player_id,name")
-    .in("player_id", ids);
+  const [{ data: plist, error: e3 }, { data: entries, error: e4 }] = await Promise.all([
+    supabase
+      .from("players_min") // <- cambiado de players_official a players_min
+      .select("player_id,name")
+      .in("player_id", ids),
+    supabase
+      .from("draw_entries")
+      .select("player_id,seed,entry_type")
+      .eq("tourney_id", id)
+      .in("player_id", ids),
+  ]);
 
-  if (e3) {
-    return new Response(JSON.stringify({ error: e3.message }), {
+  if (e3 || e4) {
+    return new Response(JSON.stringify({ error: e3?.message || e4?.message }), {
       status: 500,
     });
   }
 
   const pmap = new Map<string, (typeof plist)[number]>();
   (plist ?? []).forEach((p) => pmap.set(p.player_id, p));
+  const emap = new Map<string, (typeof entries)[number]>();
+  (entries ?? []).forEach((e) => emap.set(e.player_id, e));
 
   const matches: Match[] = list.map((row) => {
     const tp = row.top_id ? pmap.get(row.top_id) : null;
     const bp = row.bot_id ? pmap.get(row.bot_id) : null;
 
+    const tentry = row.top_id ? emap.get(row.top_id) : null;
     const top: Player = {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
+      seed: tentry?.seed ?? undefined,
+      entryType: tentry?.entry_type ?? null,
     };
 
+    const bentry = row.bot_id ? emap.get(row.bot_id) : null;
     const bottom: Player = {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
+      seed: bentry?.seed ?? undefined,
+      entryType: bentry?.entry_type ?? null,
     };
 
     return {
