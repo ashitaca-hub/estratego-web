@@ -277,6 +277,22 @@ function bandStyle(ratio01: number) {
   return { start, end, head, border, showFire };
 }
 
+function rankBadge(rank: number | null) {
+  if (rank == null || !Number.isFinite(rank)) {
+    return { label: "Rank N/A", className: "bg-slate-800 text-slate-300 border border-slate-700" };
+  }
+  const r = Math.round(rank);
+  if (r >= 1 && r <= 5)
+    return { label: `#${r} - TOP 5`, className: "bg-yellow-400/20 text-yellow-300 border border-yellow-400/40" };
+  if (r <= 10)
+    return { label: `#${r} - TOP 10`, className: "bg-slate-300/20 text-slate-200 border border-slate-300/40" };
+  if (r <= 20)
+    return { label: `#${r} - TOP 20`, className: "bg-amber-600/20 text-amber-400 border border-amber-600/40" };
+  if (r <= 50)
+    return { label: `#${r} - TOP 50`, className: "bg-orange-700/20 text-orange-400 border border-orange-700/40" };
+  return { label: `#${r}`, className: "bg-slate-700/20 text-slate-300 border border-slate-600/40" };
+}
+
 function decimalOdds(prob: number | null): string {
   if (prob == null) return "-";
   if (prob <= 0) return "-";
@@ -440,17 +456,25 @@ const highlight = useMemo(() => {
               {summary && (
                 <div className="space-y-6">
                   <div className="flex flex-col items-center gap-10 md:flex-row md:items-start md:justify-center">
-                    <WinProbabilityOrb
-                      label={top.name}
-                      value={probability}
-                      description="El rojo intenso y las chispas indican a este jugador llegando en modo imparable."
-                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <WinProbabilityOrb label={top.name} value={probability} />
+                      {(() => {
+                        const badge = rankBadge(summary?.playerA?.ranking ?? null);
+                        return (
+                          <div className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}>{badge.label}</div>
+                        );
+                      })()}
+                    </div>
                     <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
-                    <WinProbabilityOrb
-                      label={bottom.name}
-                      value={probability != null ? 1 - probability : null}
-                      description="Si el azul glaciar domina, el modelo anticipa un partido cuesta arriba para este jugador."
-                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <WinProbabilityOrb label={bottom.name} value={probability != null ? 1 - probability : null} />
+                      {(() => {
+                        const badge = rankBadge(summary?.playerB?.ranking ?? null);
+                        return (
+                          <div className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}>{badge.label}</div>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
