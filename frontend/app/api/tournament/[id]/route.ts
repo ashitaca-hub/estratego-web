@@ -85,7 +85,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     if (entriesAttempt.error.message?.toLowerCase().includes("entry_type")) {
       const fallback = await supabase
         .from("draw_entries")
-        .select("player_id,seed")
+        .select("player_id,seed,tag")
         .eq("tourney_id", id)
         .in("player_id", ids);
       e4 = fallback.error;
@@ -163,3 +163,4 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     headers: { "content-type": "application/json" },
   });
 }
+
