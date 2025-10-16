@@ -120,7 +120,12 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
       seed: tentry?.seed ?? undefined,
-      entryType: (tentry as any)?.entry_type ?? null,
+      entryType:
+        ((tentry as any)?.entry_type ?? (tentry as any)?.tag) &&
+        (((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "Q" ||
+          ((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "WC")
+          ? ((tentry as any)?.entry_type ?? (tentry as any)?.tag)
+          : null,
     };
 
     const bentry = row.bot_id ? emap.get(row.bot_id) : null;
@@ -128,7 +133,12 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
       seed: bentry?.seed ?? undefined,
-      entryType: (bentry as any)?.entry_type ?? null,
+      entryType:
+        ((bentry as any)?.entry_type ?? (bentry as any)?.tag) &&
+        (((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "Q" ||
+          ((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "WC")
+          ? ((bentry as any)?.entry_type ?? (bentry as any)?.tag)
+          : null,
     };
 
     return {
