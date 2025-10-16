@@ -72,25 +72,33 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     .select("player_id,name")
     .in("player_id", ids);
 
-  // Try to fetch entries including entry_type; if column doesn't exist, fallback without it
-  let entriesRes = await supabase
+  // Try to fetch entries including entry_type; if column doesn't exist, fallback without it (TS-safe)
+  const entriesAttempt = await supabase
     .from("draw_entries")
     .select("player_id,seed,entry_type")
     .eq("tourney_id", id)
     .in("player_id", ids);
 
-  if (entriesRes.error && entriesRes.error.message?.toLowerCase().includes("entry_type")) {
-    entriesRes = await supabase
-      .from("draw_entries")
-      .select("player_id,seed")
-      .eq("tourney_id", id)
-      .in("player_id", ids);
+  let entries: Array<{ player_id: string; seed: any; entry_type?: any }> = [];
+  let e4: any = null;
+  if (entriesAttempt.error) {
+    if (entriesAttempt.error.message?.toLowerCase().includes("entry_type")) {
+      const fallback = await supabase
+        .from("draw_entries")
+        .select("player_id,seed")
+        .eq("tourney_id", id)
+        .in("player_id", ids);
+      e4 = fallback.error;
+      entries = (fallback.data as any[]) ?? [];
+    } else {
+      e4 = entriesAttempt.error;
+      entries = (entriesAttempt.data as any[]) ?? [];
+    }
+  } else {
+    entries = (entriesAttempt.data as any[]) ?? [];
   }
 
-  const [{ data: plist, error: e3 }, { data: entries, error: e4 }] = await Promise.all([
-    pPromise,
-    Promise.resolve(entriesRes),
-  ]);
+  const { data: plist, error: e3 } = await pPromise;
 
   if (e3 || e4) {
     return new Response(JSON.stringify({ error: e3?.message || e4?.message }), {
@@ -101,7 +109,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   const pmap = new Map<string, (typeof plist)[number]>();
   (plist ?? []).forEach((p) => pmap.set(p.player_id, p));
   const emap = new Map<string, (typeof entries)[number]>();
-  (entries ?? []).forEach((e) => emap.set(e.player_id, e));
+  (entries ?? []).forEach((e: any) => emap.set(e.player_id, e));
 
   const matches: Match[] = list.map((row) => {
     const tp = row.top_id ? pmap.get(row.top_id) : null;
