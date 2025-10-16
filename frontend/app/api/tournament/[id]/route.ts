@@ -74,7 +74,8 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
 
   // Fetch IOC from estratego_v1.players to derive ISO-2 country
   const iocPromise = supabase
-    .from("estratego_v1.players")
+    .schema("estratego_v1")
+    .from("players")
     .select("player_id,ioc")
     .in("player_id", ids);
 
@@ -109,8 +110,8 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     iocPromise,
   ]);
 
-  if (e3 || e4 || e5) {
-    return new Response(JSON.stringify({ error: e3?.message || e4?.message || e5?.message }), {
+  if (e3 || e4) {
+    return new Response(JSON.stringify({ error: e3?.message || e4?.message }), {
       status: 500,
     });
   }
