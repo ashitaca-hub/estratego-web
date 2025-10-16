@@ -8,7 +8,7 @@ type Player = {
   name: string;
   seed?: number;
   entryType?: string | null;
-  country?: string;
+  country?: string | null;
 };
 
 type Match = {
@@ -66,10 +66,16 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
   );
 
-  // Fetch players list
+  // Fetch players (names)
   const pPromise = supabase
     .from("players_min") // <- cambiado de players_official a players_min
     .select("player_id,name")
+    .in("player_id", ids);
+
+  // Fetch IOC from estratego_v1.players to derive ISO-2 country
+  const iocPromise = supabase
+    .from("estratego_v1.players")
+    .select("player_id,ioc")
     .in("player_id", ids);
 
   // Try to fetch entries including entry_type; if column doesn't exist, fallback without it (TS-safe)
@@ -98,10 +104,13 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     entries = Array.isArray(entriesAttempt.data) ? (entriesAttempt.data as any[]) : [];
   }
 
-  const { data: plist, error: e3 } = await pPromise;
+  const [{ data: plist, error: e3 }, { data: iocList, error: e5 }] = await Promise.all([
+    pPromise,
+    iocPromise,
+  ]);
 
-  if (e3 || e4) {
-    return new Response(JSON.stringify({ error: e3?.message || e4?.message }), {
+  if (e3 || e4 || e5) {
+    return new Response(JSON.stringify({ error: e3?.message || e4?.message || e5?.message }), {
       status: 500,
     });
   }
@@ -110,6 +119,24 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   (plist ?? []).forEach((p) => pmap.set(p.player_id, p));
   const emap = new Map<string, (typeof entries)[number]>();
   (entries ?? []).forEach((e: any) => emap.set(e.player_id, e));
+  const iocMap = new Map<string, string | null>();
+  (iocList ?? []).forEach((r: any) => iocMap.set(r.player_id, r.ioc ?? null));
+
+  const iocToIso2 = (ioc?: string | null): string | null => {
+    if (!ioc || typeof ioc !== "string") return null;
+    const code = ioc.trim().toUpperCase();
+    const map: Record<string, string> = {
+      ESP: "ES", ARG: "AR", USA: "US", GBR: "GB", UKR: "UA", GER: "DE", FRA: "FR", ITA: "IT",
+      SUI: "CH", NED: "NL", BEL: "BE", SWE: "SE", NOR: "NO", DEN: "DK", CRO: "HR", SRB: "RS",
+      BIH: "BA", POR: "PT", POL: "PL", CZE: "CZ", SVK: "SK", SLO: "SI", HUN: "HU", AUT: "AT",
+      AUS: "AU", NZL: "NZ", CAN: "CA", MEX: "MX", COL: "CO", CHI: "CL", PER: "PE", ECU: "EC",
+      URU: "UY", BOL: "BO", VEN: "VE", BRA: "BR", JPN: "JP", KOR: "KR", CHN: "CN", HKG: "HK",
+      TPE: "TW", THA: "TH", VIE: "VN", IND: "IN", PAK: "PK", QAT: "QA", UAE: "AE", KAZ: "KZ",
+      UZB: "UZ", GEO: "GE", ARM: "AM", TUR: "TR", GRE: "GR", CYP: "CY", ROU: "RO", BUL: "BG",
+      LTU: "LT", LAT: "LV", EST: "EE", FIN: "FI", IRL: "IE", SCO: "GB", WAL: "GB",
+    };
+    return map[code] || null;
+  };
 
   const matches: Match[] = list.map((row) => {
     const tp = row.top_id ? pmap.get(row.top_id) : null;
@@ -126,6 +153,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
           ((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "WC")
           ? ((tentry as any)?.entry_type ?? (tentry as any)?.tag)
           : null,
+      country: iocToIso2(iocMap.get(row.top_id)),
     };
 
     const bentry = row.bot_id ? emap.get(row.bot_id) : null;
@@ -139,6 +167,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
           ((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "WC")
           ? ((bentry as any)?.entry_type ?? (bentry as any)?.tag)
           : null,
+      country: iocToIso2(iocMap.get(row.bot_id)),
     };
 
     return {
@@ -163,4 +192,5 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     headers: { "content-type": "application/json" },
   });
 }
+
 

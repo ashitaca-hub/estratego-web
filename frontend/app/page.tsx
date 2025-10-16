@@ -501,7 +501,7 @@ const highlight = useMemo(() => {
                       })()}
                       {(() => {
                         const chips: any[] = [];
-                        const flag = isoToFlag(summary?.extras?.country_p ?? null);
+                        const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
                         if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
                         const seed = match?.top?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
@@ -534,7 +534,7 @@ const highlight = useMemo(() => {
                       })()}
                       {(() => {
                         const chips: any[] = [];
-                        const flag = isoToFlag(summary?.extras?.country_o ?? null);
+                        const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
                         if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
                         const seed = match?.bottom?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
