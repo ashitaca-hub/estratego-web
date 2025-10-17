@@ -13,6 +13,7 @@ type PlayerSummary = {
   court_speed_score: number | null;
   win_score: number | null;
   win_probability: number | null;
+  defends_round?: string | null;
 };
 
 type TournamentSummary = {
@@ -330,6 +331,17 @@ const buildPlayer = (
         `predicted_win_pct_${prefix}`,
       ]),
     );
+  const defendsRound =
+    asString(playerRecord?.["defends_round"]) ??
+    asString(playerRecord?.["last_year_round"]) ??
+    getFromPrefixes((source, prefix) =>
+      asString(
+        source[`${prefix}_defends_round`] ??
+          source[`${prefix}_last_year_round`] ??
+          source[`defends_round_${prefix}`] ??
+          source[`last_year_round_${prefix}`],
+      ),
+    );
 
   return {
     win_pct_year: winPctYear,
@@ -342,6 +354,7 @@ const buildPlayer = (
     court_speed_score: courtSpeedScore,
     win_score: winScore,
     win_probability: winProbability,
+    defends_round: defendsRound,
   };
 };
 

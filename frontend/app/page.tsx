@@ -109,6 +109,7 @@ type PlayerPrematchStats = {
   ranking: number | null;
   home_advantage: boolean | null;
   days_since_last: number | null;
+  defends_round?: string | null;
 };
 
 type PrematchSummary = {
@@ -180,6 +181,12 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         ? p.home_advantage.toLowerCase() === "true"
         : null,
     days_since_last: asNumber(p?.days_since_last),
+    defends_round:
+      typeof p?.defends_round === "string" && p.defends_round.trim() !== ""
+        ? p.defends_round
+        : typeof p?.last_year_round === "string" && p.last_year_round.trim() !== ""
+        ? p.last_year_round
+        : undefined,
   });
 
   const wins = asNumber(h2h?.wins) ?? 0;
@@ -248,6 +255,35 @@ function formatDays(value: number | null) {
   if (value == null) return "N/A";
   return `${value} dias`;
 }
+
+const formatDefendsRoundLabel = (value?: string | null) => {
+  if (!value) return null;
+  const clean = value.trim();
+  if (!clean) return null;
+  const upper = clean.toUpperCase();
+  switch (upper) {
+    case "W":
+    case "CAMPEON":
+    case "CAMPEÓN":
+      return "Campeón";
+    case "F":
+    case "FINALISTA":
+      return "Finalista";
+    case "SF":
+    case "SEMIFINALISTA":
+      return "Semifinalista";
+    case "QF":
+      return "Cuartos de final";
+    case "R16":
+      return "Octavos de final";
+    case "R32":
+      return "32avos de final";
+    case "R64":
+      return "64avos de final";
+    default:
+      return clean;
+  }
+};
 
 function normalizeRatio01(value: number | null): number {
   if (value == null || Number.isNaN(value as any)) return 0;
@@ -507,7 +543,9 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
-                        if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
+                        if (flag) chips.push(
+                          <span key="flag" className="text-base leading-none">{flag}</span>
+                        );
                         const seed = match?.top?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -520,9 +558,14 @@ const highlight = useMemo(() => {
                             <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
                           );
                         }
-                        return chips.length ? (
-                          <div className="flex items-center gap-2">{chips}</div>
-                        ) : null;
+                        const defendLabel = formatDefendsRoundLabel(summary.playerA.defends_round);
+                        if (chips.length === 0 && !defendLabel) return null;
+                        return (
+                          <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400">
+                            {chips.length > 0 && <div className="flex items-center gap-2">{chips}</div>}
+                            {defendLabel && <div>Defiende: {defendLabel}</div>}
+                          </div>
+                        );
                       })()}
                     </div>
                     <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
@@ -540,7 +583,9 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
-                        if (flag) chips.push(<span key="flag" className="text-base leading-none">{flag}</span>);
+                        if (flag) chips.push(
+                          <span key="flag" className="text-base leading-none">{flag}</span>
+                        );
                         const seed = match?.bottom?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -553,9 +598,14 @@ const highlight = useMemo(() => {
                             <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
                           );
                         }
-                        return chips.length ? (
-                          <div className="flex items-center gap-2">{chips}</div>
-                        ) : null;
+                        const defendLabel = formatDefendsRoundLabel(summary.playerB.defends_round);
+                        if (chips.length === 0 && !defendLabel) return null;
+                        return (
+                          <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400">
+                            {chips.length > 0 && <div className="flex items-center gap-2">{chips}</div>}
+                            {defendLabel && <div>Defiende: {defendLabel}</div>}
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>
@@ -847,7 +897,22 @@ const highlight = useMemo(() => {
                           Ultimo torneo similar: <span className="font-medium text-slate-100">{summary.last_surface ?? 'Desconocido'}</span>
                         </div>
                         <div>
-                          Defiende puntos de: <span className="font-medium text-slate-100">{summary.defends_round ?? 'Ninguno'}</span>
+                          Defiende puntos:
+                          <div className="mt-1 space-y-1 text-xs text-slate-300">
+                            <div>
+                              <span className="font-medium text-slate-100">{top.name}</span>:{" "}
+                              {formatDefendsRoundLabel(summary.playerA.defends_round) ?? "Ninguno"}
+                            </div>
+                            <div>
+                              <span className="font-medium text-slate-100">{bottom.name}</span>:{" "}
+                              {formatDefendsRoundLabel(summary.playerB.defends_round) ?? "Ninguno"}
+                            </div>
+                            {summary.defends_round && (
+                              <div className="pt-1 text-slate-400">
+                                <span className="font-medium text-slate-100">Meta</span>: {summary.defends_round}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           Velocidad estimada de la pista: {summary.court_speed != null ? summary.court_speed : 'N/A'}
