@@ -179,7 +179,15 @@ export async function GET(
 
     const tentry = row.top_id ? emap.get(String(row.top_id)) : null;
     const rawSeedTop = (tentry as any)?.seed;
-    const seedTop = typeof rawSeedTop === "number" && Number.isFinite(rawSeedTop) ? rawSeedTop : null;
+    const seedTop =
+      typeof rawSeedTop === "number" && Number.isFinite(rawSeedTop)
+        ? rawSeedTop
+        : typeof rawSeedTop === "string" && rawSeedTop.trim() !== ""
+        ? (() => {
+            const parsed = Number(rawSeedTop);
+            return Number.isFinite(parsed) ? parsed : null;
+          })()
+        : null;
     const rawEntryTop = (tentry as any)?.entry_type ?? (tentry as any)?.tag ?? null;
     const entryTop =
       typeof rawEntryTop === "string"
@@ -198,7 +206,15 @@ export async function GET(
 
     const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
     const rawSeedBot = (bentry as any)?.seed;
-    const seedBot = typeof rawSeedBot === "number" && Number.isFinite(rawSeedBot) ? rawSeedBot : null;
+    const seedBot =
+      typeof rawSeedBot === "number" && Number.isFinite(rawSeedBot)
+        ? rawSeedBot
+        : typeof rawSeedBot === "string" && rawSeedBot.trim() !== ""
+        ? (() => {
+            const parsed = Number(rawSeedBot);
+            return Number.isFinite(parsed) ? parsed : null;
+          })()
+        : null;
     const rawEntryBot = (bentry as any)?.entry_type ?? (bentry as any)?.tag ?? null;
     const entryBot =
       typeof rawEntryBot === "string"
