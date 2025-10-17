@@ -304,7 +304,12 @@ function rankBadge(rank: number | null) {
 
 function isoToFlag(iso?: string | null) {
   if (!iso) return "";
-  let code = iso.trim().toUpperCase();
+  let code = iso.trim();
+  // Already looks like a flag emoji (two regional indicator symbols)
+  if (/^[\u{1F1E6}-\u{1F1FF}]{2}$/u.test(code)) {
+    return code;
+  }
+  code = code.toUpperCase();
   if (code.length === 3) {
     const iocToIso2: Record<string, string> = {
       ESP: "ES", ARG: "AR", USA: "US", GBR: "GB", UKR: "UA", GER: "DE", FRA: "FR", ITA: "IT",

@@ -163,6 +163,16 @@ export async function GET(
     return map[code] || null;
   };
 
+  const isoToFlag = (iso?: string | null): string | null => {
+    if (!iso || typeof iso !== "string") return null;
+    const code = iso.trim().toUpperCase();
+    if (code.length !== 2) return null;
+    const A = 0x1f1e6;
+    const base = "A".charCodeAt(0);
+    const chars = Array.from(code).map((c) => String.fromCodePoint(A + (c.charCodeAt(0) - base)));
+    return chars.join("");
+  };
+
   const matches: Match[] = list.map((row) => {
     const tp = row.top_id ? pmap.get(String(row.top_id)) : null;
     const bp = row.bot_id ? pmap.get(String(row.bot_id)) : null;
@@ -183,7 +193,7 @@ export async function GET(
       name: tp?.name ?? "TBD",
       seed: seedTop,
       entryType: entryTop,
-      country: iocToIso2(iocMap.get(String(row.top_id))),
+      country: isoToFlag(iocToIso2(iocMap.get(String(row.top_id)))),
     };
 
     const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
@@ -202,7 +212,7 @@ export async function GET(
       name: bp?.name ?? "TBD",
       seed: seedBot,
       entryType: entryBot,
-      country: iocToIso2(iocMap.get(String(row.bot_id))),
+      country: isoToFlag(iocToIso2(iocMap.get(String(row.bot_id)))),
     };
 
     return {
@@ -227,5 +237,4 @@ export async function GET(
     headers: { "content-type": "application/json" },
   });
 }
-
 
