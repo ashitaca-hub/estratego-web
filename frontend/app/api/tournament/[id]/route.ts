@@ -85,14 +85,13 @@ export async function GET(
       : Promise.resolve({ data: [], error: null } as any);
 
   // Fetch IOC from estratego_v1.players to derive ISO-2 country
-  const iocPromise =
-    ids.length > 0
-      ? supabase
-          .schema("estratego_v1")
-          .from("players")
-          .select("player_id,ioc")
-          .in("player_id", ids)
-      : Promise.resolve({ data: [], error: null } as any);
+    const iocPromise =
+      ids.length > 0
+        ? supabase
+            .from("players_flag")          // vista pública
+            .select("player_id,ioc")
+            .in("player_id", ids)
+        : Promise.resolve({ data: [], error: null } as any);
 
   // Try to fetch entries including entry_type; if column doesn't exist, fallback without it (TS-safe)
   const entriesAttempt = await supabase
