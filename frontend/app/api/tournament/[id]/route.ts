@@ -128,22 +128,25 @@ export async function GET(
     });
   }
 
-  const pmap = new Map<string, (typeof plist)[number]>();
+  const pmap = new Map<number, (typeof plist)[number]>();
   (plist ?? []).forEach((p: any) => {
-    if (p?.player_id != null) {
-      pmap.set(String(p.player_id), p);
+    const pid = Number(p?.player_id);
+    if (Number.isFinite(pid)) {
+      pmap.set(pid, p);
     }
   });
-  const emap = new Map<string, (typeof entries)[number]>();
+  const emap = new Map<number, (typeof entries)[number]>();
   (entries ?? []).forEach((e: any) => {
-    if (e?.player_id != null) {
-      emap.set(String(e.player_id), e);
+    const pid = Number(e?.player_id);
+    if (Number.isFinite(pid)) {
+      emap.set(pid, e);
     }
   });
-  const iocMap = new Map<string, string | null>();
+  const iocMap = new Map<number, string | null>();
   (iocList ?? []).forEach((r: any) => {
-    if (r?.player_id != null) {
-      iocMap.set(String(r.player_id), r.ioc ?? null);
+    const pid = Number(r?.player_id);
+    if (Number.isFinite(pid)) {
+      iocMap.set(pid, r.ioc ?? null);
     }
   });
 
@@ -174,10 +177,12 @@ export async function GET(
   };
 
   const matches: Match[] = list.map((row) => {
-    const tp = row.top_id ? pmap.get(String(row.top_id)) : null;
-    const bp = row.bot_id ? pmap.get(String(row.bot_id)) : null;
+    const topIdNum = Number(row.top_id);
+    const botIdNum = Number(row.bot_id);
+    const tp = Number.isFinite(topIdNum) ? pmap.get(topIdNum) : null;
+    const bp = Number.isFinite(botIdNum) ? pmap.get(botIdNum) : null;
 
-    const tentry = row.top_id ? emap.get(String(row.top_id)) : null;
+    const tentry = Number.isFinite(topIdNum) ? emap.get(topIdNum) : null;
     const rawSeedTop = (tentry as any)?.seed;
     const seedTop =
       typeof rawSeedTop === "number" && Number.isFinite(rawSeedTop)
@@ -201,10 +206,10 @@ export async function GET(
       name: tp?.name ?? "TBD",
       seed: seedTop,
       entryType: entryTop,
-      country: isoToFlag(iocToIso2(iocMap.get(String(row.top_id)))),
+      country: isoToFlag(iocToIso2(Number.isFinite(topIdNum) ? iocMap.get(topIdNum) : null)),
     };
 
-    const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
+    const bentry = Number.isFinite(botIdNum) ? emap.get(botIdNum) : null;
     const rawSeedBot = (bentry as any)?.seed;
     const seedBot =
       typeof rawSeedBot === "number" && Number.isFinite(rawSeedBot)
@@ -228,7 +233,7 @@ export async function GET(
       name: bp?.name ?? "TBD",
       seed: seedBot,
       entryType: entryBot,
-      country: isoToFlag(iocToIso2(iocMap.get(String(row.bot_id)))),
+      country: isoToFlag(iocToIso2(Number.isFinite(botIdNum) ? iocMap.get(botIdNum) : null)),
     };
 
     return {
