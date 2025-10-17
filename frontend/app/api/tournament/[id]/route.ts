@@ -178,8 +178,8 @@ export async function GET(
     const bp = row.bot_id ? pmap.get(String(row.bot_id)) : null;
 
     const tentry = row.top_id ? emap.get(String(row.top_id)) : null;
-    const parsedSeedTop = Number((tentry as any)?.seed);
-    const seedTop = Number.isFinite(parsedSeedTop) ? parsedSeedTop : null;
+    const rawSeedTop = (tentry as any)?.seed;
+    const seedTop = typeof rawSeedTop === "number" && Number.isFinite(rawSeedTop) ? rawSeedTop : null;
     const rawEntryTop = (tentry as any)?.entry_type ?? (tentry as any)?.tag ?? null;
     const entryTop =
       typeof rawEntryTop === "string"
@@ -197,8 +197,8 @@ export async function GET(
     };
 
     const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
-    const parsedSeedBot = Number((bentry as any)?.seed);
-    const seedBot = Number.isFinite(parsedSeedBot) ? parsedSeedBot : null;
+    const rawSeedBot = (bentry as any)?.seed;
+    const seedBot = typeof rawSeedBot === "number" && Number.isFinite(rawSeedBot) ? rawSeedBot : null;
     const rawEntryBot = (bentry as any)?.entry_type ?? (bentry as any)?.tag ?? null;
     const entryBot =
       typeof rawEntryBot === "string"
@@ -237,4 +237,3 @@ export async function GET(
     headers: { "content-type": "application/json" },
   });
 }
-
