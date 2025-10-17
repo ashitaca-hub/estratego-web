@@ -83,8 +83,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   const entriesAttempt = await supabase
     .from("draw_entries")
     .select("player_id,seed,entry_type")
-    .eq("tourney_id", id)
-    .in("player_id", ids);
+    .eq("tourney_id", id);
 
   let entries: Array<{ player_id: string; seed: any; entry_type?: any }> = [];
   let e4: any = null;
@@ -93,8 +92,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
       const fallback = await supabase
         .from("draw_entries")
         .select("player_id,seed,tag")
-        .eq("tourney_id", id)
-        .in("player_id", ids);
+        .eq("tourney_id", id);
       e4 = fallback.error;
       entries = Array.isArray(fallback.data) ? (fallback.data as any[]) : [];
     } else {
@@ -117,11 +115,11 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   }
 
   const pmap = new Map<string, (typeof plist)[number]>();
-  (plist ?? []).forEach((p) => pmap.set(p.player_id, p));
+  (plist ?? []).forEach((p) => pmap.set(String(p.player_id), p));
   const emap = new Map<string, (typeof entries)[number]>();
-  (entries ?? []).forEach((e: any) => emap.set(e.player_id, e));
+  (entries ?? []).forEach((e: any) => emap.set(String(e.player_id), e));
   const iocMap = new Map<string, string | null>();
-  (iocList ?? []).forEach((r: any) => iocMap.set(r.player_id, r.ioc ?? null));
+  (iocList ?? []).forEach((r: any) => iocMap.set(String(r.player_id), r.ioc ?? null));
 
   const iocToIso2 = (ioc?: string | null): string | null => {
     if (!ioc || typeof ioc !== "string") return null;
@@ -140,10 +138,10 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   };
 
   const matches: Match[] = list.map((row) => {
-    const tp = row.top_id ? pmap.get(row.top_id) : null;
-    const bp = row.bot_id ? pmap.get(row.bot_id) : null;
+    const tp = row.top_id ? pmap.get(String(row.top_id)) : null;
+    const bp = row.bot_id ? pmap.get(String(row.bot_id)) : null;
 
-    const tentry = row.top_id ? emap.get(row.top_id) : null;
+    const tentry = row.top_id ? emap.get(String(row.top_id)) : null;
     const top: Player = {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
@@ -154,10 +152,10 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
           ((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "WC")
           ? ((tentry as any)?.entry_type ?? (tentry as any)?.tag)
           : null,
-      country: iocToIso2(iocMap.get(row.top_id)),
+      country: iocToIso2(iocMap.get(String(row.top_id))),
     };
 
-    const bentry = row.bot_id ? emap.get(row.bot_id) : null;
+    const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
     const bottom: Player = {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
@@ -168,7 +166,7 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
           ((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "WC")
           ? ((bentry as any)?.entry_type ?? (bentry as any)?.tag)
           : null,
-      country: iocToIso2(iocMap.get(row.bot_id)),
+      country: iocToIso2(iocMap.get(String(row.bot_id))),
     };
 
     return {
