@@ -176,6 +176,26 @@ export async function GET(
     return chars.join("");
   };
 
+  const coerceSeed = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === "bigint") {
+      const asNumber = Number(value);
+      return Number.isFinite(asNumber) ? asNumber : null;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed === "") return null;
+      const direct = Number(trimmed);
+      if (Number.isFinite(direct)) return direct;
+      const parsedInt = parseInt(trimmed, 10);
+      return Number.isFinite(parsedInt) ? parsedInt : null;
+    }
+    return null;
+  };
+
   const matches: Match[] = list.map((row) => {
     const topIdNum = Number(row.top_id);
     const botIdNum = Number(row.bot_id);
@@ -184,15 +204,7 @@ export async function GET(
 
     const tentry = Number.isFinite(topIdNum) ? emap.get(topIdNum) : null;
     const rawSeedTop = (tentry as any)?.seed;
-    const seedTop =
-      typeof rawSeedTop === "number" && Number.isFinite(rawSeedTop)
-        ? rawSeedTop
-        : typeof rawSeedTop === "string" && rawSeedTop.trim() !== ""
-        ? (() => {
-            const parsed = Number(rawSeedTop);
-            return Number.isFinite(parsed) ? parsed : null;
-          })()
-        : null;
+    const seedTop = coerceSeed(rawSeedTop);
     const rawEntryTop = (tentry as any)?.entry_type ?? (tentry as any)?.tag ?? null;
     const entryTop =
       typeof rawEntryTop === "string"
@@ -211,15 +223,7 @@ export async function GET(
 
     const bentry = Number.isFinite(botIdNum) ? emap.get(botIdNum) : null;
     const rawSeedBot = (bentry as any)?.seed;
-    const seedBot =
-      typeof rawSeedBot === "number" && Number.isFinite(rawSeedBot)
-        ? rawSeedBot
-        : typeof rawSeedBot === "string" && rawSeedBot.trim() !== ""
-        ? (() => {
-            const parsed = Number(rawSeedBot);
-            return Number.isFinite(parsed) ? parsed : null;
-          })()
-        : null;
+    const seedBot = coerceSeed(rawSeedBot);
     const rawEntryBot = (bentry as any)?.entry_type ?? (bentry as any)?.tag ?? null;
     const entryBot =
       typeof rawEntryBot === "string"
