@@ -57,32 +57,47 @@ export async function GET(
     });
   }
 
-const list = [...(rawRows ?? [])].sort((a, b) => {
-  const getNumericId = (id: string) => parseInt(id.split("-")[1], 10);
-  return getNumericId(a.id) - getNumericId(b.id);
-});
+  const list = [...(rawRows ?? [])].sort((a, b) => {
+    const getNumericId = (id: string) => parseInt(id.split("-")[1], 10);
+    return getNumericId(a.id) - getNumericId(b.id);
+  });
 
   const ids = Array.from(
-    new Set(list.flatMap((r) => [r.top_id, r.bot_id]).filter(Boolean))
+    new Set(
+      list
+        .flatMap((r) => [r.top_id, r.bot_id])
+        .map((value) => {
+          if (typeof value === "number") return value;
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : null;
+        })
+        .filter((value): value is number => value !== null),
+    ),
   );
 
   // Fetch players (names)
-  const pPromise = supabase
-    .from("players_min") // <- cambiado de players_official a players_min
-    .select("player_id,name")
-    .in("player_id", ids);
+  const pPromise =
+    ids.length > 0
+      ? supabase
+          .from("players_min") // <- cambiado de players_official a players_min
+          .select("player_id,name")
+          .in("player_id", ids)
+      : Promise.resolve({ data: [], error: null } as any);
 
   // Fetch IOC from estratego_v1.players to derive ISO-2 country
-  const iocPromise = supabase
-    .schema("estratego_v1")
-    .from("players")
-    .select("player_id,ioc")
-    .in("player_id", ids);
+  const iocPromise =
+    ids.length > 0
+      ? supabase
+          .schema("estratego_v1")
+          .from("players")
+          .select("player_id,ioc")
+          .in("player_id", ids)
+      : Promise.resolve({ data: [], error: null } as any);
 
   // Try to fetch entries including entry_type; if column doesn't exist, fallback without it (TS-safe)
   const entriesAttempt = await supabase
     .from("draw_entries")
-    .select("player_id,seed,entry_type")
+    .select("player_id,seed,entry_type,tag")
     .eq("tourney_id", id);
 
   let entries: Array<{ player_id: string; seed: any; entry_type?: any }> = [];
@@ -115,11 +130,23 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
   }
 
   const pmap = new Map<string, (typeof plist)[number]>();
-  (plist ?? []).forEach((p) => pmap.set(String(p.player_id), p));
+  (plist ?? []).forEach((p) => {
+    if (p?.player_id != null) {
+      pmap.set(String(p.player_id), p);
+    }
+  });
   const emap = new Map<string, (typeof entries)[number]>();
-  (entries ?? []).forEach((e: any) => emap.set(String(e.player_id), e));
+  (entries ?? []).forEach((e: any) => {
+    if (e?.player_id != null) {
+      emap.set(String(e.player_id), e);
+    }
+  });
   const iocMap = new Map<string, string | null>();
-  (iocList ?? []).forEach((r: any) => iocMap.set(String(r.player_id), r.ioc ?? null));
+  (iocList ?? []).forEach((r: any) => {
+    if (r?.player_id != null) {
+      iocMap.set(String(r.player_id), r.ioc ?? null);
+    }
+  });
 
   const iocToIso2 = (ioc?: string | null): string | null => {
     if (!ioc || typeof ioc !== "string") return null;
