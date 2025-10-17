@@ -130,7 +130,7 @@ export async function GET(
   }
 
   const pmap = new Map<string, (typeof plist)[number]>();
-  (plist ?? []).forEach((p) => {
+  (plist ?? []).forEach((p: any) => {
     if (p?.player_id != null) {
       pmap.set(String(p.player_id), p);
     }
