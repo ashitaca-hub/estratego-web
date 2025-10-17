@@ -142,30 +142,40 @@ const list = [...(rawRows ?? [])].sort((a, b) => {
     const bp = row.bot_id ? pmap.get(String(row.bot_id)) : null;
 
     const tentry = row.top_id ? emap.get(String(row.top_id)) : null;
+    const parsedSeedTop = Number((tentry as any)?.seed);
+    const seedTop = Number.isFinite(parsedSeedTop) ? parsedSeedTop : null;
+    const rawEntryTop = (tentry as any)?.entry_type ?? (tentry as any)?.tag ?? null;
+    const entryTop =
+      typeof rawEntryTop === "string"
+        ? (() => {
+            const clean = rawEntryTop.trim().toUpperCase();
+            return clean === "Q" || clean === "WC" ? clean : null;
+          })()
+        : null;
     const top: Player = {
       id: row.top_id ?? "TBD",
       name: tp?.name ?? "TBD",
-      seed: tentry?.seed ?? undefined,
-      entryType:
-        ((tentry as any)?.entry_type ?? (tentry as any)?.tag) &&
-        (((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "Q" ||
-          ((tentry as any)?.entry_type ?? (tentry as any)?.tag) === "WC")
-          ? ((tentry as any)?.entry_type ?? (tentry as any)?.tag)
-          : null,
+      seed: seedTop,
+      entryType: entryTop,
       country: iocToIso2(iocMap.get(String(row.top_id))),
     };
 
     const bentry = row.bot_id ? emap.get(String(row.bot_id)) : null;
+    const parsedSeedBot = Number((bentry as any)?.seed);
+    const seedBot = Number.isFinite(parsedSeedBot) ? parsedSeedBot : null;
+    const rawEntryBot = (bentry as any)?.entry_type ?? (bentry as any)?.tag ?? null;
+    const entryBot =
+      typeof rawEntryBot === "string"
+        ? (() => {
+            const clean = rawEntryBot.trim().toUpperCase();
+            return clean === "Q" || clean === "WC" ? clean : null;
+          })()
+        : null;
     const bottom: Player = {
       id: row.bot_id ?? "TBD",
       name: bp?.name ?? "TBD",
-      seed: bentry?.seed ?? undefined,
-      entryType:
-        ((bentry as any)?.entry_type ?? (bentry as any)?.tag) &&
-        (((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "Q" ||
-          ((bentry as any)?.entry_type ?? (bentry as any)?.tag) === "WC")
-          ? ((bentry as any)?.entry_type ?? (bentry as any)?.tag)
-          : null,
+      seed: seedBot,
+      entryType: entryBot,
       country: iocToIso2(iocMap.get(String(row.bot_id))),
     };
 
