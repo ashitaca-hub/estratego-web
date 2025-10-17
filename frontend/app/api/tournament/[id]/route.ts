@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 type Player = {
   id: string;
   name: string;
-  seed?: number;
+  seed?: number | null;
   entryType?: string | null;
   country?: string | null;
 };
