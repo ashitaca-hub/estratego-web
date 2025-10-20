@@ -112,6 +112,13 @@ type PlayerPrematchStats = {
   defends_round?: string | null;
 };
 
+type TournamentSummary = {
+  name: string | null;
+  surface: string | null;
+  bucket: string | null;
+  month: number | null;
+};
+
 type PrematchSummary = {
   prob_player: number | null;
   playerA: PlayerPrematchStats;
@@ -131,6 +138,7 @@ type PrematchSummary = {
     country_p?: string | null;
     country_o?: string | null;
   };
+  tournament?: TournamentSummary;
 };
 
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
@@ -202,6 +210,15 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
   const losses = asNumber(h2h?.losses) ?? 0;
 
   const extras = asRecord(data?.extras) ?? null;
+  const tournamentRecord = asRecord(data?.tournament) ?? null;
+  const tournament: TournamentSummary | undefined = tournamentRecord
+    ? {
+        name: asStringLocal(tournamentRecord?.name),
+        surface: asStringLocal(tournamentRecord?.surface),
+        bucket: asStringLocal(tournamentRecord?.bucket),
+        month: asNumber(tournamentRecord?.month),
+      }
+    : undefined;
 
   const probabilityCandidates: Array<number | null> = [
     asNumber(data?.prob_player),
@@ -244,6 +261,7 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
       country_p: typeof (extras as any)?.country_p === "string" ? String((extras as any).country_p) : null,
       country_o: typeof (extras as any)?.country_o === "string" ? String((extras as any).country_o) : null,
     },
+    tournament,
   };
 };
 
