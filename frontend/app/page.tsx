@@ -285,6 +285,57 @@ const formatDefendsRoundLabel = (value?: string | null) => {
   }
 };
 
+const renderDefendChip = (value?: string | null) => {
+  const label = formatDefendsRoundLabel(value);
+  if (!label) return null;
+  const upper = label.toUpperCase();
+  if (upper === "CAMPEÓN" || upper === "CAMPEON") {
+    return (
+      <span
+        key="defend"
+        title="Defiende título"
+        className="text-lg"
+        role="img"
+        aria-label="Defiende título"
+      >
+        🏆
+      </span>
+    );
+  }
+  if (upper === "FINALISTA") {
+    return (
+      <span
+        key="defend"
+        title="Defiende final"
+        className="text-lg text-slate-200"
+        role="img"
+        aria-label="Defiende final"
+      >
+        🥈
+      </span>
+    );
+  }
+  if (upper === "SEMIFINALISTA") {
+    return (
+      <span
+        key="defend"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-700/30 text-[11px] font-semibold text-amber-200"
+        title="Defiende semifinal"
+      >
+        SF
+      </span>
+    );
+  }
+  return (
+    <span
+      key="defend"
+      className="inline-flex h-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-2 text-[11px] text-slate-200"
+    >
+      {label}
+    </span>
+  );
+};
+
 function normalizeRatio01(value: number | null): number {
   if (value == null || Number.isNaN(value as any)) return 0;
   const v = Math.abs(value as number) <= 1 ? Number(value) : Number(value) / 100;
@@ -543,9 +594,12 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
-                        if (flag) chips.push(
-                          <span key="flag" className="text-base leading-none">{flag}</span>
-                        );
+                        if (flag)
+                          chips.push(
+                            <span key="flag" className="text-base leading-none">
+                              {flag}
+                            </span>,
+                          );
                         const seed = match?.top?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -558,14 +612,12 @@ const highlight = useMemo(() => {
                             <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
                           );
                         }
-                        const defendLabel = formatDefendsRoundLabel(summary.playerA.defends_round);
-                        if (chips.length === 0 && !defendLabel) return null;
-                        return (
-                          <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400">
-                            {chips.length > 0 && <div className="flex items-center gap-2">{chips}</div>}
-                            {defendLabel && <div>Defiende: {defendLabel}</div>}
-                          </div>
-                        );
+                        const defendChip = renderDefendChip(summary.playerA.defends_round);
+                        if (defendChip) {
+                          chips.push(defendChip);
+                        }
+                        if (chips.length === 0) return null;
+                        return <div className="flex items-center gap-2">{chips}</div>;
                       })()}
                     </div>
                     <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
@@ -583,9 +635,12 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
-                        if (flag) chips.push(
-                          <span key="flag" className="text-base leading-none">{flag}</span>
-                        );
+                        if (flag)
+                          chips.push(
+                            <span key="flag" className="text-base leading-none">
+                              {flag}
+                            </span>,
+                          );
                         const seed = match?.bottom?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -598,14 +653,12 @@ const highlight = useMemo(() => {
                             <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
                           );
                         }
-                        const defendLabel = formatDefendsRoundLabel(summary.playerB.defends_round);
-                        if (chips.length === 0 && !defendLabel) return null;
-                        return (
-                          <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400">
-                            {chips.length > 0 && <div className="flex items-center gap-2">{chips}</div>}
-                            {defendLabel && <div>Defiende: {defendLabel}</div>}
-                          </div>
-                        );
+                        const defendChip = renderDefendChip(summary.playerB.defends_round);
+                        if (defendChip) {
+                          chips.push(defendChip);
+                        }
+                        if (chips.length === 0) return null;
+                        return <div className="flex items-center gap-2">{chips}</div>;
                       })()}
                     </div>
                   </div>
