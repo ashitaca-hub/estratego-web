@@ -47,6 +47,8 @@ type PrematchSummaryResponse = {
   last_surface: string | null;
   defends_round: string | null;
   court_speed: number | null;
+  court_speed_rank?: number | null;
+  surface_reported?: string | null;
   tournament?: TournamentSummary;
   extras?: ExtrasSummary;
 };
@@ -648,6 +650,36 @@ export async function POST(req: Request) {
   }
 
   const formatted = formatPrematchSummary(data);
+  const tourneyIdRaw = body?.tourney_id;
+  const tourneyIdBase =
+    typeof tourneyIdRaw === "string" && tourneyIdRaw.includes("-")
+      ? tourneyIdRaw.split("-")[1] ?? tourneyIdRaw
+      : typeof tourneyIdRaw === "string"
+        ? tourneyIdRaw
+        : null;
+
+  if (tourneyIdBase) {
+    const { data: speedData, error: speedError } = await supabase
+      .schema("estratego_v1")
+      .from("court_speed_ranking_norm")
+      .select("speed_rank,surface_reported")
+      .eq("tourney_id", tourneyIdBase)
+      .maybeSingle();
+
+    if (!speedError && speedData) {
+      const speedRank =
+        typeof speedData.speed_rank === "number" ? speedData.speed_rank : Number(speedData.speed_rank ?? NaN);
+      formatted.court_speed_rank = Number.isFinite(speedRank) ? speedRank : null;
+      formatted.surface_reported =
+        typeof speedData.surface_reported === "string" && speedData.surface_reported.trim() !== ""
+          ? speedData.surface_reported
+          : null;
+
+      if (formatted.court_speed == null && Number.isFinite(speedRank)) {
+        formatted.court_speed = speedRank;
+      }
+    }
+  }
 
   return new Response(JSON.stringify(formatted), {
     status: 200,

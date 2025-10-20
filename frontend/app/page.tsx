@@ -125,6 +125,8 @@ type PrematchSummary = {
   last_surface: string | null;
   defends_round: string | null;
   court_speed: number | null;
+  court_speed_rank?: number | null;
+  surface_reported?: string | null;
   extras?: {
     country_p?: string | null;
     country_o?: string | null;
@@ -162,6 +164,13 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
       const parsed = Number.parseFloat(normalized);
       return Number.isFinite(parsed) ? parsed : null;
     }
+    return null;
+  };
+
+  const asStringLocal = (value: unknown): string | null => {
+    if (typeof value === "string" && value.trim() !== "") return value;
+    if (value == null) return null;
+    if (typeof value === "number" && Number.isFinite(value)) return `${value}`;
     return null;
   };
 
@@ -223,6 +232,14 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     last_surface: typeof meta?.last_surface === "string" ? meta.last_surface : null,
     defends_round: typeof meta?.defends_round === "string" ? meta.defends_round : null,
     court_speed: asNumber(meta?.court_speed),
+    court_speed_rank:
+      asNumber(data?.court_speed_rank) ??
+      asNumber((meta as any)?.court_speed_rank) ??
+      asNumber(data?.court_speed),
+    surface_reported:
+      asStringLocal(data?.surface_reported) ??
+      asStringLocal((meta as any)?.surface_reported) ??
+      asStringLocal((meta as any)?.surface_reported_name),
     extras: {
       country_p: typeof (extras as any)?.country_p === "string" ? String((extras as any).country_p) : null,
       country_o: typeof (extras as any)?.country_o === "string" ? String((extras as any).country_o) : null,
@@ -332,6 +349,44 @@ const renderDefendChip = (value?: string | null) => {
       className="inline-flex h-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-2 text-[11px] text-slate-200"
     >
       {label}
+    </span>
+  );
+};
+
+const describeCourtSpeed = (rank?: number | null) => {
+  if (rank == null || Number.isNaN(rank)) return null;
+  if (rank <= 15) return "Super fast";
+  if (rank <= 30) return "Fast";
+  if (rank <= 45) return "Medium";
+  return "Slow";
+};
+
+const renderSurfaceChip = (surface?: string | null) => {
+  if (!surface) return null;
+  const label = surface.trim();
+  if (!label) return null;
+  const lower = label.toLowerCase();
+  let className = "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ";
+  let icon = "🎾";
+  if (lower.includes("indoor") && lower.includes("hard")) {
+    className += "border-violet-500/40 bg-violet-500/20 text-violet-200";
+    icon = "🏟️";
+  } else if (lower.includes("hard")) {
+    className += "border-sky-500/40 bg-sky-500/20 text-sky-100";
+    icon = "🔵";
+  } else if (lower.includes("grass")) {
+    className += "border-lime-500/40 bg-lime-500/20 text-lime-200";
+    icon = "🌱";
+  } else if (lower.includes("clay") || lower.includes("terra") || lower.includes("arcilla")) {
+    className += "border-orange-500/40 bg-orange-500/20 text-orange-200";
+    icon = "🧱";
+  } else {
+    className += "border-slate-600/40 bg-slate-700/20 text-slate-200";
+  }
+  return (
+    <span className={className}>
+      <span>{icon}</span>
+      <span>{label}</span>
     </span>
   );
 };
@@ -967,8 +1022,28 @@ const highlight = useMemo(() => {
                             )}
                           </div>
                         </div>
-                        <div>
-                          Velocidad estimada de la pista: {summary.court_speed != null ? summary.court_speed : 'N/A'}
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {renderSurfaceChip(summary.surface_reported ?? summary.tournament?.surface ?? null)}
+                            {(() => {
+                              const rank = summary.court_speed_rank ?? summary.court_speed ?? null;
+                              if (rank == null) {
+                                return <span>Velocidad: N/A</span>;
+                              }
+                              const descriptor = describeCourtSpeed(rank);
+                              return (
+                                <span>
+                                  Velocidad: #{rank}
+                                  {descriptor ? ` (${descriptor})` : ""}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          {(summary.surface_reported ?? summary.tournament?.surface) && (
+                            <div className="text-xs text-slate-400">
+                              Superficie: {summary.surface_reported ?? summary.tournament?.surface}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
