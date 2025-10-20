@@ -1092,6 +1092,7 @@ export function EstrategoBracketApp() {
   const [tidInput, setTidInput] = useState<string>(tParam);
   const [listLoading, setListLoading] = useState(false);
   const [tournaments, setTournaments] = useState<Array<{ tourney_id: string; name: string; surface?: string; draw_size?: number }>>([]);
+  const [multiSimLoading, setMultiSimLoading] = useState(false);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -1168,6 +1169,62 @@ export function EstrategoBracketApp() {
     const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
     const data = (await res.json()) as Bracket;
     setBracket(data);
+  };
+
+  const onSimulateMultiple = async () => {
+    if (!bracket || multiSimLoading) return;
+    const defaultRuns = 100;
+    const input = window.prompt(
+      "¿Cuántas simulaciones quieres ejecutar?",
+      String(defaultRuns),
+    );
+
+    if (input === null) {
+      return;
+    }
+
+    const runs = Number.parseInt(input, 10);
+    if (!Number.isFinite(runs) || runs <= 0) {
+      alert("Introduce un número válido de runs (entero positivo).");
+      return;
+    }
+
+    setMultiSimLoading(true);
+    try {
+      const payload = {
+        tourney_id: bracket.tourney_id,
+        runs,
+        year: new Date().getFullYear(),
+      };
+
+      const res = await fetch("/api/simulate/multiple", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Error en simulate/multiple:", text);
+        alert(`Fallo al correr las simulaciones: ${text || res.status}`);
+        return;
+      }
+
+      const latest = await fetch(`/api/tournament/${bracket.tourney_id}`);
+      if (latest.ok) {
+        const data = (await latest.json()) as Bracket;
+        setBracket(data);
+      }
+
+      router.push(
+        `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
+      );
+    } catch (err) {
+      console.error("Error ejecutando simulaciones múltiples:", err);
+      alert("Ocurrió un error al ejecutar las simulaciones múltiples.");
+    } finally {
+      setMultiSimLoading(false);
+    }
   };
 
   const onReset = async () => {
@@ -1284,9 +1341,18 @@ export function EstrategoBracketApp() {
             Draw {bracket.drawSize} - Superficie: {bracket.surface}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button className="rounded-2xl" onClick={onSimulate}>
             <Play className="w-4 h-4 mr-2" /> Simular
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl"
+            onClick={onSimulateMultiple}
+            disabled={multiSimLoading}
+          >
+            <Flame className="w-4 h-4 mr-2" />
+            {multiSimLoading ? "Simulando..." : "Simular xN"}
           </Button>
           <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
             Resetear
