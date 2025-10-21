@@ -1190,41 +1190,78 @@ export function EstrategoBracketApp() {
       return;
     }
 
-    const chunkSize = 5;
-    const totalChunks = Math.ceil(runs / chunkSize);
-
     setMultiSimLoading(true);
     setMultiSimProgress({ done: 0, total: runs });
 
     try {
       let processed = 0;
       let reset = true;
+      const baseChunkSize = 5;
+      let chunkSize = Math.min(baseChunkSize, runs);
 
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx += 1) {
-        const chunkRuns = Math.min(chunkSize, runs - processed);
+      const runChunk = async (chunkRuns: number, resetChunk: boolean) => {
         const payload = {
           tourney_id: bracket.tourney_id,
           runs: chunkRuns,
           year: new Date().getFullYear(),
-          reset,
+          reset: resetChunk,
         };
 
-        const res = await fetch("/api/simulate/multiple", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        try {
+          const res = await fetch("/api/simulate/multiple", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Error en simulate/multiple:", text);
-          alert(`Fallo al correr las simulaciones: ${text || res.status}`);
+          if (!res.ok) {
+            const text = await res.text();
+            let message = text || `${res.status}`;
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed && typeof parsed.error === "string") {
+                message = parsed.error;
+              }
+            } catch {
+              // ignore parse errors
+            }
+            return { ok: false as const, error: message };
+          }
+
+          // consume response to avoid keeping body streams open
+          await res.json().catch(() => undefined);
+          return { ok: true as const };
+        } catch (err) {
+          return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+        }
+      };
+
+      while (processed < runs) {
+        const remaining = runs - processed;
+        chunkSize = Math.min(chunkSize, remaining);
+        const result = await runChunk(chunkSize, reset);
+
+        if (!result.ok) {
+          const errMsg = result.error ?? "Error desconocido";
+          console.error("Error en simulate/multiple:", errMsg);
+
+          if (chunkSize > 1 && errMsg.toLowerCase().includes("statement timeout")) {
+            // reduce chunk size and retry without advancing progress
+            chunkSize = 1;
+            continue;
+          }
+
+          alert(`Fallo al correr las simulaciones: ${errMsg}`);
           break;
         }
 
-        processed += chunkRuns;
+        processed += chunkSize;
         reset = false;
         setMultiSimProgress({ done: processed, total: runs });
+        chunkSize = Math.min(baseChunkSize, runs - processed);
+
+        // allow UI to breathe between iterations
+        await new Promise((resolve) => setTimeout(resolve, 120));
       }
 
       if (processed > 0) {
