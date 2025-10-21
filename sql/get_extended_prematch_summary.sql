@@ -1,0 +1,321 @@
+-- get_extended_prematch_summary aggregates performance metrics for two players
+-- and returns their weighted win probability plus contextual data.
+CREATE OR REPLACE FUNCTION public.get_extended_prematch_summary(
+  p_tourney_id  TEXT,
+  p_year        INTEGER,
+  player_a_id   INTEGER,
+  player_b_id   INTEGER
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  rec_a_year RECORD;
+  rec_b_year RECORD;
+  rec_a_surf RECORD;
+  rec_b_surf RECORD;
+
+  win_month_a FLOAT;
+  win_month_b FLOAT;
+  win_vs_rankband_a FLOAT;
+  win_vs_rankband_b FLOAT;
+  court_speed_score_a FLOAT;
+  court_speed_score_b FLOAT;
+  win_score_a FLOAT := 0;
+  win_score_b FLOAT := 0;
+  prob_a FLOAT := NULL;
+  prob_b FLOAT := NULL;
+
+  h2h_rec RECORD;
+  country_a TEXT;
+  country_b TEXT;
+  tourney_surf TEXT;
+  tourney_speed_id TEXT;
+  tourney_speed_rank INT;
+  ranking_a INT;
+  ranking_b INT;
+  days_since_a INT;
+  days_since_b INT;
+  tourney_month INT;
+  w RECORD;
+
+  round_last_a TEXT := NULL;
+  round_last_b TEXT := NULL;
+  tourney_base TEXT;
+  prev_year INT;
+  tourney_prev_id TEXT;
+  meta_defend_round TEXT := NULL;
+BEGIN
+  -- Win % in current year
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins,
+         COUNT(*) AS total
+    INTO rec_a_year
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+      AND (winner_id = player_a_id OR loser_id = player_a_id);
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id) AS wins,
+         COUNT(*) AS total
+    INTO rec_b_year
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+      AND (winner_id = player_b_id OR loser_id = player_b_id);
+
+  -- Tournament surface and month
+  SELECT surface,
+         EXTRACT(MONTH FROM TO_DATE(tourney_date::TEXT, 'YYYYMMDD'))::INT
+    INTO tourney_surf, tourney_month
+    FROM estratego_v1.tournaments
+    WHERE tourney_id = p_tourney_id;
+
+  tourney_speed_id := split_part(p_tourney_id, '-', 2);
+
+  SELECT speed_rank
+    INTO tourney_speed_rank
+    FROM estratego_v1.court_speed_ranking_norm
+    WHERE tourney_id = tourney_speed_id;
+
+  -- Win % on surface during the year
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins_surf,
+         COUNT(*) AS total_surf
+    INTO rec_a_surf
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+      AND surface = tourney_surf
+      AND (winner_id = player_a_id OR loser_id = player_a_id);
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id) AS wins_surf,
+         COUNT(*) AS total_surf
+    INTO rec_b_surf
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+      AND surface = tourney_surf
+      AND (winner_id = player_b_id OR loser_id = player_b_id);
+
+  -- Latest ranking snapshot up to the tournament year
+  SELECT rs.rank
+    INTO ranking_a
+    FROM estratego_v1.rankings_snapshot rs
+    WHERE rs.player_id = player_a_id
+      AND LEFT(rs.match_id, 4)::INT <= p_year
+    ORDER BY LEFT(rs.match_id, 4)::INT DESC
+    LIMIT 1;
+
+  SELECT rs.rank
+    INTO ranking_b
+    FROM estratego_v1.rankings_snapshot rs
+    WHERE rs.player_id = player_b_id
+      AND LEFT(rs.match_id, 4)::INT <= p_year
+    ORDER BY LEFT(rs.match_id, 4)::INT DESC
+    LIMIT 1;
+
+  -- Head-to-head record
+  SELECT wins, losses, last_meeting
+    INTO h2h_rec
+    FROM estratego_v1.h2h
+    WHERE player_id = player_a_id AND opponent_id = player_b_id;
+
+  -- Countries
+  SELECT ioc INTO country_a FROM estratego_v1.players WHERE player_id = player_a_id;
+  SELECT ioc INTO country_b FROM estratego_v1.players WHERE player_id = player_b_id;
+
+  -- Days since last match
+  SELECT (CURRENT_DATE - MAX(tourney_date))
+    INTO days_since_a
+    FROM estratego_v1.matches_full
+    WHERE winner_id = player_a_id OR loser_id = player_a_id;
+
+  SELECT (CURRENT_DATE - MAX(tourney_date))
+    INTO days_since_b
+    FROM estratego_v1.matches_full
+    WHERE winner_id = player_b_id OR loser_id = player_b_id;
+
+  -- Monthly win percentage
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_month_a
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(MONTH FROM tourney_date)::INT = tourney_month
+      AND (winner_id = player_a_id OR loser_id = player_a_id);
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_month_b
+    FROM estratego_v1.matches_full
+    WHERE EXTRACT(MONTH FROM tourney_date)::INT = tourney_month
+      AND (winner_id = player_b_id OR loser_id = player_b_id);
+
+  -- Win % vs Top-10 opponents
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_vs_rankband_a
+    FROM estratego_v1.matches_full mf
+    JOIN estratego_v1.rankings_snapshot rs
+      ON rs.player_id = CASE
+        WHEN mf.winner_id = player_a_id THEN mf.loser_id
+        WHEN mf.loser_id = player_a_id THEN mf.winner_id
+      END
+      AND LEFT(rs.match_id, 4) = TO_CHAR(mf.tourney_date, 'YYYY')
+    WHERE (winner_id = player_a_id OR loser_id = player_a_id)
+      AND rs.rank <= 10;
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_vs_rankband_b
+    FROM estratego_v1.matches_full mf
+    JOIN estratego_v1.rankings_snapshot rs
+      ON rs.player_id = CASE
+        WHEN mf.winner_id = player_b_id THEN mf.loser_id
+        WHEN mf.loser_id = player_b_id THEN mf.winner_id
+      END
+      AND LEFT(rs.match_id, 4) = TO_CHAR(mf.tourney_date, 'YYYY')
+    WHERE (winner_id = player_b_id OR loser_id = player_b_id)
+      AND rs.rank <= 10;
+
+  -- Court speed adaptation
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO court_speed_score_a
+    FROM estratego_v1.matches_full mf
+    JOIN estratego_v1.court_speed_ranking_norm cs
+      ON cs.tourney_id = split_part(mf.tourney_id, '-', 2)
+    WHERE (winner_id = player_a_id OR loser_id = player_a_id)
+      AND cs.speed_rank BETWEEN tourney_speed_rank - 10 AND tourney_speed_rank + 10;
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO court_speed_score_b
+    FROM estratego_v1.matches_full mf
+    JOIN estratego_v1.court_speed_ranking_norm cs
+      ON cs.tourney_id = split_part(mf.tourney_id, '-', 2)
+    WHERE (winner_id = player_b_id OR loser_id = player_b_id)
+      AND cs.speed_rank BETWEEN tourney_speed_rank - 10 AND tourney_speed_rank + 10;
+
+  -- Weighted score across metrics
+  FOR w IN SELECT * FROM estratego_v1.prematch_metric_weights LOOP
+    CASE w.metric
+      WHEN 'win_pct_year' THEN
+        win_score_a := win_score_a
+          + COALESCE(rec_a_year.wins * 1.0 / NULLIF(rec_a_year.total, 0), 0) * w.weight;
+        win_score_b := win_score_b
+          + COALESCE(rec_b_year.wins * 1.0 / NULLIF(rec_b_year.total, 0), 0) * w.weight;
+      WHEN 'win_pct_surface' THEN
+        win_score_a := win_score_a
+          + COALESCE(rec_a_surf.wins_surf * 1.0 / NULLIF(rec_a_surf.total_surf, 0), 0) * w.weight;
+        win_score_b := win_score_b
+          + COALESCE(rec_b_surf.wins_surf * 1.0 / NULLIF(rec_b_surf.total_surf, 0), 0) * w.weight;
+      WHEN 'win_pct_month' THEN
+        win_score_a := win_score_a + COALESCE(win_month_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(win_month_b, 0) * w.weight;
+      WHEN 'win_pct_vs_top10' THEN
+        win_score_a := win_score_a + COALESCE(win_vs_rankband_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(win_vs_rankband_b, 0) * w.weight;
+      WHEN 'court_speed_score' THEN
+        win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
+    END CASE;
+  END LOOP;
+
+  IF win_score_a + win_score_b > 0 THEN
+    prob_a := win_score_a / (win_score_a + win_score_b);
+    prob_b := win_score_b / (win_score_a + win_score_b);
+  END IF;
+
+  tourney_base := split_part(p_tourney_id, '-', 2);
+  prev_year := p_year - 1;
+  tourney_prev_id := prev_year::TEXT || '-' || tourney_base;
+
+  SELECT CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_a_id
+               AND round = 'F'
+           ) THEN 'W'
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_a_id
+               AND round = 'SF'
+           ) THEN 'F'
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_a_id
+               AND round = 'QF'
+           ) THEN 'SF'
+           ELSE NULL
+         END
+    INTO round_last_a;
+
+  SELECT CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_b_id
+               AND round = 'F'
+           ) THEN 'W'
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_b_id
+               AND round = 'SF'
+           ) THEN 'F'
+           WHEN EXISTS (
+             SELECT 1
+             FROM estratego_v1.matches_full
+             WHERE tourney_id = tourney_prev_id
+               AND winner_id = player_b_id
+               AND round = 'QF'
+           ) THEN 'SF'
+           ELSE NULL
+         END
+    INTO round_last_b;
+
+  IF round_last_a IS NOT NULL THEN
+    IF round_last_a = 'W' THEN
+      meta_defend_round := 'Campeón';
+    ELSIF round_last_a = 'F' THEN
+      meta_defend_round := 'Finalista';
+    ELSIF round_last_a = 'SF' THEN
+      meta_defend_round := 'Semifinalista';
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'playerA', jsonb_build_object(
+      'win_pct_year', CASE WHEN rec_a_year.total > 0 THEN rec_a_year.wins * 100.0 / rec_a_year.total ELSE NULL END,
+      'win_pct_surface', CASE WHEN rec_a_surf.total_surf > 0 THEN rec_a_surf.wins_surf * 100.0 / rec_a_surf.total_surf ELSE NULL END,
+      'ranking', ranking_a,
+      'days_since_last', days_since_a,
+      'home_advantage', country_a = country_b,
+      'win_pct_month', win_month_a,
+      'win_pct_vs_top10', win_vs_rankband_a,
+      'court_speed_score', court_speed_score_a,
+      'win_score', win_score_a,
+      'win_probability', prob_a,
+      'last_year_round', round_last_a
+    ),
+    'playerB', jsonb_build_object(
+      'win_pct_year', CASE WHEN rec_b_year.total > 0 THEN rec_b_year.wins * 100.0 / rec_b_year.total ELSE NULL END,
+      'win_pct_surface', CASE WHEN rec_b_surf.total_surf > 0 THEN rec_b_surf.wins_surf * 100.0 / rec_b_surf.total_surf ELSE NULL END,
+      'ranking', ranking_b,
+      'days_since_last', days_since_b,
+      'home_advantage', country_b = country_a,
+      'win_pct_month', win_month_b,
+      'win_pct_vs_top10', win_vs_rankband_b,
+      'court_speed_score', court_speed_score_b,
+      'win_score', win_score_b,
+      'win_probability', prob_b,
+      'last_year_round', round_last_b
+    ),
+    'h2h', jsonb_build_object(
+      'wins', h2h_rec.wins,
+      'losses', h2h_rec.losses,
+      'last_meeting', h2h_rec.last_meeting
+    ),
+    'meta', jsonb_build_object(
+      'defends_round', meta_defend_round
+    )
+  );
+END;
+$function$;
