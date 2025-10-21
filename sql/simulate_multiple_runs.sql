@@ -109,3 +109,16 @@ BEGIN
   END LOOP;
 END;
 $function$;
+
+-- Returns the number of distinct simulation runs stored for a tournament.
+CREATE OR REPLACE FUNCTION public.simulation_results_run_count(
+  p_tourney_id TEXT
+)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT COALESCE(COUNT(DISTINCT run_number), 0)
+  FROM public.simulation_results
+  WHERE tourney_id = p_tourney_id;
+$function$;
