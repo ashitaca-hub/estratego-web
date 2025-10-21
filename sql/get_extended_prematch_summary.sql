@@ -237,27 +237,26 @@ BEGIN
 
   -- Weighted score across metrics already stored in prematch_metric_weights
   FOR w IN SELECT * FROM estratego_v1.prematch_metric_weights LOOP
-    CASE w.metric
-      WHEN 'win_pct_year' THEN
-        win_score_a := win_score_a
-          + COALESCE(rec_a_year.wins * 1.0 / NULLIF(rec_a_year.total, 0), 0) * w.weight;
-        win_score_b := win_score_b
-          + COALESCE(rec_b_year.wins * 1.0 / NULLIF(rec_b_year.total, 0), 0) * w.weight;
-      WHEN 'win_pct_surface' THEN
-        win_score_a := win_score_a
-          + COALESCE(rec_a_surf.wins_surf * 1.0 / NULLIF(rec_a_surf.total_surf, 0), 0) * w.weight;
-        win_score_b := win_score_b
-          + COALESCE(rec_b_surf.wins_surf * 1.0 / NULLIF(rec_b_surf.total_surf, 0), 0) * w.weight;
-      WHEN 'win_pct_month' THEN
-        win_score_a := win_score_a + COALESCE(win_month_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(win_month_b, 0) * w.weight;
-      WHEN 'win_pct_vs_top10' THEN
-        win_score_a := win_score_a + COALESCE(win_vs_rankband_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(win_vs_rankband_b, 0) * w.weight;
-      WHEN 'court_speed_score' THEN
-        win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
-    END CASE;
+    IF w.metric = 'win_pct_year' THEN
+      win_score_a := win_score_a
+        + COALESCE(rec_a_year.wins * 1.0 / NULLIF(rec_a_year.total, 0), 0) * w.weight;
+      win_score_b := win_score_b
+        + COALESCE(rec_b_year.wins * 1.0 / NULLIF(rec_b_year.total, 0), 0) * w.weight;
+    ELSIF w.metric = 'win_pct_surface' THEN
+      win_score_a := win_score_a
+        + COALESCE(rec_a_surf.wins_surf * 1.0 / NULLIF(rec_a_surf.total_surf, 0), 0) * w.weight;
+      win_score_b := win_score_b
+        + COALESCE(rec_b_surf.wins_surf * 1.0 / NULLIF(rec_b_surf.total_surf, 0), 0) * w.weight;
+    ELSIF w.metric = 'win_pct_month' THEN
+      win_score_a := win_score_a + COALESCE(win_month_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_month_b, 0) * w.weight;
+    ELSIF w.metric = 'win_pct_vs_top10' THEN
+      win_score_a := win_score_a + COALESCE(win_vs_rankband_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_vs_rankband_b, 0) * w.weight;
+    ELSIF w.metric = 'court_speed_score' THEN
+      win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
+    END IF;
   END LOOP;
 
   -- Additional metrics with default weights if absent from the configuration table
@@ -368,13 +367,13 @@ BEGIN
       ELSE 0
     END;
     defend_label_a := CASE round_last_a
-      WHEN 'W' THEN 'Campeón'
+      WHEN 'W' THEN 'Campeon'
       WHEN 'F' THEN 'Finalista'
       WHEN 'SF' THEN 'Semifinalista'
       ELSE NULL
     END;
     meta_defend_round := defend_label_a;
-    alerts_a := array_append(alerts_a, format('Defiende %s del año anterior.', COALESCE(defend_label_a, round_last_a)));
+    alerts_a := array_append(alerts_a, format('Defiende %s del ano anterior.', COALESCE(defend_label_a, round_last_a)));
   END IF;
 
   IF round_last_b IS NOT NULL THEN
@@ -385,12 +384,12 @@ BEGIN
       ELSE 0
     END;
     defend_label_b := CASE round_last_b
-      WHEN 'W' THEN 'Campeón'
+      WHEN 'W' THEN 'Campeon'
       WHEN 'F' THEN 'Finalista'
       WHEN 'SF' THEN 'Semifinalista'
       ELSE NULL
     END;
-    alerts_b := array_append(alerts_b, format('Defiende %s del año anterior.', COALESCE(defend_label_b, round_last_b)));
+    alerts_b := array_append(alerts_b, format('Defiende %s del ano anterior.', COALESCE(defend_label_b, round_last_b)));
   END IF;
 
   motivation_score_a := LEAST(1.0, defend_component_a);
