@@ -1,5 +1,5 @@
--- get_extended_prematch_summary aggregates performance metrics for two players
--- and returns their weighted win probability plus contextual data.
+-- get_extended_prematch_summary aggregates performance metrics for two players,
+-- returning a JSON payload with weighted win probabilities and context.
 CREATE OR REPLACE FUNCTION public.get_extended_prematch_summary(
   p_tourney_id  TEXT,
   p_year        INTEGER,
@@ -25,6 +25,16 @@ DECLARE
   win_score_b FLOAT := 0;
   prob_a FLOAT := NULL;
   prob_b FLOAT := NULL;
+  ranking_score_a FLOAT := NULL;
+  ranking_score_b FLOAT := NULL;
+  h2h_score_a FLOAT := NULL;
+  h2h_score_b FLOAT := NULL;
+  rest_score_a FLOAT := NULL;
+  rest_score_b FLOAT := NULL;
+  defend_component_a FLOAT := 0;
+  defend_component_b FLOAT := 0;
+  motivation_score_a FLOAT := 0;
+  motivation_score_b FLOAT := 0;
 
   h2h_rec RECORD;
   country_a TEXT;
@@ -38,9 +48,15 @@ DECLARE
   days_since_b INT;
   tourney_month INT;
   w RECORD;
+  denom FLOAT;
+
+  alerts_a TEXT[] := ARRAY[]::TEXT[];
+  alerts_b TEXT[] := ARRAY[]::TEXT[];
 
   round_last_a TEXT := NULL;
   round_last_b TEXT := NULL;
+  defend_label_a TEXT := NULL;
+  defend_label_b TEXT := NULL;
   tourney_base TEXT;
   prev_year INT;
   tourney_prev_id TEXT;
@@ -109,11 +125,25 @@ BEGIN
     ORDER BY LEFT(rs.match_id, 4)::INT DESC
     LIMIT 1;
 
+  IF ranking_a IS NOT NULL THEN
+    ranking_score_a := LEAST(1.0, GREATEST(0.0, (500 - LEAST(ranking_a, 500))::FLOAT / 499));
+  END IF;
+
+  IF ranking_b IS NOT NULL THEN
+    ranking_score_b := LEAST(1.0, GREATEST(0.0, (500 - LEAST(ranking_b, 500))::FLOAT / 499));
+  END IF;
+
   -- Head-to-head record
   SELECT wins, losses, last_meeting
     INTO h2h_rec
     FROM estratego_v1.h2h
     WHERE player_id = player_a_id AND opponent_id = player_b_id;
+
+  denom := COALESCE(h2h_rec.wins, 0)::FLOAT + COALESCE(h2h_rec.losses, 0)::FLOAT + 2;
+  IF denom > 0 THEN
+    h2h_score_a := (COALESCE(h2h_rec.wins, 0)::FLOAT + 1) / denom;
+    h2h_score_b := (COALESCE(h2h_rec.losses, 0)::FLOAT + 1) / denom;
+  END IF;
 
   -- Countries
   SELECT ioc INTO country_a FROM estratego_v1.players WHERE player_id = player_a_id;
@@ -129,6 +159,26 @@ BEGIN
     INTO days_since_b
     FROM estratego_v1.matches_full
     WHERE winner_id = player_b_id OR loser_id = player_b_id;
+
+  IF days_since_a IS NOT NULL THEN
+    rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
+    rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
+    IF days_since_a <= 2 THEN
+      alerts_a := array_append(alerts_a, format('Ha competido hace %s día(s); posible fatiga.', days_since_a));
+    ELSIF days_since_a >= 30 THEN
+      alerts_a := array_append(alerts_a, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_a));
+    END IF;
+  END IF;
+
+  IF days_since_b IS NOT NULL THEN
+    rest_score_b := 1 / (1 + ABS(days_since_b - 7)::FLOAT / 7);
+    rest_score_b := LEAST(1.0, GREATEST(0.0, rest_score_b));
+    IF days_since_b <= 2 THEN
+      alerts_b := array_append(alerts_b, format('Ha competido hace %s día(s); posible fatiga.', days_since_b));
+    ELSIF days_since_b >= 30 THEN
+      alerts_b := array_append(alerts_b, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_b));
+    END IF;
+  END IF;
 
   -- Monthly win percentage
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
@@ -185,7 +235,7 @@ BEGIN
     WHERE (winner_id = player_b_id OR loser_id = player_b_id)
       AND cs.speed_rank BETWEEN tourney_speed_rank - 10 AND tourney_speed_rank + 10;
 
-  -- Weighted score across metrics
+  -- Weighted score across metrics already stored in prematch_metric_weights
   FOR w IN SELECT * FROM estratego_v1.prematch_metric_weights LOOP
     CASE w.metric
       WHEN 'win_pct_year' THEN
@@ -207,6 +257,41 @@ BEGIN
       WHEN 'court_speed_score' THEN
         win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
         win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
+    END CASE;
+  END LOOP;
+
+  -- Additional metrics with default weights if absent from the configuration table
+  FOR w IN
+    SELECT metric, weight
+    FROM estratego_v1.prematch_metric_weights
+    WHERE metric IN ('ranking_score','h2h_score','rest_score','motivation_score')
+    UNION ALL
+    SELECT metric, weight
+    FROM (VALUES
+      ('ranking_score', 0.12),
+      ('h2h_score', 0.08),
+      ('rest_score', 0.05),
+      ('motivation_score', 0.05)
+    ) AS defaults(metric, weight)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM estratego_v1.prematch_metric_weights mw
+      WHERE mw.metric = defaults.metric
+    )
+  LOOP
+    CASE w.metric
+      WHEN 'ranking_score' THEN
+        win_score_a := win_score_a + COALESCE(ranking_score_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(ranking_score_b, 0) * w.weight;
+      WHEN 'h2h_score' THEN
+        win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
+      WHEN 'rest_score' THEN
+        win_score_a := win_score_a + COALESCE(rest_score_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(rest_score_b, 0) * w.weight;
+      WHEN 'motivation_score' THEN
+        win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
+        win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
     END CASE;
   END LOOP;
 
@@ -272,14 +357,40 @@ BEGIN
     INTO round_last_b;
 
   IF round_last_a IS NOT NULL THEN
-    IF round_last_a = 'W' THEN
-      meta_defend_round := 'Campeón';
-    ELSIF round_last_a = 'F' THEN
-      meta_defend_round := 'Finalista';
-    ELSIF round_last_a = 'SF' THEN
-      meta_defend_round := 'Semifinalista';
-    END IF;
+    defend_component_a := CASE round_last_a
+      WHEN 'W' THEN 1
+      WHEN 'F' THEN 0.75
+      WHEN 'SF' THEN 0.5
+      ELSE 0
+    END;
+    defend_label_a := CASE round_last_a
+      WHEN 'W' THEN 'Campeón'
+      WHEN 'F' THEN 'Finalista'
+      WHEN 'SF' THEN 'Semifinalista'
+      ELSE NULL
+    END;
+    meta_defend_round := defend_label_a;
+    alerts_a := array_append(alerts_a, format('Defiende %s del año anterior.', COALESCE(defend_label_a, round_last_a)));
   END IF;
+
+  IF round_last_b IS NOT NULL THEN
+    defend_component_b := CASE round_last_b
+      WHEN 'W' THEN 1
+      WHEN 'F' THEN 0.75
+      WHEN 'SF' THEN 0.5
+      ELSE 0
+    END;
+    defend_label_b := CASE round_last_b
+      WHEN 'W' THEN 'Campeón'
+      WHEN 'F' THEN 'Finalista'
+      WHEN 'SF' THEN 'Semifinalista'
+      ELSE NULL
+    END;
+    alerts_b := array_append(alerts_b, format('Defiende %s del año anterior.', COALESCE(defend_label_b, round_last_b)));
+  END IF;
+
+  motivation_score_a := LEAST(1.0, defend_component_a);
+  motivation_score_b := LEAST(1.0, defend_component_b);
 
   RETURN jsonb_build_object(
     'playerA', jsonb_build_object(
@@ -293,7 +404,13 @@ BEGIN
       'court_speed_score', court_speed_score_a,
       'win_score', win_score_a,
       'win_probability', prob_a,
-      'last_year_round', round_last_a
+      'last_year_round', round_last_a,
+      'defends_round', defend_label_a,
+      'ranking_score', ranking_score_a,
+      'h2h_score', h2h_score_a,
+      'rest_score', rest_score_a,
+      'motivation_score', motivation_score_a,
+      'alerts', to_jsonb(alerts_a)
     ),
     'playerB', jsonb_build_object(
       'win_pct_year', CASE WHEN rec_b_year.total > 0 THEN rec_b_year.wins * 100.0 / rec_b_year.total ELSE NULL END,
@@ -306,7 +423,13 @@ BEGIN
       'court_speed_score', court_speed_score_b,
       'win_score', win_score_b,
       'win_probability', prob_b,
-      'last_year_round', round_last_b
+      'last_year_round', round_last_b,
+      'defends_round', defend_label_b,
+      'ranking_score', ranking_score_b,
+      'h2h_score', h2h_score_b,
+      'rest_score', rest_score_b,
+      'motivation_score', motivation_score_b,
+      'alerts', to_jsonb(alerts_b)
     ),
     'h2h', jsonb_build_object(
       'wins', h2h_rec.wins,
@@ -314,7 +437,8 @@ BEGIN
       'last_meeting', h2h_rec.last_meeting
     ),
     'meta', jsonb_build_object(
-      'defends_round', meta_defend_round
+      'defends_round', meta_defend_round,
+      'defends_round_opponent', defend_label_b
     )
   );
 END;

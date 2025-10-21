@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronRight, Play, Flame } from "lucide-react";
+import { AlertTriangle, ChevronRight, Play, Flame } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -110,6 +110,11 @@ type PlayerPrematchStats = {
   home_advantage: boolean | null;
   days_since_last: number | null;
   defends_round?: string | null;
+  ranking_score?: number | null;
+  h2h_score?: number | null;
+  rest_score?: number | null;
+  motivation_score?: number | null;
+  alerts?: string[];
 };
 
 type TournamentSummary = {
@@ -131,6 +136,7 @@ type PrematchSummary = {
   };
   last_surface: string | null;
   defends_round: string | null;
+  defends_round_opponent: string | null;
   court_speed: number | null;
   court_speed_rank?: number | null;
   surface_reported?: string | null;
@@ -182,6 +188,24 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     return null;
   };
 
+  const asStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => {
+          if (typeof item === "string") {
+            const clean = item.trim();
+            return clean.length > 0 ? clean : null;
+          }
+          return null;
+        })
+        .filter((item): item is string => item !== null);
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      return [value.trim()];
+    }
+    return [];
+  };
+
   const buildPlayer = (p: Record<string, unknown> | null | undefined): PlayerPrematchStats => ({
     win_pct_year: asNumber(p?.win_pct_year),
     win_pct_surface: asNumber(p?.win_pct_surface),
@@ -204,6 +228,14 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         : typeof p?.last_year_round === "string" && p.last_year_round.trim() !== ""
         ? p.last_year_round
         : undefined,
+    ranking_score: asNumber(p?.ranking_score),
+    h2h_score: asNumber(p?.h2h_score),
+    rest_score: asNumber(p?.rest_score),
+    motivation_score: asNumber(p?.motivation_score),
+    alerts: (() => {
+      const arr = asStringArray(p?.alerts);
+      return arr.length ? arr : undefined;
+    })(),
   });
 
   const wins = asNumber(h2h?.wins) ?? 0;
@@ -236,10 +268,23 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     }
   }
 
+  const playerAStats = buildPlayer(playerA);
+  const playerBStats = buildPlayer(playerB);
+
+  const metaDefendRound = asStringLocal(meta?.defends_round);
+  const metaDefendOpponent = asStringLocal(meta?.defends_round_opponent);
+
+  if (!playerAStats.defends_round && metaDefendRound) {
+    playerAStats.defends_round = metaDefendRound;
+  }
+  if (!playerBStats.defends_round && metaDefendOpponent) {
+    playerBStats.defends_round = metaDefendOpponent;
+  }
+
   return {
     prob_player: probability,
-    playerA: buildPlayer(playerA),
-    playerB: buildPlayer(playerB),
+    playerA: playerAStats,
+    playerB: playerBStats,
     h2h: {
       wins,
       losses,
@@ -247,7 +292,8 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
       last_meeting: typeof h2h?.last_meeting === "string" ? h2h.last_meeting : null,
     },
     last_surface: typeof meta?.last_surface === "string" ? meta.last_surface : null,
-    defends_round: typeof meta?.defends_round === "string" ? meta.defends_round : null,
+    defends_round: metaDefendRound,
+    defends_round_opponent: metaDefendOpponent,
     court_speed: asNumber(meta?.court_speed),
     court_speed_rank:
       asNumber(data?.court_speed_rank) ??
@@ -291,16 +337,21 @@ function formatDays(value: number | null) {
   return `${value} dias`;
 }
 
+function formatScorePercent(value: number | null) {
+  if (value == null || Number.isNaN(value)) return "N/A";
+  const clamped = Math.max(0, Math.min(1, value));
+  return `${(clamped * 100).toFixed(0)}%`;
+}
+
 const formatDefendsRoundLabel = (value?: string | null) => {
   if (!value) return null;
   const clean = value.trim();
   if (!clean) return null;
-  const upper = clean.toUpperCase();
-  switch (upper) {
+  const normalized = clean.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  switch (normalized.toUpperCase()) {
     case "W":
     case "CAMPEON":
-    case "CAMPEÓN":
-      return "Campeón";
+      return "Campeon";
     case "F":
     case "FINALISTA":
       return "Finalista";
@@ -323,8 +374,8 @@ const formatDefendsRoundLabel = (value?: string | null) => {
 const renderDefendChip = (value?: string | null) => {
   const label = formatDefendsRoundLabel(value);
   if (!label) return null;
-  const upper = label.toUpperCase();
-  if (upper === "CAMPEÓN" || upper === "CAMPEON") {
+  const normalized = label.normalize('NFD').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (normalized === 'CAMPEON') {
     return (
       <span
         key="defend"
@@ -337,7 +388,7 @@ const renderDefendChip = (value?: string | null) => {
       </span>
     );
   }
-  if (upper === "FINALISTA") {
+  if (normalized === "FINALISTA") {
     return (
       <span
         key="defend"
@@ -350,7 +401,7 @@ const renderDefendChip = (value?: string | null) => {
       </span>
     );
   }
-  if (upper === "SEMIFINALISTA") {
+  if (normalized === "SEMIFINALISTA") {
     return (
       <span
         key="defend"
@@ -377,6 +428,23 @@ const describeCourtSpeed = (rank?: number | null) => {
   if (rank <= 30) return "Fast";
   if (rank <= 45) return "Medium";
   return "Slow";
+};
+
+const renderAlertBadges = (alerts?: string[]) => {
+  if (!alerts || alerts.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1 text-xs">
+      {alerts.map((alert, idx) => (
+        <div
+          key={`${alert}-${idx}`}
+          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-100"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="leading-tight">{alert}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const renderSurfaceChip = (surface?: string | null) => {
@@ -692,6 +760,7 @@ const highlight = useMemo(() => {
                         if (chips.length === 0) return null;
                         return <div className="flex items-center gap-2">{chips}</div>;
                       })()}
+                      {renderAlertBadges(summary.playerA.alerts)}
                     </div>
                     <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
                     <div className="flex flex-col items-center gap-2">
@@ -733,6 +802,7 @@ const highlight = useMemo(() => {
                         if (chips.length === 0) return null;
                         return <div className="flex items-center gap-2">{chips}</div>;
                       })()}
+                      {renderAlertBadges(summary.playerB.alerts)}
                     </div>
                   </div>
 
@@ -987,6 +1057,26 @@ const highlight = useMemo(() => {
                         label="Win score"
                         playerA={formatFloat(summary.playerA.win_score, 2)}
                         playerB={formatFloat(summary.playerB.win_score, 2)}
+                      />
+                      <StatRow
+                        label="Ranking score"
+                        playerA={formatScorePercent(summary.playerA.ranking_score ?? null)}
+                        playerB={formatScorePercent(summary.playerB.ranking_score ?? null)}
+                      />
+                      <StatRow
+                        label="H2H score"
+                        playerA={formatScorePercent(summary.playerA.h2h_score ?? null)}
+                        playerB={formatScorePercent(summary.playerB.h2h_score ?? null)}
+                      />
+                      <StatRow
+                        label="Recuperación"
+                        playerA={formatScorePercent(summary.playerA.rest_score ?? null)}
+                        playerB={formatScorePercent(summary.playerB.rest_score ?? null)}
+                      />
+                      <StatRow
+                        label="Motivación"
+                        playerA={formatScorePercent(summary.playerA.motivation_score ?? null)}
+                        playerB={formatScorePercent(summary.playerB.motivation_score ?? null)}
                       />
                     </div>
                   </section>
@@ -1465,5 +1555,13 @@ export default function Page() {
     </Suspense>
   );
 }
+
+
+
+
+
+
+
+
 
 
