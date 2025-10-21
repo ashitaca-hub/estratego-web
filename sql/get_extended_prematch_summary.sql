@@ -279,20 +279,19 @@ BEGIN
       WHERE mw.metric = defaults.metric
     )
   LOOP
-    CASE w.metric
-      WHEN 'ranking_score' THEN
-        win_score_a := win_score_a + COALESCE(ranking_score_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(ranking_score_b, 0) * w.weight;
-      WHEN 'h2h_score' THEN
-        win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
-      WHEN 'rest_score' THEN
-        win_score_a := win_score_a + COALESCE(rest_score_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(rest_score_b, 0) * w.weight;
-      WHEN 'motivation_score' THEN
-        win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
-        win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
-    END CASE;
+    IF w.metric = 'ranking_score' THEN
+      win_score_a := win_score_a + COALESCE(ranking_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(ranking_score_b, 0) * w.weight;
+    ELSIF w.metric = 'h2h_score' THEN
+      win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
+    ELSIF w.metric = 'rest_score' THEN
+      win_score_a := win_score_a + COALESCE(rest_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(rest_score_b, 0) * w.weight;
+    ELSIF w.metric = 'motivation_score' THEN
+      win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
+    END IF;
   END LOOP;
 
   IF win_score_a + win_score_b > 0 THEN
