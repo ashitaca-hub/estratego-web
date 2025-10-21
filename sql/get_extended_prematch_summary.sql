@@ -355,6 +355,11 @@ BEGIN
          END
     INTO round_last_b;
 
+  defend_component_a := 0;
+  defend_component_b := 0;
+  defend_label_a := NULL;
+  defend_label_b := NULL;
+
   IF round_last_a IS NOT NULL THEN
     defend_component_a := CASE round_last_a
       WHEN 'W' THEN 1
