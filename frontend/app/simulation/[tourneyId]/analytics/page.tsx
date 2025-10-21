@@ -21,6 +21,7 @@ type PlayerInfo = {
 type AggregatedPlayer = {
   playerId: number;
   name: string;
+  country: string | null;
   totals: Record<string, number>;
 };
 
@@ -32,7 +33,7 @@ export default function SimulationAnalyticsPage() {
   const tourneyId = params?.tourneyId ?? "";
 
   const [rows, setRows] = useState<SimulationRow[]>([]);
-  const [playersMap, setPlayersMap] = useState<Map<number, PlayerInfo>>(new Map());
+  const [playersMap, setPlayersMap] = useState<Map<string, PlayerInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +74,11 @@ export default function SimulationAnalyticsPage() {
         setRows(fetched);
 
         const playerIds = Array.from(
-          new Set(fetched.map((r) => r.player_id).filter((id): id is number => typeof id === "number")),
+          new Set(
+            fetched
+              .map((r) => r.player_id)
+              .filter((id): id is number => typeof id === "number"),
+          ),
         );
 
         if (playerIds.length > 0) {
@@ -84,14 +89,29 @@ export default function SimulationAnalyticsPage() {
 
           if (playersErr) {
             console.warn("No se pudo cargar players_min:", playersErr.message);
-            setPlayersMap(new Map());
+            setPlayersMap(new Map<string, PlayerInfo>());
           } else {
             setPlayersMap(
-              new Map((players ?? []).map((p) => [p.id as number, { id: p.id as number, name: p.name ?? null, country: p.country }])),
+              new Map<string, PlayerInfo>(
+                (players ?? []).map((p) => {
+                  const rawId = p.id;
+                  const numericId =
+                    typeof rawId === "number" ? rawId : Number.parseInt(String(rawId), 10);
+                  const key = Number.isFinite(numericId) ? String(numericId) : String(rawId);
+                  return [
+                    key,
+                    {
+                      id: Number.isFinite(numericId) ? numericId : Number.NaN,
+                      name: p.name ?? null,
+                      country: p.country,
+                    },
+                  ];
+                }),
+              ),
             );
           }
         } else {
-          setPlayersMap(new Map());
+          setPlayersMap(new Map<string, PlayerInfo>());
         }
       } catch (err) {
         console.error("Error cargando resultados de simulacion:", err);
@@ -124,11 +144,15 @@ export default function SimulationAnalyticsPage() {
       if (!playerId || typeof round !== "string") continue;
       roundsPresent.add(round);
 
+      const key = String(playerId);
       if (!byPlayer.has(playerId)) {
-        const playerInfo = playersMap.get(playerId);
+        const playerInfo = playersMap.get(key);
+        const displayName = playerInfo?.name?.trim();
+        const fallbackName = displayName && displayName.length > 0 ? displayName : `Jugador ${playerId}`;
         byPlayer.set(playerId, {
           playerId,
-          name: playerInfo?.name ?? `Jugador ${playerId}`,
+          name: fallbackName,
+          country: playerInfo?.country ?? null,
           totals: {},
         });
       }
@@ -153,6 +177,33 @@ export default function SimulationAnalyticsPage() {
     };
   }, [rows, playersMap]);
 
+  const topPerformers = useMemo(() => {
+    if (aggregated.rows.length === 0) return [];
+
+    return aggregated.rows
+      .map((player) => ({
+        playerId: player.playerId,
+        name: player.name,
+        country: player.country,
+        finals: player.totals["F"] ?? 0,
+        semis: player.totals["SF"] ?? 0,
+      }))
+      .filter((entry) => entry.finals > 0 || entry.semis > 0)
+      .sort((a, b) => {
+        const byFinals = b.finals - a.finals;
+        if (byFinals !== 0) return byFinals;
+        return b.semis - a.semis;
+      })
+      .slice(0, 4);
+  }, [aggregated.rows]);
+
+  const maxBarValue = useMemo(() => {
+    if (topPerformers.length === 0) return 0;
+    return Math.max(
+      ...topPerformers.map((p) => Math.max(p.finals, p.semis)),
+    );
+  }, [topPerformers]);
+
   if (!tourneyId) {
     return (
       <div className="min-h-screen p-6 text-sm text-slate-200">
@@ -165,9 +216,9 @@ export default function SimulationAnalyticsPage() {
     <div className="min-h-screen space-y-6 p-6 md:p-10 text-slate-100 bg-slate-950">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Resultados simulados · {tourneyId}</h1>
+          <h1 className="text-2xl font-semibold">Resultados simulados - {tourneyId}</h1>
           <p className="text-sm text-slate-400">
-            Runs procesados: {totalRuns || "—"}
+            Runs procesados: {totalRuns > 0 ? totalRuns : "0"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -196,46 +247,126 @@ export default function SimulationAnalyticsPage() {
           Aún no hay simulaciones registradas para este torneo.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
-          <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
-            <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Jugador</th>
-                {aggregated.rounds.map((round) => (
-                  <th key={round} className="px-4 py-3 font-semibold text-right">
-                    {round}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {aggregated.rows.map((player) => (
-                <tr key={player.playerId} className="hover:bg-slate-900/70">
-                  <td className="px-4 py-2">
-                    <div className="font-medium text-slate-100">{player.name}</div>
-                    <div className="text-xs text-slate-500">#{player.playerId}</div>
-                  </td>
-                  {aggregated.rounds.map((round) => {
-                    const reached = player.totals[round] ?? 0;
-                    const percent =
-                      totalRuns > 0
-                        ? ((reached / totalRuns) * 100).toLocaleString("es-ES", {
-                            maximumFractionDigits: reached > 0 && reached < totalRuns ? 1 : 0,
-                          })
-                        : "0";
-                    return (
-                      <td key={round} className="px-4 py-2 text-right tabular-nums">
-                        <div>{reached}</div>
-                        <div className="text-xs text-slate-500">{percent}%</div>
-                      </td>
-                    );
-                  })}
+        <div className="space-y-6">
+          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+            <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+              <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Jugador</th>
+                  {aggregated.rounds.map((round) => (
+                    <th key={round} className="px-4 py-3 font-semibold text-right">
+                      {round}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {aggregated.rows.map((player) => (
+                  <tr key={player.playerId} className="hover:bg-slate-900/70">
+                    <td className="px-4 py-2">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-100">{player.name}</span>
+                          {player.country ? (
+                            <span className="text-xs text-slate-400">{player.country}</span>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-slate-500">#{player.playerId}</div>
+                      </div>
+                    </td>
+                    {aggregated.rounds.map((round) => {
+                      const reached = player.totals[round] ?? 0;
+                      const percent =
+                        totalRuns > 0
+                          ? ((reached / totalRuns) * 100).toLocaleString("es-ES", {
+                              maximumFractionDigits: reached > 0 && reached < totalRuns ? 1 : 0,
+                            })
+                          : "0";
+                      return (
+                        <td key={round} className="px-4 py-2 text-right tabular-nums">
+                          <div>{reached}</div>
+                          <div className="text-xs text-slate-500">{percent}%</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {topPerformers.length > 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-slate-100">Top finalistas y semifinalistas</h2>
+                <span className="text-xs text-slate-400">
+                  Referencia sobre {totalRuns > 0 ? `${totalRuns} runs` : "cero runs"}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {topPerformers.map((player) => {
+                  const denom = maxBarValue > 0 ? maxBarValue : 1;
+                  const finalsWidth = Math.max(0, Math.min(100, (player.finals / denom) * 100));
+                  const semisWidth = Math.max(0, Math.min(100, (player.semis / denom) * 100));
+                  const finalsPct =
+                    totalRuns > 0 && player.finals > 0
+                      ? ((player.finals / totalRuns) * 100).toFixed(player.finals === totalRuns ? 0 : 1)
+                      : null;
+                  const semisPct =
+                    totalRuns > 0 && player.semis > 0
+                      ? ((player.semis / totalRuns) * 100).toFixed(player.semis === totalRuns ? 0 : 1)
+                      : null;
+
+                  return (
+                    <div
+                      key={player.playerId}
+                      className="rounded-lg border border-slate-800/70 bg-slate-900/50 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 font-medium text-slate-100">
+                          <span>{player.name}</span>
+                          {player.country ? <span className="text-xs text-slate-400">{player.country}</span> : null}
+                        </div>
+                        <span className="text-xs text-slate-500">#{player.playerId}</span>
+                      </div>
+                      <div className="mt-3 space-y-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-slate-400">Final</span>
+                          <div className="flex-1 overflow-hidden rounded bg-slate-800/70">
+                            <div
+                              className="h-2 rounded bg-emerald-500"
+                              style={{ width: `${finalsWidth}%` }}
+                            />
+                          </div>
+                          <span className="w-14 text-right text-slate-300">
+                            {player.finals}
+                            {finalsPct ? ` (${finalsPct}%)` : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-slate-400">Semi</span>
+                          <div className="flex-1 overflow-hidden rounded bg-slate-800/70">
+                            <div
+                              className="h-2 rounded bg-sky-500"
+                              style={{ width: `${semisWidth}%` }}
+                            />
+                          </div>
+                          <span className="w-14 text-right text-slate-300">
+                            {player.semis}
+                            {semisPct ? ` (${semisPct}%)` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
   );
 }
+
+

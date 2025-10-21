@@ -1419,7 +1419,7 @@ export function EstrategoBracketApp() {
         </div>
       </div>
       {multiSimProgress && (
-        <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
           Ejecutando simulaciones {multiSimProgress.done}/{multiSimProgress.total} (
           {Math.round((multiSimProgress.done / multiSimProgress.total) * 100)}%). Puedes seguir navegando; revisa la vista de analytics para ver los resultados cuando termine.
         </div>
