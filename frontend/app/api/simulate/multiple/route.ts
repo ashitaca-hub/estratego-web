@@ -7,6 +7,7 @@ type MultipleSimPayload = {
   tourney_id?: string;
   runs?: number;
   year?: number;
+  reset?: boolean;
 };
 
 const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
@@ -118,8 +119,9 @@ export async function POST(req: Request) {
   }
 
   const tourneyId = body.tourney_id?.trim();
-  const runs = Number.parseInt(String(body.runs ?? 100), 10);
+  const runs = Number.parseInt(String(body.runs ?? 1), 10);
   const year = Number.parseInt(String(body.year ?? new Date().getFullYear()), 10);
+  const reset = Boolean(body.reset);
 
   if (!tourneyId) {
     return new Response(JSON.stringify({ error: "Missing tourney_id" }), {
@@ -133,6 +135,12 @@ export async function POST(req: Request) {
     });
   }
 
+  if (runs > 20) {
+    return new Response(JSON.stringify({ error: "runs chunk too large (max 20)" }), {
+      status: 400,
+    });
+  }
+
   try {
     await ensureDraw(tourneyId);
   } catch (err) {
@@ -142,26 +150,18 @@ export async function POST(req: Request) {
     });
   }
 
-  const batchSize = 50;
-  let remaining = runs;
-  let batchIndex = 0;
+  const { error: simError } = await supabase.rpc("simulate_multiple_runs", {
+    p_tourney_id: tourneyId,
+    p_year: year,
+    p_runs: runs,
+    p_reset: reset,
+  });
 
-  while (remaining > 0) {
-    const chunk = Math.min(batchSize, remaining);
-    const { error: simError } = await supabase.rpc("simulate_multiple_runs", {
-      p_tourney_id: tourneyId,
-      p_year: year,
-      p_runs: chunk,
-      p_reset: batchIndex === 0,
+  if (simError) {
+    console.error("Error in simulate_multiple_runs:", simError.message);
+    return new Response(JSON.stringify({ error: simError.message }), {
+      status: 500,
     });
-
-    if (simError) {
-      console.error("Error in simulate_multiple_runs:", simError.message);
-      return new Response(JSON.stringify({ error: simError.message }), { status: 500 });
-    }
-
-    remaining -= chunk;
-    batchIndex += 1;
   }
 
   try {
@@ -183,3 +183,4 @@ export async function POST(req: Request) {
     { status: 200 },
   );
 }
+

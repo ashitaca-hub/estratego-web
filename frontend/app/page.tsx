@@ -1093,6 +1093,7 @@ export function EstrategoBracketApp() {
   const [listLoading, setListLoading] = useState(false);
   const [tournaments, setTournaments] = useState<Array<{ tourney_id: string; name: string; surface?: string; draw_size?: number }>>([]);
   const [multiSimLoading, setMultiSimLoading] = useState(false);
+  const [multiSimProgress, setMultiSimProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -1189,41 +1190,62 @@ export function EstrategoBracketApp() {
       return;
     }
 
+    const chunkSize = 5;
+    const totalChunks = Math.ceil(runs / chunkSize);
+
     setMultiSimLoading(true);
+    setMultiSimProgress({ done: 0, total: runs });
+
     try {
-      const payload = {
-        tourney_id: bracket.tourney_id,
-        runs,
-        year: new Date().getFullYear(),
-      };
+      let processed = 0;
+      let reset = true;
 
-      const res = await fetch("/api/simulate/multiple", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx += 1) {
+        const chunkRuns = Math.min(chunkSize, runs - processed);
+        const payload = {
+          tourney_id: bracket.tourney_id,
+          runs: chunkRuns,
+          year: new Date().getFullYear(),
+          reset,
+        };
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Error en simulate/multiple:", text);
-        alert(`Fallo al correr las simulaciones: ${text || res.status}`);
-        return;
+        const res = await fetch("/api/simulate/multiple", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Error en simulate/multiple:", text);
+          alert(`Fallo al correr las simulaciones: ${text || res.status}`);
+          break;
+        }
+
+        processed += chunkRuns;
+        reset = false;
+        setMultiSimProgress({ done: processed, total: runs });
       }
 
-      const latest = await fetch(`/api/tournament/${bracket.tourney_id}`);
-      if (latest.ok) {
-        const data = (await latest.json()) as Bracket;
-        setBracket(data);
-      }
+      if (processed > 0) {
+        const latest = await fetch(`/api/tournament/${bracket.tourney_id}`);
+        if (latest.ok) {
+          const data = (await latest.json()) as Bracket;
+          setBracket(data);
+        }
 
-      router.push(
-        `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
-      );
+        if (processed === runs) {
+          router.push(
+            `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
+          );
+        }
+      }
     } catch (err) {
       console.error("Error ejecutando simulaciones múltiples:", err);
       alert("Ocurrió un error al ejecutar las simulaciones múltiples.");
     } finally {
       setMultiSimLoading(false);
+      setMultiSimProgress(null);
     }
   };
 
@@ -1359,6 +1381,12 @@ export function EstrategoBracketApp() {
           </Button>
         </div>
       </div>
+      {multiSimProgress && (
+        <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Ejecutando simulaciones {multiSimProgress.done}/{multiSimProgress.total} (
+          {Math.round((multiSimProgress.done / multiSimProgress.total) * 100)}%). Puedes seguir navegando; revisa la vista de analytics para ver los resultados cuando termine.
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <div className="flex gap-6">
