@@ -142,15 +142,26 @@ export async function POST(req: Request) {
     });
   }
 
-  const { error: simError } = await supabase.rpc("simulate_multiple_runs", {
-    p_tourney_id: tourneyId,
-    p_year: year,
-    p_runs: runs,
-  });
+  const batchSize = 50;
+  let remaining = runs;
+  let batchIndex = 0;
 
-  if (simError) {
-    console.error("Error in simulate_multiple_runs:", simError.message);
-    return new Response(JSON.stringify({ error: simError.message }), { status: 500 });
+  while (remaining > 0) {
+    const chunk = Math.min(batchSize, remaining);
+    const { error: simError } = await supabase.rpc("simulate_multiple_runs", {
+      p_tourney_id: tourneyId,
+      p_year: year,
+      p_runs: chunk,
+      p_reset: batchIndex === 0,
+    });
+
+    if (simError) {
+      console.error("Error in simulate_multiple_runs:", simError.message);
+      return new Response(JSON.stringify({ error: simError.message }), { status: 500 });
+    }
+
+    remaining -= chunk;
+    batchIndex += 1;
   }
 
   try {
