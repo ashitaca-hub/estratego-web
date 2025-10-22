@@ -14,6 +14,11 @@ type PlayerSummary = {
   win_score: number | null;
   win_probability: number | null;
   defends_round?: string | null;
+  ranking_score?: number | null;
+  h2h_score?: number | null;
+  rest_score?: number | null;
+  motivation_score?: number | null;
+  alerts?: string[] | null;
 };
 
 type TournamentSummary = {
@@ -99,6 +104,19 @@ const asString = (value: unknown): string | null => {
   if (typeof value === "string" && value.trim() !== "") return value;
   if (value == null) return null;
   if (typeof value === "number" && Number.isFinite(value)) return `${value}`;
+  return null;
+};
+
+const asStringArray = (value: unknown): string[] | null => {
+  if (Array.isArray(value)) {
+    const mapped = value
+      .map(asString)
+      .filter((item): item is string => item !== null && item.trim().length > 0);
+    return mapped.length > 0 ? mapped : null;
+  }
+
+  const single = asString(value);
+  if (single) return [single];
   return null;
 };
 
@@ -344,6 +362,33 @@ const buildPlayer = (
           source[`last_year_round_${prefix}`],
       ),
     );
+  const rankingScore =
+    pickNumber(playerRecord, ["ranking_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [`${prefix}_ranking_score`, `ranking_score_${prefix}`]),
+    );
+  const h2hScore =
+    pickNumber(playerRecord, ["h2h_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [`${prefix}_h2h_score`, `h2h_score_${prefix}`]),
+    );
+  const restScore =
+    pickNumber(playerRecord, ["rest_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [`${prefix}_rest_score`, `rest_score_${prefix}`]),
+    );
+  const motivationScore =
+    pickNumber(playerRecord, ["motivation_score"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [`${prefix}_motivation_score`, `motivation_score_${prefix}`]),
+    );
+
+  const alerts =
+    asStringArray(playerRecord?.["alerts"]) ??
+    getFromPrefixes((source, prefix) => {
+      const fromPrefix = source[`${prefix}_alerts`] ?? source[`alerts_${prefix}`];
+      return asStringArray(fromPrefix);
+    });
 
   return {
     win_pct_year: winPctYear,
@@ -355,8 +400,13 @@ const buildPlayer = (
     win_pct_vs_top10: winPctVsTop10,
     court_speed_score: courtSpeedScore,
     win_score: winScore,
-    win_probability: winProbability,
+   win_probability: winProbability,
     defends_round: defendsRound,
+    ranking_score: rankingScore,
+    h2h_score: h2hScore,
+    rest_score: restScore,
+    motivation_score: motivationScore,
+    alerts,
   };
 };
 
