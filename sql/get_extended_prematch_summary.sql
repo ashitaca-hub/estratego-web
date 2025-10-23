@@ -276,6 +276,9 @@ BEGIN
     ELSIF w.metric = 'court_speed_score' THEN
       win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
       win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
+    ELSIF w.metric = 'rest_score' THEN
+      -- rest_score se usa solo como alerta, no impacta en la ponderación
+      NULL;
     END IF;
   END LOOP;
 
@@ -283,13 +286,12 @@ BEGIN
   FOR w IN
     SELECT metric, weight
     FROM estratego_v1.prematch_metric_weights
-    WHERE metric IN ('ranking_score','h2h_score','rest_score','motivation_score')
+    WHERE metric IN ('ranking_score','h2h_score','motivation_score')
     UNION ALL
     SELECT metric, weight
     FROM (VALUES
       ('ranking_score', 0.12),
       ('h2h_score', 0.08),
-      ('rest_score', 0.05),
       ('motivation_score', 0.05)
     ) AS defaults(metric, weight)
     WHERE NOT EXISTS (
@@ -304,9 +306,6 @@ BEGIN
     ELSIF w.metric = 'h2h_score' THEN
       win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
       win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
-    ELSIF w.metric = 'rest_score' THEN
-      win_score_a := win_score_a + COALESCE(rest_score_a, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(rest_score_b, 0) * w.weight;
     ELSIF w.metric = 'motivation_score' THEN
       win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
       win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
