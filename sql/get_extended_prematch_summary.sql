@@ -108,22 +108,42 @@ BEGIN
       AND surface = tourney_surf
       AND (winner_id = player_b_id OR loser_id = player_b_id);
 
-  -- Latest ranking snapshot up to the tournament year
+  -- Latest ranking snapshot up to the tournament year (prefers v2 table, falls back to legacy)
   SELECT rs.rank
     INTO ranking_a
-    FROM estratego_v1.rankings_snapshot rs
+    FROM estratego_v1.rankings_snapshot_v2 rs
     WHERE rs.player_id = player_a_id
       AND LEFT(rs.match_id, 4)::INT <= p_year
-    ORDER BY LEFT(rs.match_id, 4)::INT DESC
+    ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
     LIMIT 1;
+
+  IF ranking_a IS NULL THEN
+    SELECT rs.rank
+      INTO ranking_a
+      FROM estratego_v1.rankings_snapshot rs
+      WHERE rs.player_id = player_a_id
+        AND LEFT(rs.match_id, 4)::INT <= p_year
+      ORDER BY LEFT(rs.match_id, 4)::INT DESC
+      LIMIT 1;
+  END IF;
 
   SELECT rs.rank
     INTO ranking_b
-    FROM estratego_v1.rankings_snapshot rs
+    FROM estratego_v1.rankings_snapshot_v2 rs
     WHERE rs.player_id = player_b_id
       AND LEFT(rs.match_id, 4)::INT <= p_year
-    ORDER BY LEFT(rs.match_id, 4)::INT DESC
+    ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
     LIMIT 1;
+
+  IF ranking_b IS NULL THEN
+    SELECT rs.rank
+      INTO ranking_b
+      FROM estratego_v1.rankings_snapshot rs
+      WHERE rs.player_id = player_b_id
+        AND LEFT(rs.match_id, 4)::INT <= p_year
+      ORDER BY LEFT(rs.match_id, 4)::INT DESC
+      LIMIT 1;
+  END IF;
 
   IF ranking_a IS NOT NULL THEN
     ranking_score_a := LEAST(1.0, GREATEST(0.0, (500 - LEAST(ranking_a, 500))::FLOAT / 499));
