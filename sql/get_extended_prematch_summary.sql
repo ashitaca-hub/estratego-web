@@ -146,11 +146,11 @@ BEGIN
   END IF;
 
   IF ranking_a IS NOT NULL THEN
-    ranking_score_a := LEAST(1.0, GREATEST(0.0, (500 - LEAST(ranking_a, 500))::FLOAT / 499));
+    ranking_score_a := EXP(-GREATEST(ranking_a - 1, 0) / 20.0);
   END IF;
 
   IF ranking_b IS NOT NULL THEN
-    ranking_score_b := LEAST(1.0, GREATEST(0.0, (500 - LEAST(ranking_b, 500))::FLOAT / 499));
+    ranking_score_b := EXP(-GREATEST(ranking_b - 1, 0) / 20.0);
   END IF;
 
   -- Head-to-head record
