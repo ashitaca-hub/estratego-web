@@ -35,6 +35,10 @@ DECLARE
   defend_component_b FLOAT := 0;
   motivation_score_a FLOAT := 0;
   motivation_score_b FLOAT := 0;
+  recent_matches_a INT := 0;
+  recent_matches_b INT := 0;
+  last_match_a_text TEXT;
+  last_match_b_text TEXT;
 
   h2h_rec RECORD;
   country_a TEXT;
@@ -180,12 +184,58 @@ BEGIN
     FROM estratego_v1.matches_full
     WHERE winner_id = player_b_id OR loser_id = player_b_id;
 
+  SELECT COUNT(*)
+    INTO recent_matches_a
+    FROM estratego_v1.matches_full
+    WHERE tourney_date IS NOT NULL
+      AND CURRENT_DATE - tourney_date BETWEEN 0 AND 15
+      AND (winner_id = player_a_id OR loser_id = player_a_id);
+
+  SELECT COUNT(*)
+    INTO recent_matches_b
+    FROM estratego_v1.matches_full
+    WHERE tourney_date IS NOT NULL
+      AND CURRENT_DATE - tourney_date BETWEEN 0 AND 15
+      AND (winner_id = player_b_id OR loser_id = player_b_id);
+
+  SELECT COALESCE(
+           json_match->>'score',
+           json_match->>'match_score',
+           json_match->>'result',
+           json_match->>'status',
+           json_match->>'outcome'
+         )
+    INTO last_match_a_text
+    FROM (
+      SELECT to_jsonb(mf) AS json_match
+      FROM estratego_v1.matches_full mf
+      WHERE winner_id = player_a_id OR loser_id = player_a_id
+      ORDER BY mf.tourney_date DESC
+      LIMIT 1
+    ) AS last_match_a;
+
+  SELECT COALESCE(
+           json_match->>'score',
+           json_match->>'match_score',
+           json_match->>'result',
+           json_match->>'status',
+           json_match->>'outcome'
+         )
+    INTO last_match_b_text
+    FROM (
+      SELECT to_jsonb(mf) AS json_match
+      FROM estratego_v1.matches_full mf
+      WHERE winner_id = player_b_id OR loser_id = player_b_id
+      ORDER BY mf.tourney_date DESC
+      LIMIT 1
+    ) AS last_match_b;
+
   IF days_since_a IS NOT NULL THEN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
     rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
     IF days_since_a <= 2 THEN
       alerts_a := array_append(alerts_a, format('Ha competido hace %s día(s); posible fatiga.', days_since_a));
-    ELSIF days_since_a >= 30 THEN
+    ELSIF days_since_a >= 20 THEN
       alerts_a := array_append(alerts_a, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_a));
     END IF;
   END IF;
@@ -195,9 +245,31 @@ BEGIN
     rest_score_b := LEAST(1.0, GREATEST(0.0, rest_score_b));
     IF days_since_b <= 2 THEN
       alerts_b := array_append(alerts_b, format('Ha competido hace %s día(s); posible fatiga.', days_since_b));
-    ELSIF days_since_b >= 30 THEN
+    ELSIF days_since_b >= 20 THEN
       alerts_b := array_append(alerts_b, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_b));
     END IF;
+  END IF;
+
+  IF recent_matches_a > 6 THEN
+    alerts_a := array_append(
+      alerts_a,
+      format('Ha disputado %s partidos en los últimos 15 días; posible fatiga.', recent_matches_a)
+    );
+  END IF;
+
+  IF recent_matches_b > 6 THEN
+    alerts_b := array_append(
+      alerts_b,
+      format('Ha disputado %s partidos en los últimos 15 días; posible fatiga.', recent_matches_b)
+    );
+  END IF;
+
+  IF last_match_a_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_a_text)) > 0 THEN
+    alerts_a := array_append(alerts_a, 'Se retiró en su último partido.');
+  END IF;
+
+  IF last_match_b_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_b_text)) > 0 THEN
+    alerts_b := array_append(alerts_b, 'Se retiró en su último partido.');
   END IF;
 
   -- Monthly win percentage
