@@ -1,6 +1,8 @@
 # Estratego WebApp
 
-Aplicación para análisis **prematch** y simulación de brackets de torneos ATP/WTA. El frontend está construido en Next.js 14 y consume funciones SQL alojadas en Supabase (PostgreSQL). El repositorio incluye los scripts SQL necesarios y los workflows que automatizan la carga y simulación de torneos.
+Aplicación para el análisis **prematch** y la simulación de brackets de torneos ATP/WTA.  
+El frontend está construido en **Next.js 14** y consume funciones SQL alojadas en **Supabase (PostgreSQL)**.  
+El repositorio incluye los scripts SQL necesarios y los workflows de automatización (GitHub Actions).
 
 ---
 
@@ -10,7 +12,7 @@ Aplicación para análisis **prematch** y simulación de brackets de torneos ATP
 estratego-web/
 ├── frontend/                # Next.js 14 + TailwindCSS + shadcn/ui
 ├── sql/                     # Scripts y funciones SQL para Supabase
-└── .github/                 # GitHub Actions (carga de cuadros, pruebas, despliegues)
+└── .github/                 # Workflows CI/CD (carga de cuadros, builds, tests)
 ```
 
 ---
@@ -34,7 +36,7 @@ npm install
 npm run dev
 ```
 
-La aplicación estará disponible en [http://localhost:3000](http://localhost:3000).
+La aplicación queda disponible en [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -42,39 +44,38 @@ La aplicación estará disponible en [http://localhost:3000](http://localhost:30
 
 ### Análisis Prematch Extendido
 
-La ruta `POST /api/prematch` llama a la función SQL `public.get_extended_prematch_summary`. Para cada jugador devuelve:
+- Endpoint `POST /api/prematch`.
+- Invoca `public.get_extended_prematch_summary` y devuelve, para cada jugador:
+  - % de victorias en el año / superficie / mes actual.
+  - % de victorias frente a TOP10.
+  - Score de adaptación a la pista (court speed).
+  - Ranking más reciente + score normalizado (transformación exponencial).
+  - Días desde el último partido; se generan alertas si hay exceso o falta de ritmo.
+  - Head to head y último enfrentamiento.
+  - Ronda defendida respecto al año anterior.
+  - **Nuevos scores**: `ranking_score`, `h2h_score`, `motivation_score`.
+  - **Alertas** (mensajes):
+    - Falta de ritmo (≥ 20 días sin competir).
+    - Carga de partidos (>6 partidos en 15 días).
+    - Retiro en el último partido.
+  - Ventaja de localía: se compara el `ioc` del jugador con el país del torneo (`estratego_v1.tournaments.country`).
 
-- % de victorias en el año y en la superficie del torneo
-- % de victorias en el mismo mes y vs. top10
-- Score de adaptación a la pista (basado en court speed)
-- Ranking más reciente
-- Días desde el último partido (con alertas por exceso o falta de ritmo)
-- Ventaja de localía (mismo país)
-- Ronda defendida en la edición anterior
-- **Scores normalizados añadidos recientemente:**
-  - `ranking_score`
-  - `h2h_score`
-  - `rest_score`
-  - `motivation_score` (defender puntos / localía)
-- Probabilidad ponderada de victoria (`win_probability`)
-- Lista de `alerts` generadas en base al descanso y a la defensa de puntos
-
-> Los pesos de cada métrica se almacenan en `estratego_v1.prematch_metric_weights`. Las filas para `ranking_score`, `h2h_score`, `rest_score` y `motivation_score` deben existir (el script añade valores por defecto si faltan).
+> Los pesos de cada métrica se mantienen en `estratego_v1.prematch_metric_weights`.  
+> Puedes ajustarlos o actualizarlos con los INSERT/UPDATE indicados en la sección de **Notas técnicas**.
 
 ### Simulación de Torneos
 
-- `POST /api/simulate`: ejecuta `public.simulate_full_tournament`, que toma la probabilidad prematch y promueve ganadores hasta la final.
-- `POST /api/simulate/multiple`: permite lanzar la simulación N veces. Cada lote se registra en la tabla `public.simulation_results`.
-- Endpoints auxiliares:
-  - `POST /api/reset`: limpia un cuadro (devuelve `draw_matches` al estado original).
-  - `GET /api/tournament/[tourney_id]`: entrega el cuadro actual para renderizar el bracket.
+- `POST /api/simulate`: ejecuta `public.simulate_full_tournament`, tomando la probabilidad prematch para cada partido y promoviendo ganadores hasta la final.
+- `POST /api/simulate/multiple`: lanza la simulación N veces, registra resultados en `public.simulation_results` y borra las tablas temporales después de cada iteración. Usa batching para evitar `statement_timeout`.
+- `POST /api/reset`: devuelve el cuadro (`draw_matches`) al estado original.
+- `GET /api/tournament/[tourney_id]`: proporciona el draw actual para renderizarlo en la UI.
 
 ### Analytics de simulaciones
 
-- Página `simulation/[tourneyId]/analytics` con el agregado de `simulation_results`:
-  - Conteo y porcentaje de apariciones en cada ronda por jugador.
-  - Tarjeta “Top finalistas y semifinalistas” con los cuatro jugadores más frecuentes.
-  - Tabla enriquecida con nombre, bandera (cuando está disponible) y totales.
+- Página `/simulation/[tourneyId]/analytics`:
+  - Tabla resumida con apariciones por ronda de cada jugador (conteo y porcentaje).
+  - Tarjeta “Top finalistas y semifinalistas” (top 4 jugadores).
+  - Enriquecida con nombres, banderas y marcadores locales (home advantage).
 
 ---
 
@@ -82,72 +83,78 @@ La ruta `POST /api/prematch` llama a la función SQL `public.get_extended_premat
 
 ### Tablas clave
 
-- `estratego_v1.matches_full` – Historial de partidos ATP/WTA.
-- `estratego_v1.players` – Información base de jugadores (incluye `ioc`).
-- `estratego_v1.rankings_snapshot` – Ranking por torneo.
-- `estratego_v1.h2h` – Head-to-head normalizado.
-- `estratego_v1.tournaments` – Metadatos del torneo (fecha, superficie).
-- `estratego_v1.court_speed_ranking_norm` – Ranking de velocidad de pista.
-- `estratego_v1.prematch_metric_weights` – Pesos para las métricas del análisis prematch.
-- `public.draw_matches` / `public.draw_entries` – Infraestructura del cuadro principal.
-- `public.simulation_results` – Resultados agregados por simulación (tourney_id, run_number, player_id, reached_round).
+- `estratego_v1.matches_full`: historial de partidos.
+- `estratego_v1.players`: información de jugadores (`player_id`, `ioc`, etc.).
+- `estratego_v1.rankings_snapshot_v2`: ranking y puntos asociados a cada match (reemplaza la tabla legacy).
+- `estratego_v1.h2h`: head-to-head normalizado.
+- `estratego_v1.tournaments`: metadatos de torneos (fecha, superficie, país anfitrión).
+- `estratego_v1.court_speed_ranking_norm`: ranking de velocidad de pista.
+- `estratego_v1.prematch_metric_weights`: pesos configurables para el análisis prematch.
+- `public.draw_matches` / `public.draw_entries`: infraestructura del cuadro principal.
+- `public.simulation_results`: resultados acumulados por corrida (tourney_id, run_number, player_id, reached_round).
 
 ### Funciones disponibles en `sql/`
 
-| Archivo | Descripción |
-|---------|-------------|
-| `simulate_full_tournament.sql` | Restaura el cuadro inicial, simula ronda a ronda usando las probabilidades prematch y registra ganadores. |
-| `simulate_multiple_runs.sql` | Ejecuta `simulate_full_tournament` en bucle, limpia tablas temporales y registra cada run en `simulation_results`. Admite `p_reset` para reiniciar resultados. |
-| `get_extended_prematch_summary.sql` | Calcula las métricas y probabilidades extendidas para dos jugadores. Devuelve JSON con scores, alertas y motivaciones. |
+| Script | Descripción |
+|--------|-------------|
+| `get_extended_prematch_summary.sql` | Calcula métricas, scores y alertas de dos jugadores en un torneo dado (extrae ranking de `rankings_snapshot_v2`, evalúa localía, etc.). |
+| `simulate_full_tournament.sql` | Restaura draw inicial, ejecuta partidos según probabilidad y promueve ganadores hasta la final. |
+| `simulate_multiple_runs.sql` | Ejecuta la simulación completa N veces, limpia tablas temporales y registra resultados en `simulation_results`. |
 
-> Ejecuta estos scripts directamente en el editor SQL de Supabase (`CREATE OR REPLACE FUNCTION …`). Tras cada actualización del repositorio, vuelve a correrlos para mantener la lógica sincronizada.
+> Ejecuta los scripts íntegramente en Supabase (`CREATE OR REPLACE FUNCTION ...`).  
+> Tras cada pull que modifique estos archivos, vuelve a lanzarlos para mantener la lógica sincronizada.
 
 ---
 
 ## Workflows (GitHub Actions)
 
-- Procesamiento de cuadros desde PDF ➜ CSV ➜ Supabase.
-- Normalización e inserción de jugadores en `draw_entries`.
-- Disparadores para `build_draw_matches` y pruebas automáticas.
+- Carga de cuadros (PDF → CSV → Supabase).
+- Normalización e inserción de jugadores (`draw_entries`).
+- Ejecución de `build_draw_matches`.
+- Build y tests automáticos del frontend.
 
 ---
 
 ## Notas técnicas
 
-- `tourney_date` puede almacenarse como `INT` (formato YYYYMMDD) o `DATE`. Ajusta las conversiones según tu dataset.
-- `draw_matches` debe conservar el orden lógico (`R32-1` … `R32-16`, `R16-1` …).
-- El frontend opera contra `players_min` para obtener los nombres visibles en el bracket; asegúrate de mantener esa tabla sincronizada.
-- Tras ejecutar simulaciones masivas, puedes reconstruir el cuadro original invocando `build_draw_matches`.
+- Muchos campos de fechas se almacenan como `INT` (formato `YYYYMMDD`). Usa `TO_DATE`/`EXTRACT` según corresponda.
+- `draw_matches` debe mantener el orden lógico (`R32-1` ... `R32-16`).
+- El frontend obtiene nombres desde `players_min`; mantén esa tabla sincronizada para reflejar las últimas altas.
+- Después de simulaciones masivas, puedes rearmar el cuadro llamando a `build_draw_matches`.
 
-### Ajuste de pesos
+### Ajuste de pesos (ejemplo)
 
-```
+```sql
 INSERT INTO estratego_v1.prematch_metric_weights (metric, weight)
 VALUES
-  ('ranking_score',     0.12),
-  ('h2h_score',         0.08),
-  ('rest_score',        0.05),
-  ('motivation_score',  0.05)
+  ('ranking_score',     0.30),
+  ('h2h_score',         0.10),
+  ('motivation_score',  0.05),
+  ('rest_score',        0.00) -- rest_score solo actúa como alerta visual
 ON CONFLICT (metric)
 DO UPDATE SET weight = EXCLUDED.weight;
 ```
 
-- Ajusta los valores según tus criterios modelísticos.
-- Para ver el estado actual: `SELECT * FROM estratego_v1.prematch_metric_weights ORDER BY metric;`
+### Asignación de países
 
-### Alertas de descanso/motivación
+```
+ALTER TABLE estratego_v1.tournaments ADD COLUMN IF NOT EXISTS country CHAR(3);
 
-- `alerts` se puebla automáticamente con frases como “Lleva 39 días sin competir; posible falta de ritmo.”
-- La motivación (`motivation_score`) combina defensa de puntos y bonus por localía (si decides extenderlo).
+UPDATE estratego_v1.tournaments
+SET country = 'SUI' -- (ejemplo: Basel)
+WHERE tourney_id IN ('2024-0328','2025-0328');
+```
+
+> `country` debe usar el mismo IOC que `estratego_v1.players.ioc` para que la localía funcione.
 
 ---
 
 ## Documentación complementaria
 
-- `sql/get_extended_prematch_summary.sql` – lógica detallada del análisis prematch.
-- `sql/simulate_multiple_runs.sql` – pipeline de simulación por lotes con topes de tamaño y limpieza de tablas temporales.
-- `frontend/app/simulation/[tourneyId]/analytics/page.tsx` – obtención y presentación del dashboard de resultados acumulados.
+- `sql/get_extended_prematch_summary.sql`: lógica detallada del análisis prematch y generación de alertas.
+- `frontend/app/api/prematch/route.ts`: formatea la respuesta, añade metadatos del torneo y exporta a `/api/prematch`.
+- `frontend/app/simulation/[tourneyId]/analytics/page.tsx`: obtención y visualización del dashboard de resultados acumulados.
 
 ---
 
-Última actualización: octubre 2025
+Última actualización: **octubre 2025**
