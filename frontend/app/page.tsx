@@ -1089,9 +1089,17 @@ const highlight = useMemo(() => {
                         playerB={formatScorePercent(summary.playerB.h2h_score ?? null)}
                       />
                       <StatRow
-                        label="Motivación"
-                        playerA={formatScorePercent(summary.playerA.motivation_score ?? null)}
-                        playerB={formatScorePercent(summary.playerB.motivation_score ?? null)}
+                        label="Defiende puntos"
+                        playerA={
+                          summary.playerA.motivation_score && summary.playerA.motivation_score > 0
+                            ? <span className="text-red-400 font-semibold">Sí</span>
+                            : <span>No</span>
+                        }
+                        playerB={
+                          summary.playerB.motivation_score && summary.playerB.motivation_score > 0
+                            ? <span className="text-red-400 font-semibold">Sí</span>
+                            : <span>No</span>
+                        }
                       />
                     </div>
                   </section>
