@@ -621,18 +621,22 @@ function StatRow({
   label,
   playerA,
   playerB,
+  alignPlayerA = "left",
+  alignPlayerB = "right",
 }: {
   label: string;
   playerA: React.ReactNode;
   playerB: React.ReactNode;
+  alignPlayerA?: "left" | "right";
+  alignPlayerB?: "left" | "right";
 }) {
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm text-slate-200">
-      <div>{playerA}</div>
+      <div className={alignPlayerA === "right" ? "text-right" : "text-left"}>{playerA}</div>
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 text-center">
         {label}
       </div>
-      <div className="text-right">{playerB}</div>
+      <div className={alignPlayerB === "left" ? "text-left" : "text-right"}>{playerB}</div>
     </div>
   );
 }
@@ -1113,9 +1117,10 @@ const highlight = useMemo(() => {
                         label="Court speed score"
                         playerA={renderCourtSpeedBadge(summary.playerA.court_speed_score)}
                         playerB={renderCourtSpeedBadge(summary.playerB.court_speed_score)}
+                        alignPlayerB="left"
                       />
                       <StatRow
-                        label="Ultimos dias"
+                        label="Dias sin competir"
                         playerA={formatDays(summary.playerA.days_since_last)}
                         playerB={formatDays(summary.playerB.days_since_last)}
                       />
@@ -1123,11 +1128,6 @@ const highlight = useMemo(() => {
                         label="Ventaja local"
                         playerA={summary.playerA.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
                         playerB={summary.playerB.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
-                      />
-                      <StatRow
-                        label="Win score"
-                        playerA={formatFloat(summary.playerA.win_score, 2)}
-                        playerB={formatFloat(summary.playerB.win_score, 2)}
                       />
                       <StatRow
                         label="Defiende puntos"
