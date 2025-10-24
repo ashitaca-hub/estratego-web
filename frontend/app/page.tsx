@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Play, Flame } from "lucide-react";
+import { AlertTriangle, ChevronRight, Play, Flame, Star } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -428,6 +428,57 @@ const describeCourtSpeed = (rank?: number | null) => {
   if (rank <= 30) return "Fast";
   if (rank <= 45) return "Medium";
   return "Slow";
+};
+
+type CourtSpeedTier = {
+  stars: number;
+  label: string;
+  colorClass: string;
+  percent: number;
+};
+
+const getCourtSpeedTier = (score?: number | null): CourtSpeedTier | null => {
+  if (score == null || Number.isNaN(score)) return null;
+  const rawPercent = score * 100;
+  const percent = Math.round(Math.min(Math.max(rawPercent, 0), 100));
+  if (rawPercent >= 80) {
+    return { stars: 5, label: "Oro", colorClass: "text-amber-400", percent };
+  }
+  if (rawPercent >= 70) {
+    return { stars: 4, label: "Plata", colorClass: "text-slate-200", percent };
+  }
+  if (rawPercent >= 60) {
+    return { stars: 3, label: "Bronce", colorClass: "text-amber-600", percent };
+  }
+  if (rawPercent >= 50) {
+    return { stars: 2, label: "Media", colorClass: "text-slate-400", percent };
+  }
+  return { stars: 1, label: "Baja", colorClass: "text-slate-500", percent };
+};
+
+const renderCourtSpeedBadge = (score?: number | null) => {
+  const tier = getCourtSpeedTier(score);
+  if (!tier) return <span className="text-slate-500">-</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex gap-1">
+        {Array.from({ length: 5 }).map((_, idx) => {
+          const active = idx < tier.stars;
+          return (
+            <Star
+              key={`court-speed-star-${idx}`}
+              className={`h-4 w-4 ${active ? `${tier.colorClass}` : "text-slate-700"}`}
+              fill={active ? "currentColor" : "none"}
+              stroke="currentColor"
+            />
+          );
+        })}
+      </div>
+      <span className="text-xs text-slate-400">
+        {tier.percent}% {tier.label}
+      </span>
+    </div>
+  );
 };
 
 const renderAlertBadges = (alerts?: string[]) => {
@@ -1060,8 +1111,8 @@ const highlight = useMemo(() => {
                       })()}
                       <StatRow
                         label="Court speed score"
-                        playerA={formatFloat(summary.playerA.court_speed_score, 1)}
-                        playerB={formatFloat(summary.playerB.court_speed_score, 1)}
+                        playerA={renderCourtSpeedBadge(summary.playerA.court_speed_score)}
+                        playerB={renderCourtSpeedBadge(summary.playerB.court_speed_score)}
                       />
                       <StatRow
                         label="Ultimos dias"
