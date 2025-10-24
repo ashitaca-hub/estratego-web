@@ -1079,16 +1079,6 @@ const highlight = useMemo(() => {
                         playerB={formatFloat(summary.playerB.win_score, 2)}
                       />
                       <StatRow
-                        label="Ranking score"
-                        playerA={formatScorePercent(summary.playerA.ranking_score ?? null)}
-                        playerB={formatScorePercent(summary.playerB.ranking_score ?? null)}
-                      />
-                      <StatRow
-                        label="H2H score"
-                        playerA={formatScorePercent(summary.playerA.h2h_score ?? null)}
-                        playerB={formatScorePercent(summary.playerB.h2h_score ?? null)}
-                      />
-                      <StatRow
                         label="Defiende puntos"
                         playerA={
                           summary.playerA.motivation_score && summary.playerA.motivation_score > 0
