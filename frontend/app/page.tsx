@@ -572,8 +572,8 @@ function StatRow({
   playerB,
 }: {
   label: string;
-  playerA: string;
-  playerB: string;
+  playerA: React.ReactNode;
+  playerB: React.ReactNode;
 }) {
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm text-slate-200">
@@ -735,12 +735,20 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
-                        if (flag)
+                        if (flag) {
+                          const flagClasses = summary.playerA.home_advantage
+                            ? "text-base leading-none rounded-full border border-yellow-400/80 px-2"
+                            : "text-base leading-none";
                           chips.push(
-                            <span key="flag" className="text-base leading-none">
+                            <span
+                              key="flag"
+                              className={flagClasses}
+                              title={summary.playerA.home_advantage ? "Jugador local" : undefined}
+                            >
                               {flag}
                             </span>,
                           );
+                        }
                         const seed = match?.top?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -777,12 +785,20 @@ const highlight = useMemo(() => {
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
-                        if (flag)
+                        if (flag) {
+                          const flagClasses = summary.playerB.home_advantage
+                            ? "text-base leading-none rounded-full border border-yellow-400/80 px-2"
+                            : "text-base leading-none";
                           chips.push(
-                            <span key="flag" className="text-base leading-none">
+                            <span
+                              key="flag"
+                              className={flagClasses}
+                              title={summary.playerB.home_advantage ? "Jugador local" : undefined}
+                            >
                               {flag}
                             </span>,
                           );
+                        }
                         const seed = match?.bottom?.seed;
                         if (typeof seed === "number" && Number.isFinite(seed)) {
                           chips.push(
@@ -1050,8 +1066,8 @@ const highlight = useMemo(() => {
                       />
                       <StatRow
                         label="Ventaja local"
-                        playerA={formatBool(summary.playerA.home_advantage)}
-                        playerB={formatBool(summary.playerB.home_advantage)}
+                        playerA={summary.playerA.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
+                        playerB={summary.playerB.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
                       />
                       <StatRow
                         label="Win score"

@@ -1,4 +1,4 @@
--- get_extended_prematch_summary aggregates performance metrics for two players,
+﻿-- get_extended_prematch_summary aggregates performance metrics for two players,
 -- returning a JSON payload with weighted win probabilities and context.
 CREATE OR REPLACE FUNCTION public.get_extended_prematch_summary(
   p_tourney_id  TEXT,
@@ -39,6 +39,8 @@ DECLARE
   recent_matches_b INT := 0;
   last_match_a_text TEXT;
   last_match_b_text TEXT;
+  home_advantage_a BOOLEAN := FALSE;
+  home_advantage_b BOOLEAN := FALSE;
 
   h2h_rec RECORD;
   country_a TEXT;
@@ -46,6 +48,7 @@ DECLARE
   tourney_surf TEXT;
   tourney_speed_id TEXT;
   tourney_speed_rank INT;
+  tourney_country TEXT;
   ranking_a INT;
   ranking_b INT;
   days_since_a INT;
@@ -83,8 +86,9 @@ BEGIN
 
   -- Tournament surface and month
   SELECT surface,
-         EXTRACT(MONTH FROM TO_DATE(tourney_date::TEXT, 'YYYYMMDD'))::INT
-    INTO tourney_surf, tourney_month
+         EXTRACT(MONTH FROM TO_DATE(tourney_date::TEXT, 'YYYYMMDD'))::INT,
+         country
+    INTO tourney_surf, tourney_month, tourney_country
     FROM estratego_v1.tournaments
     WHERE tourney_id = p_tourney_id;
 
@@ -234,9 +238,9 @@ BEGIN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
     rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
     IF days_since_a <= 2 THEN
-      alerts_a := array_append(alerts_a, format('Ha competido hace %s día(s); posible fatiga.', days_since_a));
+      alerts_a := array_append(alerts_a, format('Ha competido hace %s dÃ­a(s); posible fatiga.', days_since_a));
     ELSIF days_since_a >= 20 THEN
-      alerts_a := array_append(alerts_a, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_a));
+      alerts_a := array_append(alerts_a, format('Lleva %s dÃ­as sin competir; posible falta de ritmo.', days_since_a));
     END IF;
   END IF;
 
@@ -244,32 +248,37 @@ BEGIN
     rest_score_b := 1 / (1 + ABS(days_since_b - 7)::FLOAT / 7);
     rest_score_b := LEAST(1.0, GREATEST(0.0, rest_score_b));
     IF days_since_b <= 2 THEN
-      alerts_b := array_append(alerts_b, format('Ha competido hace %s día(s); posible fatiga.', days_since_b));
+      alerts_b := array_append(alerts_b, format('Ha competido hace %s dÃ­a(s); posible fatiga.', days_since_b));
     ELSIF days_since_b >= 20 THEN
-      alerts_b := array_append(alerts_b, format('Lleva %s días sin competir; posible falta de ritmo.', days_since_b));
+      alerts_b := array_append(alerts_b, format('Lleva %s dÃ­as sin competir; posible falta de ritmo.', days_since_b));
     END IF;
   END IF;
 
   IF recent_matches_a > 6 THEN
     alerts_a := array_append(
       alerts_a,
-      format('Ha disputado %s partidos en los últimos 15 días; posible fatiga.', recent_matches_a)
+      format('Ha disputado %s partidos en los Ãºltimos 15 dÃ­as; posible fatiga.', recent_matches_a)
     );
   END IF;
 
   IF recent_matches_b > 6 THEN
     alerts_b := array_append(
       alerts_b,
-      format('Ha disputado %s partidos en los últimos 15 días; posible fatiga.', recent_matches_b)
+      format('Ha disputado %s partidos en los Ãºltimos 15 dÃ­as; posible fatiga.', recent_matches_b)
     );
   END IF;
 
   IF last_match_a_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_a_text)) > 0 THEN
-    alerts_a := array_append(alerts_a, 'Se retiró en su último partido.');
+    alerts_a := array_append(alerts_a, 'Se retirÃ³ en su Ãºltimo partido.');
+  END IF;
+
+  IF tourney_country IS NOT NULL THEN
+    home_advantage_a := country_a IS NOT NULL AND UPPER(country_a) = UPPER(tourney_country);
+    home_advantage_b := country_b IS NOT NULL AND UPPER(country_b) = UPPER(tourney_country);
   END IF;
 
   IF last_match_b_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_b_text)) > 0 THEN
-    alerts_b := array_append(alerts_b, 'Se retiró en su último partido.');
+    alerts_b := array_append(alerts_b, 'Se retirÃ³ en su Ãºltimo partido.');
   END IF;
 
   -- Monthly win percentage
@@ -349,7 +358,7 @@ BEGIN
       win_score_a := win_score_a + COALESCE(court_speed_score_a, 0) * w.weight;
       win_score_b := win_score_b + COALESCE(court_speed_score_b, 0) * w.weight;
     ELSIF w.metric = 'rest_score' THEN
-      -- rest_score se usa solo como alerta, no impacta en la ponderación
+      -- rest_score se usa solo como alerta, no impacta en la ponderaciÃ³n
       NULL;
     END IF;
   END LOOP;
@@ -492,7 +501,7 @@ BEGIN
       'win_pct_surface', CASE WHEN rec_a_surf.total_surf > 0 THEN rec_a_surf.wins_surf * 100.0 / rec_a_surf.total_surf ELSE NULL END,
       'ranking', ranking_a,
       'days_since_last', days_since_a,
-      'home_advantage', country_a = country_b,
+      'home_advantage', home_advantage_a,
       'win_pct_month', win_month_a,
       'win_pct_vs_top10', win_vs_rankband_a,
       'court_speed_score', court_speed_score_a,
@@ -511,7 +520,7 @@ BEGIN
       'win_pct_surface', CASE WHEN rec_b_surf.total_surf > 0 THEN rec_b_surf.wins_surf * 100.0 / rec_b_surf.total_surf ELSE NULL END,
       'ranking', ranking_b,
       'days_since_last', days_since_b,
-      'home_advantage', country_b = country_a,
+      'home_advantage', home_advantage_b,
       'win_pct_month', win_month_b,
       'win_pct_vs_top10', win_vs_rankband_b,
       'court_speed_score', court_speed_score_b,
@@ -537,3 +546,4 @@ BEGIN
   );
 END;
 $function$;
+
