@@ -736,9 +736,11 @@ const highlight = useMemo(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
                         if (flag) {
+                          const baseFlag =
+                            "inline-flex items-center justify-center rounded-full px-3 py-1 text-lg transition";
                           const flagClasses = summary.playerA.home_advantage
-                            ? "text-base leading-none rounded-full border border-yellow-400/80 px-2"
-                            : "text-base leading-none";
+                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
+                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
                           chips.push(
                             <span
                               key="flag"
@@ -786,9 +788,11 @@ const highlight = useMemo(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
                         if (flag) {
+                          const baseFlag =
+                            "inline-flex items-center justify-center rounded-full px-3 py-1 text-lg transition";
                           const flagClasses = summary.playerB.home_advantage
-                            ? "text-base leading-none rounded-full border border-yellow-400/80 px-2"
-                            : "text-base leading-none";
+                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
+                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
                           chips.push(
                             <span
                               key="flag"

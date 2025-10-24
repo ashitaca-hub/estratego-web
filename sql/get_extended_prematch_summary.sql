@@ -238,9 +238,9 @@ BEGIN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
     rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
     IF days_since_a <= 2 THEN
-      alerts_a := array_append(alerts_a, format('Ha competido hace %s dÃ­a(s); posible fatiga.', days_since_a));
+      alerts_a := array_append(alerts_a, format('Ha competido hace %s dia(s); posible fatiga.', days_since_a));
     ELSIF days_since_a >= 20 THEN
-      alerts_a := array_append(alerts_a, format('Lleva %s dÃ­as sin competir; posible falta de ritmo.', days_since_a));
+      alerts_a := array_append(alerts_a, format('Lleva %s dias sin competir; posible falta de ritmo.', days_since_a));
     END IF;
   END IF;
 
@@ -248,28 +248,28 @@ BEGIN
     rest_score_b := 1 / (1 + ABS(days_since_b - 7)::FLOAT / 7);
     rest_score_b := LEAST(1.0, GREATEST(0.0, rest_score_b));
     IF days_since_b <= 2 THEN
-      alerts_b := array_append(alerts_b, format('Ha competido hace %s dÃ­a(s); posible fatiga.', days_since_b));
+      alerts_b := array_append(alerts_b, format('Ha competido hace %s dia(s); posible fatiga.', days_since_b));
     ELSIF days_since_b >= 20 THEN
-      alerts_b := array_append(alerts_b, format('Lleva %s dÃ­as sin competir; posible falta de ritmo.', days_since_b));
+      alerts_b := array_append(alerts_b, format('Lleva %s dias sin competir; posible falta de ritmo.', days_since_b));
     END IF;
   END IF;
 
   IF recent_matches_a > 6 THEN
     alerts_a := array_append(
       alerts_a,
-      format('Ha disputado %s partidos en los Ãºltimos 15 dÃ­as; posible fatiga.', recent_matches_a)
+      format('Ha disputado %s partidos en los ultimos 15 dias; posible fatiga.', recent_matches_a)
     );
   END IF;
 
   IF recent_matches_b > 6 THEN
     alerts_b := array_append(
       alerts_b,
-      format('Ha disputado %s partidos en los Ãºltimos 15 dÃ­as; posible fatiga.', recent_matches_b)
+      format('Ha disputado %s partidos en los ultimos 15 dias; posible fatiga.', recent_matches_b)
     );
   END IF;
 
   IF last_match_a_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_a_text)) > 0 THEN
-    alerts_a := array_append(alerts_a, 'Se retirÃ³ en su Ãºltimo partido.');
+    alerts_a := array_append(alerts_a, 'Se retiro en su ultimo partido.');
   END IF;
 
   IF tourney_country IS NOT NULL THEN
@@ -278,7 +278,7 @@ BEGIN
   END IF;
 
   IF last_match_b_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_b_text)) > 0 THEN
-    alerts_b := array_append(alerts_b, 'Se retirÃ³ en su Ãºltimo partido.');
+    alerts_b := array_append(alerts_b, 'Se retiro en su ultimo partido.');
   END IF;
 
   -- Monthly win percentage
@@ -546,4 +546,6 @@ BEGIN
   );
 END;
 $function$;
+
+
 
