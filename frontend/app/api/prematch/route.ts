@@ -170,6 +170,12 @@ const ODDS_TOURNAMENT_OVERRIDES: Record<string, string> = {
   "atp basel": "tennis_atp_basel",
   "atp geneva open": "tennis_atp_geneva_open",
 };
+const ODDS_CACHE_TABLE = process.env.ODDS_CACHE_TABLE ?? "odds_cache";
+const ODDS_CACHE_TTL_MINUTES = (() => {
+  const raw = Number.parseFloat(process.env.ODDS_CACHE_TTL_MINUTES ?? "");
+  return Number.isFinite(raw) ? raw : 180;
+})();
+const ODDS_CACHE_DISABLED = (process.env.ODDS_CACHE_DISABLED ?? "false").toLowerCase() === "true";
 
 type NameMatchData = {
   original: string;
@@ -304,6 +310,109 @@ const matchesPlayersLoose = (
   return false;
 };
 
+const normalizeKeySegment = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ");
+};
+
+const buildPlayerKey = (playerA: NameMatchData, playerB: NameMatchData): string => {
+  const normalize = (data: NameMatchData) =>
+    normalizeKeySegment(data.normalized) ?? normalizeKeySegment(data.original) ?? "";
+  return [normalize(playerA), normalize(playerB)].sort().join("|");
+};
+
+const buildEventScope = (
+  normalizedEventHintLower: string | null,
+  tournament?: TournamentSummary | null,
+): string | null => {
+  const parts = new Set<string>();
+  if (normalizedEventHintLower) parts.add(normalizedEventHintLower);
+  if (tournament?.name) {
+    const normalized = normalizeKeySegment(tournament.name);
+    if (normalized) parts.add(normalized);
+  }
+  if (tournament?.bucket) {
+    const normalized = normalizeKeySegment(tournament.bucket);
+    if (normalized) parts.add(normalized);
+  }
+  if (parts.size === 0) return null;
+  return Array.from(parts).join(" | ");
+};
+
+const buildCutoffIso = () =>
+  new Date(Date.now() - ODDS_CACHE_TTL_MINUTES * 60 * 1000).toISOString();
+
+const loadOddsFromCache = async (
+  playerKey: string,
+  eventScope: string | null,
+): Promise<MatchOddsSummary | null> => {
+  if (ODDS_CACHE_DISABLED) return null;
+  try {
+    let query = supabase
+      .from(ODDS_CACHE_TABLE)
+      .select("data, sport_key, updated_at")
+      .eq("player_key", playerKey)
+      .gte("updated_at", buildCutoffIso())
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    if (eventScope) {
+      query = query.eq("event_scope", eventScope);
+    } else {
+      query = query.is("event_scope", null);
+    }
+
+    const { data, error } = await query.maybeSingle();
+    if (error) {
+      console.warn("[odds] cache load error", { error, playerKey, eventScope });
+      return null;
+    }
+    if (!data) return null;
+
+    console.info("[odds] cache hit", {
+      playerKey,
+      eventScope,
+      updated_at: data.updated_at,
+      sport_key: data.sport_key,
+    });
+
+    return data.data as MatchOddsSummary;
+  } catch (err) {
+    console.warn("[odds] cache load exception", { err, playerKey, eventScope });
+    return null;
+  }
+};
+
+const saveOddsToCache = async (
+  playerKey: string,
+  eventScope: string | null,
+  odds: MatchOddsSummary,
+) => {
+  if (ODDS_CACHE_DISABLED) return;
+  try {
+    const payload = {
+      player_key: playerKey,
+      event_scope: eventScope,
+      sport_key: odds.sport_key,
+      data: odds,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from(ODDS_CACHE_TABLE)
+      .upsert(payload, { onConflict: "player_key,event_scope" });
+    if (error) {
+      console.warn("[odds] cache save error", { error, playerKey, eventScope });
+    }
+  } catch (err) {
+    console.warn("[odds] cache save exception", { err, playerKey, eventScope });
+  }
+};
+
 const inferTourPrefix = (tournament?: TournamentSummary | null, extras?: ExtrasSummary | null): "atp" | "wta" => {
   const combined = `${tournament?.name ?? ""} ${tournament?.bucket ?? ""} ${extras?.display_p ?? ""} ${extras?.display_o ?? ""}`.toLowerCase();
   return combined.includes("wta") ? "wta" : "atp";
@@ -410,13 +519,23 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   }
   const { playerAName, playerBName, tournament, extras, eventNameHint } = input;
   if (!playerAName || !playerBName) return null;
-
   const normalizedEventHintLower = eventNameHint ? eventNameHint.toLowerCase() : null;
 
   const playerAData = buildNameMatchData(playerAName);
   const playerBData = buildNameMatchData(playerBName);
   if (!playerAData.normalized || !playerBData.normalized) return null;
 
+  const playerKey = buildPlayerKey(playerAData, playerBData);
+  const eventScope = buildEventScope(normalizedEventHintLower, tournament);
+  const cachedOdds = await loadOddsFromCache(playerKey, eventScope);
+  if (cachedOdds) {
+    console.info("[odds] returning cached odds", {
+      playerKey,
+      eventScope,
+      sport_key: cachedOdds.sport_key,
+    });
+    return cachedOdds;
+  }
   const sportKeyEntries = determineSportKeyCandidates(tournament, extras, eventNameHint);
   console.info("[odds] attempting odds lookup", {
     playerA: playerAData.original,
@@ -540,7 +659,7 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
         valueDiffB,
       });
 
-      return {
+      const oddsSummary: MatchOddsSummary = {
         sport_key: sportKey,
         bookmaker: typeof bookmaker.title === "string" && bookmaker.title.trim().length > 0 ? bookmaker.title : bookmaker.key ?? "bookmaker",
         last_update: bookmaker.last_update ?? null,
@@ -561,6 +680,8 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
         value_pick: valuePick,
         value_message: valueMessage,
       };
+      await saveOddsToCache(playerKey, eventScope, oddsSummary);
+      return oddsSummary;
     } catch (err) {
       console.warn("[odds] error fetching odds", { sportKey, err });
     }
@@ -570,6 +691,8 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
     playerA: playerAData.original,
     playerB: playerBData.original,
     sportKeys: sportKeyEntries.map((entry) => entry.sportKey),
+    playerKey,
+    eventScope,
   });
 
   return null;
@@ -1319,6 +1442,7 @@ export async function POST(req: Request) {
     headers: { "content-type": "application/json" },
   });
 }
+
 
 
 
