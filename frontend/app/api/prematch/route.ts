@@ -522,7 +522,7 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   console.info("[odds] no odds found", {
     playerA: playerAData.original,
     playerB: playerBData.original,
-    sportKeys,
+    sportKeys: sportKeyEntries.map((entry) => entry.sportKey),
   });
 
   return null;
@@ -1272,6 +1272,7 @@ export async function POST(req: Request) {
     headers: { "content-type": "application/json" },
   });
 }
+
 
 
 
