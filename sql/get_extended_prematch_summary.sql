@@ -266,21 +266,20 @@ BEGIN
          END
     INTO points_current_a
     FROM estratego_v1.matches_full
-    WHERE tourney_id = p_tourney_id
-      AND (winner_id = player_a_id OR loser_id = player_a_id)
-    ORDER BY tourney_date DESC,
-             CASE UPPER(round)
-               WHEN 'F' THEN 7
-               WHEN 'SF' THEN 6
-               WHEN 'QF' THEN 5
-               WHEN 'R16' THEN 4
-               WHEN 'R32' THEN 3
-               WHEN 'R64' THEN 2
-               WHEN 'R128' THEN 1
-               ELSE 0
-             END DESC,
-             match_id DESC NULLS LAST
-    LIMIT 1;
+   WHERE winner_id = player_a_id OR loser_id = player_a_id
+   ORDER BY tourney_date DESC,
+            CASE UPPER(round)
+              WHEN 'F' THEN 7
+              WHEN 'SF' THEN 6
+              WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4
+              WHEN 'R32' THEN 3
+              WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1
+              ELSE 0
+            END DESC,
+            match_id DESC NULLS LAST
+   LIMIT 1;
 
   SELECT CASE
            WHEN winner_id = player_b_id THEN winner_rank_points
@@ -288,21 +287,20 @@ BEGIN
          END
     INTO points_current_b
     FROM estratego_v1.matches_full
-    WHERE tourney_id = p_tourney_id
-      AND (winner_id = player_b_id OR loser_id = player_b_id)
-    ORDER BY tourney_date DESC,
-             CASE UPPER(round)
-               WHEN 'F' THEN 7
-               WHEN 'SF' THEN 6
-               WHEN 'QF' THEN 5
-               WHEN 'R16' THEN 4
-               WHEN 'R32' THEN 3
-               WHEN 'R64' THEN 2
-               WHEN 'R128' THEN 1
-               ELSE 0
-             END DESC,
-             match_id DESC NULLS LAST
-    LIMIT 1;
+   WHERE winner_id = player_b_id OR loser_id = player_b_id
+   ORDER BY tourney_date DESC,
+            CASE UPPER(round)
+              WHEN 'F' THEN 7
+              WHEN 'SF' THEN 6
+              WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4
+              WHEN 'R32' THEN 3
+              WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1
+              ELSE 0
+            END DESC,
+            match_id DESC NULLS LAST
+   LIMIT 1;
 
   IF days_since_a IS NOT NULL THEN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
