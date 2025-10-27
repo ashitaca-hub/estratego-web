@@ -927,6 +927,8 @@ function PrematchDialog({
             playerB_id: playerBId,
             tourney_id: bracket?.tourney_id, // asegurate bracket este en alcance o pasalo como prop
             year: new Date().getFullYear(),
+            playerA_name: match?.top?.name ?? null,
+            playerB_name: match?.bottom?.name ?? null,
           }),
         });
         if (!res.ok) {
@@ -1735,6 +1737,8 @@ export function EstrategoBracketApp() {
       playerB_id: playerBId,
       tourney_id: bracket.tourney_id,
       year: new Date().getFullYear(),
+      playerA_name: match?.top?.name ?? null,
+      playerB_name: match?.bottom?.name ?? null,
     };
 
     console.log("Payload prematch:", payload);

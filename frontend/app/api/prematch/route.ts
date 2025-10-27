@@ -223,6 +223,12 @@ const aliasMatches = (candidate: string | null | undefined, target: NameMatchDat
   );
 };
 
+const sanitizeNameInput = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
 const inferTourPrefix = (tournament?: TournamentSummary | null, extras?: ExtrasSummary | null): "atp" | "wta" => {
   const combined = `${tournament?.name ?? ""} ${tournament?.bucket ?? ""} ${extras?.display_p ?? ""} ${extras?.display_o ?? ""}`.toLowerCase();
   return combined.includes("wta") ? "wta" : "atp";
@@ -1000,7 +1006,17 @@ const callExtendedPrematchSummary = async (payload: PrematchRpcPayload) => {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { playerA_id, playerB_id, tourney_id, year } = body;
+  const {
+    playerA_id,
+    playerB_id,
+    tourney_id,
+    year,
+    playerA_name: playerANameInput,
+    playerB_name: playerBNameInput,
+  } = body;
+
+  const playerANameFromBody = sanitizeNameInput(playerANameInput);
+  const playerBNameFromBody = sanitizeNameInput(playerBNameInput);
 
   const normalizedYear = extractYear(year);
   const isoYearFromInput = isoFromString(year);
@@ -1119,8 +1135,8 @@ export async function POST(req: Request) {
   }
 
   if (ODDS_API_KEY) {
-    let playerAName = formatted.extras?.display_p ?? null;
-    let playerBName = formatted.extras?.display_o ?? null;
+    let playerAName = playerANameFromBody ?? formatted.extras?.display_p ?? null;
+    let playerBName = playerBNameFromBody ?? formatted.extras?.display_o ?? null;
 
     if (!playerAName) {
       const parsedId = Number(playerA_id);
