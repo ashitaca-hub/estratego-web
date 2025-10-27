@@ -19,6 +19,9 @@ type PlayerSummary = {
   rest_score?: number | null;
   motivation_score?: number | null;
   alerts?: string[] | null;
+  points_current?: number | null;
+  points_previous?: number | null;
+  points_delta?: number | null;
   last_results?: string[] | null;
 };
 
@@ -384,6 +387,43 @@ const buildPlayer = (
       pickNumber(source, [`${prefix}_motivation_score`, `motivation_score_${prefix}`]),
     );
 
+  const pointsCurrent =
+    pickNumber(playerRecord, ["points_current", "current_points"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [
+        `${prefix}_points_current`,
+        `points_current_${prefix}`,
+        `${prefix}_current_points`,
+        `current_points_${prefix}`,
+      ]),
+    );
+
+  const pointsPrevious =
+    pickNumber(playerRecord, ["points_previous", "previous_points", "points_last_year"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [
+        `${prefix}_points_previous`,
+        `points_previous_${prefix}`,
+        `${prefix}_previous_points`,
+        `previous_points_${prefix}`,
+        `${prefix}_points_last_year`,
+        `points_last_year_${prefix}`,
+      ]),
+    );
+
+  const pointsDelta =
+    pickNumber(playerRecord, ["points_delta", "points_diff", "points_difference"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [
+        `${prefix}_points_delta`,
+        `points_delta_${prefix}`,
+        `${prefix}_points_diff`,
+        `points_diff_${prefix}`,
+        `${prefix}_points_difference`,
+        `points_difference_${prefix}`,
+      ]),
+    );
+
   const alerts =
     asStringArray(playerRecord?.["alerts"]) ??
     getFromPrefixes((source, prefix) => {
@@ -424,6 +464,9 @@ const buildPlayer = (
     h2h_score: h2hScore,
     rest_score: restScore,
     motivation_score: motivationScore,
+    points_current: pointsCurrent,
+    points_previous: pointsPrevious,
+    points_delta: pointsDelta,
     alerts,
     last_results: normalizedLastResults && normalizedLastResults.length > 0 ? normalizedLastResults : undefined,
   };

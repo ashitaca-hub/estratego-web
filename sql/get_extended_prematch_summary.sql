@@ -61,6 +61,12 @@ DECLARE
   alerts_b TEXT[] := ARRAY[]::TEXT[];
   last_results_a TEXT[] := NULL;
   last_results_b TEXT[] := NULL;
+  points_current_a INT := NULL;
+  points_current_b INT := NULL;
+  points_prev_a INT := NULL;
+  points_prev_b INT := NULL;
+  points_delta_a INT := NULL;
+  points_delta_b INT := NULL;
 
   round_last_a TEXT := NULL;
   round_last_b TEXT := NULL;
@@ -254,6 +260,90 @@ BEGIN
          )
     INTO last_results_b;
 
+  SELECT CASE
+           WHEN winner_id = player_a_id THEN winner_rank_points
+           ELSE loser_rank_points
+         END
+    INTO points_current_a
+    FROM estratego_v1.matches_full
+    WHERE tourney_id = p_tourney_id
+      AND (winner_id = player_a_id OR loser_id = player_a_id)
+    ORDER BY tourney_date DESC,
+             CASE UPPER(round)
+               WHEN 'F' THEN 7
+               WHEN 'SF' THEN 6
+               WHEN 'QF' THEN 5
+               WHEN 'R16' THEN 4
+               WHEN 'R32' THEN 3
+               WHEN 'R64' THEN 2
+               WHEN 'R128' THEN 1
+               ELSE 0
+             END DESC,
+             match_id DESC NULLS LAST
+    LIMIT 1;
+
+  SELECT CASE
+           WHEN winner_id = player_b_id THEN winner_rank_points
+           ELSE loser_rank_points
+         END
+    INTO points_current_b
+    FROM estratego_v1.matches_full
+    WHERE tourney_id = p_tourney_id
+      AND (winner_id = player_b_id OR loser_id = player_b_id)
+    ORDER BY tourney_date DESC,
+             CASE UPPER(round)
+               WHEN 'F' THEN 7
+               WHEN 'SF' THEN 6
+               WHEN 'QF' THEN 5
+               WHEN 'R16' THEN 4
+               WHEN 'R32' THEN 3
+               WHEN 'R64' THEN 2
+               WHEN 'R128' THEN 1
+               ELSE 0
+             END DESC,
+             match_id DESC NULLS LAST
+    LIMIT 1;
+
+  IF points_current_a IS NULL THEN
+    SELECT points
+      INTO points_current_a
+      FROM estratego_v1.rankings_snapshot_v2 rs
+     WHERE rs.player_id = player_a_id
+       AND LEFT(rs.match_id, 4)::INT <= p_year
+     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
+     LIMIT 1;
+
+    IF points_current_a IS NULL THEN
+      SELECT points
+        INTO points_current_a
+        FROM estratego_v1.rankings_snapshot rs
+       WHERE rs.player_id = player_a_id
+         AND LEFT(rs.match_id, 4)::INT <= p_year
+       ORDER BY LEFT(rs.match_id, 4)::INT DESC
+       LIMIT 1;
+    END IF;
+  END IF;
+
+  IF points_current_b IS NULL THEN
+    SELECT points
+      INTO points_current_b
+      FROM estratego_v1.rankings_snapshot_v2 rs
+     WHERE rs.player_id = player_b_id
+       AND LEFT(rs.match_id, 4)::INT <= p_year
+     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
+     LIMIT 1;
+
+    IF points_current_b IS NULL THEN
+      SELECT points
+        INTO points_current_b
+        FROM estratego_v1.rankings_snapshot rs
+       WHERE rs.player_id = player_b_id
+         AND LEFT(rs.match_id, 4)::INT <= p_year
+       ORDER BY LEFT(rs.match_id, 4)::INT DESC
+       LIMIT 1;
+    END IF;
+  END IF;
+
   IF days_since_a IS NOT NULL THEN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
     rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
@@ -423,6 +513,98 @@ BEGIN
   tourney_prev_id := prev_year::TEXT || '-' || tourney_base;
 
   SELECT CASE
+           WHEN winner_id = player_a_id THEN winner_rank_points
+           ELSE loser_rank_points
+         END
+    INTO points_prev_a
+    FROM estratego_v1.matches_full
+   WHERE tourney_id = tourney_prev_id
+     AND (winner_id = player_a_id OR loser_id = player_a_id)
+   ORDER BY tourney_date DESC,
+            CASE UPPER(round)
+              WHEN 'F' THEN 7
+              WHEN 'SF' THEN 6
+              WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4
+              WHEN 'R32' THEN 3
+              WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1
+              ELSE 0
+            END DESC,
+            match_id DESC NULLS LAST
+   LIMIT 1;
+
+  SELECT CASE
+           WHEN winner_id = player_b_id THEN winner_rank_points
+           ELSE loser_rank_points
+         END
+    INTO points_prev_b
+    FROM estratego_v1.matches_full
+   WHERE tourney_id = tourney_prev_id
+     AND (winner_id = player_b_id OR loser_id = player_b_id)
+   ORDER BY tourney_date DESC,
+            CASE UPPER(round)
+              WHEN 'F' THEN 7
+              WHEN 'SF' THEN 6
+              WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4
+              WHEN 'R32' THEN 3
+              WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1
+              ELSE 0
+            END DESC,
+            match_id DESC NULLS LAST
+   LIMIT 1;
+
+  IF points_prev_a IS NULL THEN
+    SELECT points
+      INTO points_prev_a
+      FROM estratego_v1.rankings_snapshot_v2 rs
+     WHERE rs.player_id = player_a_id
+       AND LEFT(rs.match_id, 4)::INT <= prev_year
+     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
+     LIMIT 1;
+
+    IF points_prev_a IS NULL THEN
+      SELECT points
+        INTO points_prev_a
+        FROM estratego_v1.rankings_snapshot rs
+       WHERE rs.player_id = player_a_id
+         AND LEFT(rs.match_id, 4)::INT <= prev_year
+       ORDER BY LEFT(rs.match_id, 4)::INT DESC
+       LIMIT 1;
+    END IF;
+  END IF;
+
+  IF points_prev_b IS NULL THEN
+    SELECT points
+      INTO points_prev_b
+      FROM estratego_v1.rankings_snapshot_v2 rs
+     WHERE rs.player_id = player_b_id
+       AND LEFT(rs.match_id, 4)::INT <= prev_year
+     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
+     LIMIT 1;
+
+    IF points_prev_b IS NULL THEN
+      SELECT points
+        INTO points_prev_b
+        FROM estratego_v1.rankings_snapshot rs
+       WHERE rs.player_id = player_b_id
+         AND LEFT(rs.match_id, 4)::INT <= prev_year
+       ORDER BY LEFT(rs.match_id, 4)::INT DESC
+       LIMIT 1;
+    END IF;
+  END IF;
+
+  IF points_current_a IS NOT NULL AND points_prev_a IS NOT NULL THEN
+    points_delta_a := points_current_a - points_prev_a;
+  END IF;
+
+  IF points_current_b IS NOT NULL AND points_prev_b IS NOT NULL THEN
+    points_delta_b := points_current_b - points_prev_b;
+  END IF;
+
+  SELECT CASE
            WHEN EXISTS (
              SELECT 1
              FROM estratego_v1.matches_full
@@ -520,6 +702,9 @@ BEGIN
       'win_pct_year', CASE WHEN rec_a_year.total > 0 THEN rec_a_year.wins * 100.0 / rec_a_year.total ELSE NULL END,
       'win_pct_surface', CASE WHEN rec_a_surf.total_surf > 0 THEN rec_a_surf.wins_surf * 100.0 / rec_a_surf.total_surf ELSE NULL END,
       'ranking', ranking_a,
+      'points_current', points_current_a,
+      'points_previous', points_prev_a,
+      'points_delta', points_delta_a,
       'days_since_last', days_since_a,
       'home_advantage', home_advantage_a,
       'win_pct_month', win_month_a,
@@ -540,6 +725,9 @@ BEGIN
       'win_pct_year', CASE WHEN rec_b_year.total > 0 THEN rec_b_year.wins * 100.0 / rec_b_year.total ELSE NULL END,
       'win_pct_surface', CASE WHEN rec_b_surf.total_surf > 0 THEN rec_b_surf.wins_surf * 100.0 / rec_b_surf.total_surf ELSE NULL END,
       'ranking', ranking_b,
+      'points_current', points_current_b,
+      'points_previous', points_prev_b,
+      'points_delta', points_delta_b,
       'days_since_last', days_since_b,
       'home_advantage', home_advantage_b,
       'win_pct_month', win_month_b,

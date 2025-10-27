@@ -116,6 +116,9 @@ type PlayerPrematchStats = {
   motivation_score?: number | null;
   alerts?: string[];
   last_results?: string[];
+  points_current?: number | null;
+  points_previous?: number | null;
+  points_delta?: number | null;
 };
 
 type TournamentSummary = {
@@ -233,6 +236,9 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     h2h_score: asNumber(p?.h2h_score),
     rest_score: asNumber(p?.rest_score),
     motivation_score: asNumber(p?.motivation_score),
+    points_current: asNumber(p?.points_current),
+    points_previous: asNumber(p?.points_previous),
+    points_delta: asNumber(p?.points_delta),
     alerts: (() => {
       const arr = asStringArray(p?.alerts);
       return arr.length ? arr : undefined;
@@ -563,6 +569,64 @@ const renderRecentForm = (
   );
 };
 
+const formatPointsValue = (value: number) =>
+  new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(Math.round(value));
+
+const renderPointsDelta = (stats?: {
+  points_delta?: number | null;
+  points_current?: number | null;
+  points_previous?: number | null;
+}) => {
+  if (!stats) return null;
+  const delta = stats.points_delta ?? null;
+  const current = stats.points_current ?? null;
+  const previous = stats.points_previous ?? null;
+
+  if (delta == null && current == null && previous == null) {
+    return (
+      <div className="mt-1 text-xs font-semibold text-slate-500" aria-hidden="true">
+        —
+      </div>
+    );
+  }
+
+  const className =
+    delta == null || delta === 0
+      ? "text-slate-400"
+      : delta > 0
+      ? "text-emerald-400"
+      : "text-rose-400";
+  const sign = delta != null && delta > 0 ? "+" : "";
+  const displayValue =
+    delta != null
+      ? `${sign}${formatPointsValue(delta)} pts`
+      : current != null
+      ? `${formatPointsValue(current)} pts`
+      : "—";
+
+  const titleParts: string[] = [];
+  if (current != null) {
+    titleParts.push(`Actual: ${formatPointsValue(current)} pts`);
+  }
+  if (previous != null) {
+    titleParts.push(`Hace 1 año: ${formatPointsValue(previous)} pts`);
+  }
+
+  return (
+    <div
+      className="mt-1 text-xs font-semibold text-slate-400"
+      title={titleParts.length ? titleParts.join(" · ") : undefined}
+      aria-label={
+        titleParts.length
+          ? `Balance de puntos. ${titleParts.join(". ")}.`
+          : undefined
+      }
+    >
+      <span className={className}>{displayValue}</span>
+    </div>
+  );
+};
+
 const renderAlertBadges = (alerts?: string[]) => {
   if (!alerts || alerts.length === 0) return null;
   return (
@@ -869,6 +933,11 @@ const highlight = useMemo(() => {
                           </div>
                         );
                       })()}
+                      {renderPointsDelta({
+                        points_delta: summary?.playerA?.points_delta ?? null,
+                        points_current: summary?.playerA?.points_current ?? null,
+                        points_previous: summary?.playerA?.points_previous ?? null,
+                      })}
                       {renderRecentForm(summary?.playerA?.last_results)}
                       {(() => {
                         const chips: any[] = [];
@@ -922,6 +991,11 @@ const highlight = useMemo(() => {
                           </div>
                         );
                       })()}
+                      {renderPointsDelta({
+                        points_delta: summary?.playerB?.points_delta ?? null,
+                        points_current: summary?.playerB?.points_current ?? null,
+                        points_previous: summary?.playerB?.points_previous ?? null,
+                      })}
                       {renderRecentForm(summary?.playerB?.last_results)}
                       {(() => {
                         const chips: any[] = [];
