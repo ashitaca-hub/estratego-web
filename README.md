@@ -25,6 +25,7 @@ estratego-web/
 - Variables de entorno del frontend:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `ODDS_API_KEY` *(opcional, activa la consulta de cuotas de The Odds API)*
 
 ---
 
@@ -59,6 +60,7 @@ La aplicación queda disponible en [http://localhost:3000](http://localhost:3000
     - Carga de partidos (>6 partidos en 15 días).
     - Retiro en el último partido.
   - Ventaja de localía: se compara el `ioc` del jugador con el país del torneo (`estratego_v1.tournaments.country`).
+  - Cuotas h2h (The Odds API): muestra la cuota decimal (Pinnacle por defecto) y resalta cuando el modelo detecta valor frente al precio ofrecido.
 
 > Los pesos de cada métrica se mantienen en `estratego_v1.prematch_metric_weights`.  
 > Puedes ajustarlos o actualizarlos con los INSERT/UPDATE indicados en la sección de **Notas técnicas**.
@@ -98,6 +100,7 @@ La aplicación queda disponible en [http://localhost:3000](http://localhost:3000
 | Script | Descripción |
 |--------|-------------|
 | `get_extended_prematch_summary.sql` | Calcula métricas, scores y alertas de dos jugadores en un torneo dado (extrae ranking de `rankings_snapshot_v2`, evalúa localía, etc.). |
+| `build_draw_matches.sql` | Reconstruye los cruces iniciales (`draw_matches`) a partir de `draw_entries`, tomando el `draw_size` de `tournaments_info`. |
 | `simulate_full_tournament.sql` | Restaura draw inicial, ejecuta partidos según probabilidad y promueve ganadores hasta la final. |
 | `simulate_multiple_runs.sql` | Ejecuta la simulación completa N veces, limpia tablas temporales y registra resultados en `simulation_results`. |
 
@@ -119,6 +122,7 @@ La aplicación queda disponible en [http://localhost:3000](http://localhost:3000
 
 - Muchos campos de fechas se almacenan como `INT` (formato `YYYYMMDD`). Usa `TO_DATE`/`EXTRACT` según corresponda.
 - `draw_matches` debe mantener el orden lógico (`R32-1` ... `R32-16`).
+- Aseg?rate de que `tournaments_info.draw_size` refleja 16/32/64 antes de ejecutar `build_draw_matches`; de lo contrario solo generar? la primera ronda disponible.
 - El frontend obtiene nombres desde `players_min`; mantén esa tabla sincronizada para reflejar las últimas altas.
 - Después de simulaciones masivas, puedes rearmar el cuadro llamando a `build_draw_matches`.
 
@@ -158,3 +162,5 @@ WHERE tourney_id IN ('2024-0328','2025-0328');
 ---
 
 Última actualización: **octubre 2025**
+
+

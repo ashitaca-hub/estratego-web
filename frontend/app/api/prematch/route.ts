@@ -43,6 +43,24 @@ type ExtrasSummary = {
   ytd_wr_o: number | null;
 };
 
+type OddsPlayerSummary = {
+  name: string | null;
+  price: number | null;
+  implied_probability: number | null;
+  value_diff: number | null;
+  is_value: boolean;
+};
+
+type MatchOddsSummary = {
+  sport_key: string;
+  bookmaker: string;
+  last_update: string | null;
+  playerA: OddsPlayerSummary | null;
+  playerB: OddsPlayerSummary | null;
+  value_pick?: "playerA" | "playerB";
+  value_message?: string;
+};
+
 type PrematchSummaryResponse = {
   prob_player: number | null;
   playerA: PlayerSummary;
@@ -60,6 +78,7 @@ type PrematchSummaryResponse = {
   surface_reported?: string | null;
   tournament?: TournamentSummary;
   extras?: ExtrasSummary;
+  odds?: MatchOddsSummary;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -126,6 +145,312 @@ const asStringArray = (value: unknown): string[] | null => {
 
 const hasTruthyValue = (obj: Record<string, unknown>): boolean => {
   return Object.values(obj).some((value) => value !== null && value !== undefined);
+};
+
+const ODDS_API_KEY = process.env.ODDS_API_KEY;
+const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
+const ODDS_DEFAULT_REGIONS = process.env.ODDS_REGIONS ?? "eu";
+const ODDS_DEFAULT_MARKETS = process.env.ODDS_MARKETS ?? "h2h";
+const ODDS_DEFAULT_ODDS_FORMAT = process.env.ODDS_FORMAT ?? "decimal";
+const ODDS_DEFAULT_DATE_FORMAT = process.env.ODDS_DATE_FORMAT ?? "iso";
+const ODDS_DEFAULT_BOOKMAKER = (process.env.ODDS_BOOKMAKER ?? "Pinnacle").toLowerCase();
+const ODDS_VALUE_THRESHOLD = Number.isNaN(Number.parseFloat(process.env.ODDS_VALUE_THRESHOLD ?? ""))
+  ? 0.03
+  : Number.parseFloat(process.env.ODDS_VALUE_THRESHOLD ?? "0.03");
+const ODDS_TOURNAMENT_OVERRIDES: Record<string, string> = {
+  "atp paris masters": "tennis_atp_paris_masters",
+  "atp paris": "tennis_atp_paris_masters",
+  "atp shanghai masters": "tennis_atp_shanghai_masters",
+  "atp finals": "tennis_atp_finals",
+  "wta finals": "tennis_wta_finals",
+  "wta elite trophy": "tennis_wta_elite_trophy",
+};
+
+type NameMatchData = {
+  original: string;
+  normalized: string | null;
+  aliases: string[];
+  lastName: string | null;
+};
+
+const normalizeNameForOdds = (name?: string | null): string | null => {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  return trimmed
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9\s.]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+};
+
+const buildNameMatchData = (name?: string | null): NameMatchData => {
+  const normalized = normalizeNameForOdds(name);
+  if (!normalized) {
+    return { original: name ?? "", normalized: null, aliases: [], lastName: null };
+  }
+  const parts = normalized.split(" ");
+  const lastName = parts.length ? parts[parts.length - 1] : null;
+  const firstName = parts.length ? parts[0] : null;
+  const aliases = new Set<string>();
+  aliases.add(normalized);
+  if (lastName) aliases.add(lastName);
+  if (firstName && lastName) {
+    aliases.add(`${firstName} ${lastName}`);
+    aliases.add(`${firstName[0]} ${lastName}`);
+    aliases.add(`${firstName[0]}. ${lastName}`);
+  }
+  return {
+    original: name ?? normalized,
+    normalized,
+    aliases: Array.from(aliases),
+    lastName,
+  };
+};
+
+const aliasMatches = (candidate: string | null | undefined, target: NameMatchData): boolean => {
+  const normalizedCandidate = normalizeNameForOdds(candidate);
+  if (!normalizedCandidate || !target.normalized) return false;
+  if (target.aliases.includes(normalizedCandidate)) return true;
+  if (target.lastName && normalizedCandidate.endsWith(target.lastName)) return true;
+  return target.aliases.some(
+    (alias) =>
+      normalizedCandidate.includes(alias) ||
+      alias.includes(normalizedCandidate) ||
+      normalizedCandidate.replace(/\s+/g, "") === alias.replace(/\s+/g, ""),
+  );
+};
+
+const inferTourPrefix = (tournament?: TournamentSummary | null, extras?: ExtrasSummary | null): "atp" | "wta" => {
+  const combined = `${tournament?.name ?? ""} ${tournament?.bucket ?? ""} ${extras?.display_p ?? ""} ${extras?.display_o ?? ""}`.toLowerCase();
+  return combined.includes("wta") ? "wta" : "atp";
+};
+
+const slugifyTournament = (tournamentName: string, prefix: "atp" | "wta"): string | null => {
+  const normalized = tournamentName.toLowerCase().replace(/^(atp|wta)\s+/, "");
+  const slug = normalized.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!slug) return null;
+  return `tennis_${prefix}_${slug}`;
+};
+
+const determineSportKeyCandidates = (
+  tournament?: TournamentSummary | null,
+  extras?: ExtrasSummary | null,
+): string[] => {
+  const candidates: string[] = [];
+  const prefix = inferTourPrefix(tournament, extras);
+  const normalizedName = tournament?.name?.trim().toLowerCase() ?? null;
+
+  if (normalizedName && ODDS_TOURNAMENT_OVERRIDES[normalizedName]) {
+    candidates.push(ODDS_TOURNAMENT_OVERRIDES[normalizedName]);
+  }
+
+  if (normalizedName) {
+    const slugCandidate = slugifyTournament(normalizedName, prefix);
+    if (slugCandidate) candidates.push(slugCandidate);
+  }
+
+  candidates.push(`tennis_${prefix}`);
+
+  return Array.from(new Set(candidates));
+};
+
+const pickPreferredBookmaker = (bookmakers: any[]): any | null => {
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+  const preferred = bookmakers.find((b) => {
+    const key = typeof b.key === "string" ? b.key.toLowerCase() : "";
+    const title = typeof b.title === "string" ? b.title.toLowerCase() : "";
+    return key === ODDS_DEFAULT_BOOKMAKER || title === ODDS_DEFAULT_BOOKMAKER;
+  });
+  return preferred ?? bookmakers[0];
+};
+
+const pickMarket = (markets: any[]): any | null => {
+  if (!Array.isArray(markets) || markets.length === 0) return null;
+  const byKey = markets.find((m) => m?.key === "h2h");
+  return byKey ?? markets[0];
+};
+
+const formatOddsNumber = (value: unknown): number | null => {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : null;
+};
+
+const computeOddsForOutcome = (price: number | null): { implied: number | null } => {
+  if (price == null) return { implied: null };
+  return { implied: price > 0 ? 1 / price : null };
+};
+
+type FetchOddsInput = {
+  playerAName?: string | null;
+  playerBName?: string | null;
+  tournament?: TournamentSummary | null;
+  extras?: ExtrasSummary | null;
+  playerAProbability: number | null;
+  playerBProbability: number | null;
+};
+
+const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary | null> => {
+  if (!ODDS_API_KEY) return null;
+  const { playerAName, playerBName, tournament, extras } = input;
+  if (!playerAName || !playerBName) return null;
+
+  const playerAData = buildNameMatchData(playerAName);
+  const playerBData = buildNameMatchData(playerBName);
+  if (!playerAData.normalized || !playerBData.normalized) return null;
+
+  const sportKeys = determineSportKeyCandidates(tournament, extras);
+
+  for (const sportKey of sportKeys) {
+    try {
+      const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/odds`);
+      url.searchParams.set("apiKey", ODDS_API_KEY);
+      url.searchParams.set("regions", ODDS_DEFAULT_REGIONS);
+      url.searchParams.set("markets", ODDS_DEFAULT_MARKETS);
+      url.searchParams.set("oddsFormat", ODDS_DEFAULT_ODDS_FORMAT);
+      url.searchParams.set("dateFormat", ODDS_DEFAULT_DATE_FORMAT);
+
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      if (!response.ok) {
+        if (response.status === 404) continue;
+        console.warn("Odds API response not OK", sportKey, response.status);
+        continue;
+      }
+
+      const events: any[] = await response.json();
+      if (!Array.isArray(events)) continue;
+
+      const event = events.find((item) => {
+        if (!item) return false;
+        const home = item.home_team as string | undefined;
+        const away = item.away_team as string | undefined;
+        const homeMatchesA = aliasMatches(home, playerAData);
+        const awayMatchesA = aliasMatches(away, playerAData);
+        const homeMatchesB = aliasMatches(home, playerBData);
+        const awayMatchesB = aliasMatches(away, playerBData);
+
+        if ((homeMatchesA && awayMatchesB) || (homeMatchesB && awayMatchesA)) return true;
+
+        const outcomeNames: string[] = [];
+        if (Array.isArray(item.bookmakers)) {
+          for (const book of item.bookmakers) {
+            if (!Array.isArray(book?.markets)) continue;
+            for (const market of book.markets) {
+              if (!Array.isArray(market?.outcomes)) continue;
+              for (const outcome of market.outcomes) {
+                if (outcome?.name) outcomeNames.push(outcome.name);
+              }
+            }
+          }
+        }
+
+        const outcomeMatchesA = outcomeNames.some((name) => aliasMatches(name, playerAData));
+        const outcomeMatchesB = outcomeNames.some((name) => aliasMatches(name, playerBData));
+        return outcomeMatchesA && outcomeMatchesB;
+      });
+
+      if (!event) continue;
+
+      const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
+      if (!bookmaker) continue;
+      const market = pickMarket(bookmaker.markets ?? []);
+      if (!market || !Array.isArray(market.outcomes)) continue;
+
+      const findOutcome = (target: NameMatchData): any | null => {
+        const byAlias = market.outcomes.find((outcome: any) => aliasMatches(outcome?.name, target));
+        if (byAlias) return byAlias;
+        if (aliasMatches(event.home_team, target)) {
+          const homeOutcome = market.outcomes.find(
+            (outcome: any) => aliasMatches(outcome?.name, buildNameMatchData(event.home_team)),
+          );
+          if (homeOutcome) return homeOutcome;
+        }
+        if (aliasMatches(event.away_team, target)) {
+          const awayOutcome = market.outcomes.find(
+            (outcome: any) => aliasMatches(outcome?.name, buildNameMatchData(event.away_team)),
+          );
+          if (awayOutcome) return awayOutcome;
+        }
+        return null;
+      };
+
+      const outcomeA = findOutcome(playerAData);
+      const outcomeB = findOutcome(playerBData);
+      if (!outcomeA || !outcomeB) continue;
+
+      const priceA = formatOddsNumber(outcomeA.price ?? outcomeA.odds);
+      const priceB = formatOddsNumber(outcomeB.price ?? outcomeB.odds);
+      const { implied: impliedA } = computeOddsForOutcome(priceA);
+      const { implied: impliedB } = computeOddsForOutcome(priceB);
+
+      const valueDiffA =
+        impliedA != null && input.playerAProbability != null ? input.playerAProbability - impliedA : null;
+      const valueDiffB =
+        impliedB != null && input.playerBProbability != null ? input.playerBProbability - impliedB : null;
+
+      let valuePick: "playerA" | "playerB" | undefined;
+      if (valueDiffA != null && valueDiffA >= ODDS_VALUE_THRESHOLD) {
+        valuePick = "playerA";
+      } else if (valueDiffB != null && valueDiffB >= ODDS_VALUE_THRESHOLD) {
+        valuePick = "playerB";
+      }
+
+      let valueMessage: string | undefined;
+      if (valuePick === "playerA" && valueDiffA != null) {
+        valueMessage = `${playerAData.original} tiene valor frente a la cuota ${bookmaker.title ?? bookmaker.key
+          } (${(valueDiffA * 100).toFixed(1)} pp)`;
+      } else if (valuePick === "playerB" && valueDiffB != null) {
+        valueMessage = `${playerBData.original} tiene valor frente a la cuota ${bookmaker.title ?? bookmaker.key
+          } (${(valueDiffB * 100).toFixed(1)} pp)`;
+      }
+
+      return {
+        sport_key: sportKey,
+        bookmaker: typeof bookmaker.title === "string" && bookmaker.title.trim().length > 0 ? bookmaker.title : bookmaker.key ?? "bookmaker",
+        last_update: bookmaker.last_update ?? null,
+        playerA: {
+          name: playerAData.original,
+          price: priceA,
+          implied_probability: impliedA,
+          value_diff: valueDiffA,
+          is_value: Boolean(valueDiffA != null && valueDiffA >= ODDS_VALUE_THRESHOLD),
+        },
+        playerB: {
+          name: playerBData.original,
+          price: priceB,
+          implied_probability: impliedB,
+          value_diff: valueDiffB,
+          is_value: Boolean(valueDiffB != null && valueDiffB >= ODDS_VALUE_THRESHOLD),
+        },
+        value_pick: valuePick,
+        value_message: valueMessage,
+      };
+    } catch (err) {
+      console.warn("Error fetching odds", sportKey, err);
+    }
+  }
+
+  return null;
+};
+
+const fetchPlayerDisplayName = async (playerId: number): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .schema("estratego_v1")
+      .from("players_min")
+      .select("display_name,name")
+      .eq("player_id", playerId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const display = typeof data.display_name === "string" && data.display_name.trim().length > 0 ? data.display_name : null;
+    const fallback = typeof data.name === "string" && data.name.trim().length > 0 ? data.name : null;
+    return display ?? fallback;
+  } catch (err) {
+    console.warn("Error fetching player display name", playerId, err);
+    return null;
+  }
 };
 
 const pickNumber = (
@@ -790,6 +1115,49 @@ export async function POST(req: Request) {
       if (formatted.court_speed == null && Number.isFinite(speedRank)) {
         formatted.court_speed = speedRank;
       }
+    }
+  }
+
+  if (ODDS_API_KEY) {
+    let playerAName = formatted.extras?.display_p ?? null;
+    let playerBName = formatted.extras?.display_o ?? null;
+
+    if (!playerAName) {
+      const parsedId = Number(playerA_id);
+      if (Number.isFinite(parsedId)) {
+        playerAName = await fetchPlayerDisplayName(parsedId);
+      }
+    }
+
+    if (!playerBName) {
+      const parsedId = Number(playerB_id);
+      if (Number.isFinite(parsedId)) {
+        playerBName = await fetchPlayerDisplayName(parsedId);
+      }
+    }
+
+    const playerAProbability = normalizeProbability(
+      formatted.playerA.win_probability ?? formatted.prob_player ?? null,
+    );
+    const playerBProbability = normalizeProbability(
+      formatted.playerB.win_probability ??
+        (playerAProbability != null ? 1 - playerAProbability : formatted.prob_player != null ? 1 - formatted.prob_player : null),
+    );
+
+    try {
+      const odds = await fetchMatchOdds({
+        playerAName,
+        playerBName,
+        tournament: formatted.tournament ?? null,
+        extras: formatted.extras ?? null,
+        playerAProbability,
+        playerBProbability,
+      });
+      if (odds) {
+        formatted.odds = odds;
+      }
+    } catch (err) {
+      console.warn("Failed to attach odds information", err);
     }
   }
 

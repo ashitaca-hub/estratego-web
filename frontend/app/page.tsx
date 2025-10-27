@@ -121,6 +121,23 @@ type PlayerPrematchStats = {
   points_delta?: number | null;
 };
 
+type OddsPlayerSummary = {
+  price: number | null;
+  implied_probability: number | null;
+  value_diff: number | null;
+  is_value: boolean;
+};
+
+type MatchOddsSummary = {
+  sport_key: string;
+  bookmaker: string;
+  last_update: string | null;
+  playerA: OddsPlayerSummary | null;
+  playerB: OddsPlayerSummary | null;
+  value_pick?: "playerA" | "playerB";
+  value_message?: string;
+};
+
 type TournamentSummary = {
   name: string | null;
   surface: string | null;
@@ -147,8 +164,11 @@ type PrematchSummary = {
   extras?: {
     country_p?: string | null;
     country_o?: string | null;
+    display_p?: string | null;
+    display_o?: string | null;
   };
   tournament?: TournamentSummary;
+  odds?: MatchOddsSummary;
 };
 
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
@@ -301,6 +321,45 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     playerBStats.defends_round = metaDefendOpponent;
   }
 
+  const normalizeOddsPlayer = (raw: unknown): OddsPlayerSummary | null => {
+    const record = asRecord(raw);
+    if (!record) return null;
+    const price = asNumber(record.price);
+    const implied = asNumber(record.implied_probability);
+    const diff = asNumber(record.value_diff);
+    const isValue = (() => {
+      if (typeof record.is_value === "boolean") return record.is_value;
+      if (typeof record.is_value === "string") {
+        const lowered = record.is_value.toLowerCase();
+        return lowered === "true" || lowered === "1";
+      }
+      if (typeof record.is_value === "number") return record.is_value !== 0;
+      return false;
+    })();
+    return {
+      price,
+      implied_probability: implied,
+      value_diff: diff,
+      is_value: isValue,
+    };
+  };
+
+  const oddsRecord = asRecord(data?.odds) ?? null;
+  const odds: MatchOddsSummary | undefined = oddsRecord
+    ? {
+        sport_key: asStringLocal(oddsRecord?.sport_key) ?? "tennis_atp",
+        bookmaker: asStringLocal(oddsRecord?.bookmaker) ?? "bookmaker",
+        last_update: asStringLocal(oddsRecord?.last_update),
+        playerA: normalizeOddsPlayer(oddsRecord?.playerA),
+        playerB: normalizeOddsPlayer(oddsRecord?.playerB),
+        value_pick:
+          oddsRecord?.value_pick === "playerA" || oddsRecord?.value_pick === "playerB"
+            ? oddsRecord.value_pick
+            : undefined,
+        value_message: asStringLocal(oddsRecord?.value_message) ?? undefined,
+      }
+    : undefined;
+
   return {
     prob_player: probability,
     playerA: playerAStats,
@@ -326,8 +385,11 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     extras: {
       country_p: typeof (extras as any)?.country_p === "string" ? String((extras as any).country_p) : null,
       country_o: typeof (extras as any)?.country_o === "string" ? String((extras as any).country_o) : null,
+      display_p: typeof (extras as any)?.display_p === "string" ? String((extras as any).display_p) : null,
+      display_o: typeof (extras as any)?.display_o === "string" ? String((extras as any).display_o) : null,
     },
     tournament,
+    odds,
   };
 };
 
@@ -630,6 +692,32 @@ const renderPointsDelta = (stats?: {
         <span className={`ml-2 inline-flex items-center gap-1 ${accentClass}`}>
           {accentValue}
         </span>
+      ) : null}
+    </div>
+  );
+};
+
+const formatOddsPrice = (value: number | null) => {
+  if (value == null) return "N/A";
+  return Number(value).toFixed(2);
+};
+
+const formatValueDiff = (value: number | null) => {
+  if (value == null) return null;
+  return `${(value * 100).toFixed(1)} pp`;
+};
+
+const renderOddsInfo = (odds: MatchOddsSummary | undefined, side: "playerA" | "playerB") => {
+  if (!odds) return null;
+  const target = side === "playerA" ? odds.playerA : odds.playerB;
+  if (!target || target.price == null) return null;
+  const valueLabel = target.is_value ? formatValueDiff(target.value_diff ?? null) : null;
+  return (
+    <div className="mt-0.5 text-[11px] text-slate-400">
+      Cuota {odds.bookmaker}:{" "}
+      <span className="font-semibold text-slate-100">{formatOddsPrice(target.price)}</span>
+      {valueLabel ? (
+        <span className="ml-2 font-semibold text-emerald-400">Valor (+{valueLabel})</span>
       ) : null}
     </div>
   );
@@ -946,6 +1034,7 @@ const highlight = useMemo(() => {
                         points_current: summary?.playerA?.points_current ?? null,
                         points_previous: summary?.playerA?.points_previous ?? null,
                       })}
+                      {renderOddsInfo(summary?.odds, "playerA")}
                       {renderRecentForm(summary?.playerA?.last_results)}
                       {(() => {
                         const chips: any[] = [];
@@ -1004,6 +1093,7 @@ const highlight = useMemo(() => {
                         points_current: summary?.playerB?.points_current ?? null,
                         points_previous: summary?.playerB?.points_previous ?? null,
                       })}
+                      {renderOddsInfo(summary?.odds, "playerB")}
                       {renderRecentForm(summary?.playerB?.last_results)}
                       {(() => {
                         const chips: any[] = [];
@@ -1046,6 +1136,12 @@ const highlight = useMemo(() => {
                       {renderAlertBadges(summary.playerB.alerts)}
                     </div>
                   </div>
+
+                  {summary.odds?.value_message ? (
+                    <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-100">
+                      {summary.odds.value_message}
+                    </div>
+                  ) : null}
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                     <h3 className="text-base font-semibold text-slate-100">Resumen rapido</h3>
