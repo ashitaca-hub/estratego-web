@@ -234,6 +234,76 @@ const sanitizeNameInput = (value: unknown): string | null => {
   return trimmed.length ? trimmed : null;
 };
 
+const collectOutcomeNames = (event: any): string[] => {
+  const names: string[] = [];
+  if (Array.isArray(event?.bookmakers)) {
+    for (const book of event.bookmakers) {
+      if (!Array.isArray(book?.markets)) continue;
+      for (const market of book.markets) {
+        if (!Array.isArray(market?.outcomes)) continue;
+        for (const outcome of market.outcomes) {
+          if (typeof outcome?.name === "string") {
+            names.push(outcome.name);
+          }
+        }
+      }
+    }
+  }
+  return names;
+};
+
+const matchesPlayersStrict = (event: any, playerA: NameMatchData, playerB: NameMatchData): boolean => {
+  const outcomeNames = collectOutcomeNames(event);
+  const matchTarget = (target: NameMatchData): boolean => {
+    if (aliasMatches(event?.home_team, target)) return true;
+    if (aliasMatches(event?.away_team, target)) return true;
+    return outcomeNames.some((name) => aliasMatches(name, target));
+  };
+  return matchTarget(playerA) && matchTarget(playerB);
+};
+
+const matchesPlayersLoose = (
+  event: any,
+  playerA: NameMatchData,
+  playerB: NameMatchData,
+  normalizedEventHint?: string | null,
+): boolean => {
+  const lowerDesc = `${event?.sport_title ?? ""} ${event?.home_team ?? ""} ${event?.away_team ?? ""}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const containsTarget = (target: NameMatchData): boolean => {
+    if (!target.lastName) return false;
+    return lowerDesc.includes(target.lastName);
+  };
+
+  const outcomeNames = collectOutcomeNames(event).join(" ").toLowerCase();
+  const containsTargetInOutcome = (target: NameMatchData): boolean => {
+    if (!target.lastName) return false;
+    return outcomeNames.includes(target.lastName);
+  };
+
+  const aMatches =
+    containsTarget(playerA) ||
+    containsTargetInOutcome(playerA) ||
+    aliasMatches(event?.home_team, playerA) ||
+    aliasMatches(event?.away_team, playerA);
+  const bMatches =
+    containsTarget(playerB) ||
+    containsTargetInOutcome(playerB) ||
+    aliasMatches(event?.home_team, playerB) ||
+    aliasMatches(event?.away_team, playerB);
+
+  if (aMatches && bMatches) return true;
+
+  if (normalizedEventHint && lowerDesc.includes(normalizedEventHint)) {
+    return aMatches || bMatches;
+  }
+
+  return false;
+};
+
 const inferTourPrefix = (tournament?: TournamentSummary | null, extras?: ExtrasSummary | null): "atp" | "wta" => {
   const combined = `${tournament?.name ?? ""} ${tournament?.bucket ?? ""} ${extras?.display_p ?? ""} ${extras?.display_o ?? ""}`.toLowerCase();
   return combined.includes("wta") ? "wta" : "atp";
@@ -378,46 +448,23 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       const events: any[] = await response.json();
       if (!Array.isArray(events)) continue;
 
-      const event = events.find((item) => {
-        if (!item) return false;
-        const home = item.home_team as string | undefined;
-        const away = item.away_team as string | undefined;
-        const homeMatchesA = aliasMatches(home, playerAData);
-        const awayMatchesA = aliasMatches(away, playerAData);
-        const homeMatchesB = aliasMatches(home, playerBData);
-        const awayMatchesB = aliasMatches(away, playerBData);
+      const strictMatches = events.filter((item) => matchesPlayersStrict(item, playerAData, playerBData));
+      let event = strictMatches[0] ?? null;
 
-        if ((homeMatchesA && awayMatchesB) || (homeMatchesB && awayMatchesA)) return true;
-
-        const outcomeNames: string[] = [];
-        if (Array.isArray(item.bookmakers)) {
-          for (const book of item.bookmakers) {
-            if (!Array.isArray(book?.markets)) continue;
-            for (const market of book.markets) {
-              if (!Array.isArray(market?.outcomes)) continue;
-              for (const outcome of market.outcomes) {
-                if (outcome?.name) outcomeNames.push(outcome.name);
-              }
-            }
-          }
+      if (!event && forceMatch) {
+        const looseMatches = events.filter((item) =>
+          matchesPlayersLoose(item, playerAData, playerBData, normalizedEventHintLower),
+        );
+        if (looseMatches.length) {
+          event = looseMatches[0];
+          console.info("[odds] loose match selected", {
+            sportKey,
+            eventId: event?.id ?? null,
+            home_team: event?.home_team,
+            away_team: event?.away_team,
+          });
         }
-
-        const outcomeMatchesA = outcomeNames.some((name) => aliasMatches(name, playerAData));
-        const outcomeMatchesB = outcomeNames.some((name) => aliasMatches(name, playerBData));
-        if (outcomeMatchesA && outcomeMatchesB) return true;
-
-        if (forceMatch) {
-          const lowerDesc = `${item.sport_title ?? ""} ${item.home_team ?? ""} ${item.away_team ?? ""}`.toLowerCase();
-          if (
-            (normalizedEventHintLower && lowerDesc.includes(normalizedEventHintLower)) ||
-            (eventNameHint && lowerDesc.includes(eventNameHint.toLowerCase()))
-          ) {
-            return true;
-          }
-        }
-
-        return false;
-      });
+      }
 
       if (!event) continue;
       console.info("[odds] matched event", {
