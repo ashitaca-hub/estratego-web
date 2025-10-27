@@ -929,6 +929,7 @@ function PrematchDialog({
             year: new Date().getFullYear(),
             playerA_name: match?.top?.name ?? null,
             playerB_name: match?.bottom?.name ?? null,
+            event_name: bracket?.event ?? null,
           }),
         });
         if (!res.ok) {
@@ -1739,6 +1740,7 @@ export function EstrategoBracketApp() {
       year: new Date().getFullYear(),
       playerA_name: m.top?.name ?? null,
       playerB_name: m.bottom?.name ?? null,
+      event_name: bracket.event ?? null,
     };
 
     console.log("Payload prematch:", payload);

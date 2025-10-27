@@ -160,10 +160,15 @@ const ODDS_VALUE_THRESHOLD = Number.isNaN(Number.parseFloat(process.env.ODDS_VAL
 const ODDS_TOURNAMENT_OVERRIDES: Record<string, string> = {
   "atp paris masters": "tennis_atp_paris_masters",
   "atp paris": "tennis_atp_paris_masters",
+  "paris masters": "tennis_atp_paris_masters",
+  "rolex paris masters": "tennis_atp_paris_masters",
   "atp shanghai masters": "tennis_atp_shanghai_masters",
   "atp finals": "tennis_atp_finals",
   "wta finals": "tennis_wta_finals",
   "wta elite trophy": "tennis_wta_elite_trophy",
+  "swiss indoors basel": "tennis_atp_basel",
+  "atp basel": "tennis_atp_basel",
+  "atp geneva open": "tennis_atp_geneva_open",
 };
 
 type NameMatchData = {
@@ -244,10 +249,12 @@ const slugifyTournament = (tournamentName: string, prefix: "atp" | "wta"): strin
 const determineSportKeyCandidates = (
   tournament?: TournamentSummary | null,
   extras?: ExtrasSummary | null,
+  eventNameHint?: string | null,
 ): string[] => {
   const candidates: string[] = [];
   const prefix = inferTourPrefix(tournament, extras);
   const normalizedName = tournament?.name?.trim().toLowerCase() ?? null;
+  const normalizedEventHint = eventNameHint?.trim().toLowerCase() ?? null;
 
   if (normalizedName && ODDS_TOURNAMENT_OVERRIDES[normalizedName]) {
     candidates.push(ODDS_TOURNAMENT_OVERRIDES[normalizedName]);
@@ -256,6 +263,29 @@ const determineSportKeyCandidates = (
   if (normalizedName) {
     const slugCandidate = slugifyTournament(normalizedName, prefix);
     if (slugCandidate) candidates.push(slugCandidate);
+  }
+
+  if (normalizedEventHint) {
+    if (ODDS_TOURNAMENT_OVERRIDES[normalizedEventHint]) {
+      candidates.push(ODDS_TOURNAMENT_OVERRIDES[normalizedEventHint]);
+    }
+    const slugFromHint = slugifyTournament(normalizedEventHint, prefix);
+    if (slugFromHint) candidates.push(slugFromHint);
+
+    if (normalizedEventHint.includes("paris")) {
+      candidates.push("tennis_atp_paris_masters");
+      candidates.push("tennis_wta_paris");
+    }
+    if (normalizedEventHint.includes("basel")) {
+      candidates.push("tennis_atp_basel");
+      candidates.push("tennis_atp_swiss_indoors_basel");
+    }
+    if (normalizedEventHint.includes("shanghai")) {
+      candidates.push("tennis_atp_shanghai_masters");
+    }
+    if (normalizedEventHint.includes("madrid")) {
+      candidates.push(`tennis_${prefix}_madrid_open`);
+    }
   }
 
   candidates.push(`tennis_${prefix}`);
@@ -294,6 +324,7 @@ type FetchOddsInput = {
   playerBName?: string | null;
   tournament?: TournamentSummary | null;
   extras?: ExtrasSummary | null;
+  eventNameHint?: string | null;
   playerAProbability: number | null;
   playerBProbability: number | null;
 };
@@ -303,14 +334,14 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
     console.info("[odds] ODDS_API_KEY not configured; skipping odds retrieval");
     return null;
   }
-  const { playerAName, playerBName, tournament, extras } = input;
+  const { playerAName, playerBName, tournament, extras, eventNameHint } = input;
   if (!playerAName || !playerBName) return null;
 
   const playerAData = buildNameMatchData(playerAName);
   const playerBData = buildNameMatchData(playerBName);
   if (!playerAData.normalized || !playerBData.normalized) return null;
 
-  const sportKeys = determineSportKeyCandidates(tournament, extras);
+  const sportKeys = determineSportKeyCandidates(tournament, extras, eventNameHint);
   console.info("[odds] attempting odds lookup", {
     playerA: playerAData.original,
     playerB: playerBData.original,
@@ -1050,10 +1081,12 @@ export async function POST(req: Request) {
     year,
     playerA_name: playerANameInput,
     playerB_name: playerBNameInput,
+    event_name: eventNameInput,
   } = body;
 
   const playerANameFromBody = sanitizeNameInput(playerANameInput);
   const playerBNameFromBody = sanitizeNameInput(playerBNameInput);
+  const eventNameHint = sanitizeNameInput(eventNameInput);
 
   const normalizedYear = extractYear(year);
   const isoYearFromInput = isoFromString(year);
@@ -1219,3 +1252,4 @@ export async function POST(req: Request) {
     headers: { "content-type": "application/json" },
   });
 }
+
