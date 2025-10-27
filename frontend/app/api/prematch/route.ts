@@ -299,7 +299,10 @@ type FetchOddsInput = {
 };
 
 const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary | null> => {
-  if (!ODDS_API_KEY) return null;
+  if (!ODDS_API_KEY) {
+    console.info("[odds] ODDS_API_KEY not configured; skipping odds retrieval");
+    return null;
+  }
   const { playerAName, playerBName, tournament, extras } = input;
   if (!playerAName || !playerBName) return null;
 
@@ -308,6 +311,12 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   if (!playerAData.normalized || !playerBData.normalized) return null;
 
   const sportKeys = determineSportKeyCandidates(tournament, extras);
+  console.info("[odds] attempting odds lookup", {
+    playerA: playerAData.original,
+    playerB: playerBData.original,
+    sportKeys,
+    tournament: tournament?.name ?? null,
+  });
 
   for (const sportKey of sportKeys) {
     try {
@@ -318,10 +327,13 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       url.searchParams.set("oddsFormat", ODDS_DEFAULT_ODDS_FORMAT);
       url.searchParams.set("dateFormat", ODDS_DEFAULT_DATE_FORMAT);
 
+      console.info("[odds] fetch", { sportKey, url: url.toString() });
+
       const response = await fetch(url.toString(), { cache: "no-store" });
       if (!response.ok) {
         if (response.status === 404) continue;
-        console.warn("Odds API response not OK", sportKey, response.status);
+        const body = await response.text();
+        console.warn("[odds] API response not OK", { sportKey, status: response.status, body });
         continue;
       }
 
@@ -358,6 +370,14 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       });
 
       if (!event) continue;
+      console.info("[odds] matched event", {
+        sportKey,
+        eventId: event.id ?? null,
+        home_team: event.home_team,
+        away_team: event.away_team,
+        commence_time: event.commence_time,
+        bookmakers: Array.isArray(event.bookmakers) ? event.bookmakers.map((b: any) => b.key ?? b.title).slice(0, 5) : [],
+      });
 
       const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
       if (!bookmaker) continue;
@@ -412,6 +432,17 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
           } (${(valueDiffB * 100).toFixed(1)} pp)`;
       }
 
+      console.info("[odds] returning odds", {
+        sportKey,
+        bookmaker: bookmaker.key ?? bookmaker.title,
+        priceA,
+        priceB,
+        impliedA,
+        impliedB,
+        valueDiffA,
+        valueDiffB,
+      });
+
       return {
         sport_key: sportKey,
         bookmaker: typeof bookmaker.title === "string" && bookmaker.title.trim().length > 0 ? bookmaker.title : bookmaker.key ?? "bookmaker",
@@ -434,9 +465,15 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
         value_message: valueMessage,
       };
     } catch (err) {
-      console.warn("Error fetching odds", sportKey, err);
+      console.warn("[odds] error fetching odds", { sportKey, err });
     }
   }
+
+  console.info("[odds] no odds found", {
+    playerA: playerAData.original,
+    playerB: playerBData.original,
+    sportKeys,
+  });
 
   return null;
 };
