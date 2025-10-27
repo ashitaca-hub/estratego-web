@@ -250,7 +250,7 @@ const determineSportKeyCandidates = (
   tournament?: TournamentSummary | null,
   extras?: ExtrasSummary | null,
   eventNameHint?: string | null,
-): string[] => {
+): { sportKey: string; forceMatch?: boolean }[] => {
   const candidates: string[] = [];
   const prefix = inferTourPrefix(tournament, extras);
   const normalizedName = tournament?.name?.trim().toLowerCase() ?? null;
@@ -290,7 +290,11 @@ const determineSportKeyCandidates = (
 
   candidates.push(`tennis_${prefix}`);
 
-  return Array.from(new Set(candidates));
+  const unique = Array.from(new Set(candidates));
+  return unique.map((sportKey, idx) => ({
+    sportKey,
+    forceMatch: idx === 0 && sportKey !== `tennis_${prefix}`,
+  }));
 };
 
 const pickPreferredBookmaker = (bookmakers: any[]): any | null => {
@@ -337,19 +341,22 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   const { playerAName, playerBName, tournament, extras, eventNameHint } = input;
   if (!playerAName || !playerBName) return null;
 
+  const normalizedEventHintLower = eventNameHint ? eventNameHint.toLowerCase() : null;
+
   const playerAData = buildNameMatchData(playerAName);
   const playerBData = buildNameMatchData(playerBName);
   if (!playerAData.normalized || !playerBData.normalized) return null;
 
-  const sportKeys = determineSportKeyCandidates(tournament, extras, eventNameHint);
+  const sportKeyEntries = determineSportKeyCandidates(tournament, extras, eventNameHint);
   console.info("[odds] attempting odds lookup", {
     playerA: playerAData.original,
     playerB: playerBData.original,
-    sportKeys,
+    sportKeys: sportKeyEntries.map((entry) => entry.sportKey),
     tournament: tournament?.name ?? null,
   });
 
-  for (const sportKey of sportKeys) {
+  for (const entry of sportKeyEntries) {
+    const { sportKey, forceMatch } = entry;
     try {
       const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/odds`);
       url.searchParams.set("apiKey", ODDS_API_KEY);
@@ -397,7 +404,19 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
 
         const outcomeMatchesA = outcomeNames.some((name) => aliasMatches(name, playerAData));
         const outcomeMatchesB = outcomeNames.some((name) => aliasMatches(name, playerBData));
-        return outcomeMatchesA && outcomeMatchesB;
+        if (outcomeMatchesA && outcomeMatchesB) return true;
+
+        if (forceMatch) {
+          const lowerDesc = `${item.sport_title ?? ""} ${item.home_team ?? ""} ${item.away_team ?? ""}`.toLowerCase();
+          if (
+            (normalizedEventHintLower && lowerDesc.includes(normalizedEventHintLower)) ||
+            (eventNameHint && lowerDesc.includes(eventNameHint.toLowerCase()))
+          ) {
+            return true;
+          }
+        }
+
+        return false;
       });
 
       if (!event) continue;
@@ -1236,6 +1255,7 @@ export async function POST(req: Request) {
         playerBName,
         tournament: formatted.tournament ?? null,
         extras: formatted.extras ?? null,
+        eventNameHint,
         playerAProbability,
         playerBProbability,
       });
@@ -1252,4 +1272,7 @@ export async function POST(req: Request) {
     headers: { "content-type": "application/json" },
   });
 }
+
+
+
 
