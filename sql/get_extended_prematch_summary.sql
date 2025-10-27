@@ -304,46 +304,6 @@ BEGIN
              match_id DESC NULLS LAST
     LIMIT 1;
 
-  IF points_current_a IS NULL THEN
-    SELECT points
-      INTO points_current_a
-      FROM estratego_v1.rankings_snapshot_v2 rs
-     WHERE rs.player_id = player_a_id
-       AND LEFT(rs.match_id, 4)::INT <= p_year
-     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
-     LIMIT 1;
-
-    IF points_current_a IS NULL THEN
-      SELECT points
-        INTO points_current_a
-        FROM estratego_v1.rankings_snapshot rs
-       WHERE rs.player_id = player_a_id
-         AND LEFT(rs.match_id, 4)::INT <= p_year
-       ORDER BY LEFT(rs.match_id, 4)::INT DESC
-       LIMIT 1;
-    END IF;
-  END IF;
-
-  IF points_current_b IS NULL THEN
-    SELECT points
-      INTO points_current_b
-      FROM estratego_v1.rankings_snapshot_v2 rs
-     WHERE rs.player_id = player_b_id
-       AND LEFT(rs.match_id, 4)::INT <= p_year
-     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
-     LIMIT 1;
-
-    IF points_current_b IS NULL THEN
-      SELECT points
-        INTO points_current_b
-        FROM estratego_v1.rankings_snapshot rs
-       WHERE rs.player_id = player_b_id
-         AND LEFT(rs.match_id, 4)::INT <= p_year
-       ORDER BY LEFT(rs.match_id, 4)::INT DESC
-       LIMIT 1;
-    END IF;
-  END IF;
-
   IF days_since_a IS NOT NULL THEN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
     rest_score_a := LEAST(1.0, GREATEST(0.0, rest_score_a));
@@ -555,46 +515,6 @@ BEGIN
             END DESC,
             match_id DESC NULLS LAST
    LIMIT 1;
-
-  IF points_prev_a IS NULL THEN
-    SELECT points
-      INTO points_prev_a
-      FROM estratego_v1.rankings_snapshot_v2 rs
-     WHERE rs.player_id = player_a_id
-       AND LEFT(rs.match_id, 4)::INT <= prev_year
-     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
-     LIMIT 1;
-
-    IF points_prev_a IS NULL THEN
-      SELECT points
-        INTO points_prev_a
-        FROM estratego_v1.rankings_snapshot rs
-       WHERE rs.player_id = player_a_id
-         AND LEFT(rs.match_id, 4)::INT <= prev_year
-       ORDER BY LEFT(rs.match_id, 4)::INT DESC
-       LIMIT 1;
-    END IF;
-  END IF;
-
-  IF points_prev_b IS NULL THEN
-    SELECT points
-      INTO points_prev_b
-      FROM estratego_v1.rankings_snapshot_v2 rs
-     WHERE rs.player_id = player_b_id
-       AND LEFT(rs.match_id, 4)::INT <= prev_year
-     ORDER BY LEFT(rs.match_id, 4)::INT DESC, rs.created_at DESC
-     LIMIT 1;
-
-    IF points_prev_b IS NULL THEN
-      SELECT points
-        INTO points_prev_b
-        FROM estratego_v1.rankings_snapshot rs
-       WHERE rs.player_id = player_b_id
-         AND LEFT(rs.match_id, 4)::INT <= prev_year
-       ORDER BY LEFT(rs.match_id, 4)::INT DESC
-       LIMIT 1;
-    END IF;
-  END IF;
 
   IF points_current_a IS NOT NULL AND points_prev_a IS NOT NULL THEN
     points_delta_a := points_current_a - points_prev_a;
