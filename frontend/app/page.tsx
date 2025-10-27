@@ -590,19 +590,22 @@ const renderPointsDelta = (stats?: {
     );
   }
 
-  const className =
-    delta == null || delta === 0
-      ? "text-slate-400"
-      : delta > 0
-      ? "text-emerald-400"
-      : "text-rose-400";
-  const sign = delta != null && delta > 0 ? "+" : "";
-  const displayValue =
-    delta != null
-      ? `${sign}${formatPointsValue(delta)} pts`
-      : current != null
-      ? `${formatPointsValue(current)} pts`
-      : "—";
+  let mainValue: string | null = null;
+  let accentValue: string | null = null;
+  let accentClass = "text-slate-400";
+
+  if (delta != null) {
+    const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+    accentValue = `${sign}${formatPointsValue(Math.abs(delta))} pts`;
+    if (delta > 0) accentClass = "text-emerald-400";
+    else if (delta < 0) accentClass = "text-rose-400";
+  }
+
+  if (current != null) {
+    mainValue = `${formatPointsValue(current)} pts`;
+  } else if (previous != null) {
+    mainValue = `${formatPointsValue(previous)} pts`;
+  }
 
   const titleParts: string[] = [];
   if (current != null) {
@@ -622,7 +625,12 @@ const renderPointsDelta = (stats?: {
           : undefined
       }
     >
-      <span className={className}>{displayValue}</span>
+      {mainValue ? <span className="text-slate-300">{mainValue}</span> : null}
+      {accentValue ? (
+        <span className={`ml-2 inline-flex items-center gap-1 ${accentClass}`}>
+          {accentValue}
+        </span>
+      ) : null}
     </div>
   );
 };
