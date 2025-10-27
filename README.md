@@ -1,8 +1,8 @@
 # Estratego WebApp
 
-Aplicación para el análisis **prematch** y la simulación de brackets de torneos ATP/WTA.  
-El frontend está construido en **Next.js 14** y consume funciones SQL alojadas en **Supabase (PostgreSQL)**.  
-El repositorio incluye los scripts SQL necesarios y los workflows de automatización (GitHub Actions).
+AplicaciÃƒÂ³n para el anÃƒÂ¡lisis **prematch** y la simulaciÃƒÂ³n de brackets de torneos ATP/WTA.  
+El frontend estÃƒÂ¡ construido en **Next.js 14** y consume funciones SQL alojadas en **Supabase (PostgreSQL)**.  
+El repositorio incluye los scripts SQL necesarios y los workflows de automatizaciÃƒÂ³n (GitHub Actions).
 
 ---
 
@@ -10,9 +10,9 @@ El repositorio incluye los scripts SQL necesarios y los workflows de automatizac
 
 ```
 estratego-web/
-├── frontend/                # Next.js 14 + TailwindCSS + shadcn/ui
-├── sql/                     # Scripts y funciones SQL para Supabase
-└── .github/                 # Workflows CI/CD (carga de cuadros, builds, tests)
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ frontend/                # Next.js 14 + TailwindCSS + shadcn/ui
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sql/                     # Scripts y funciones SQL para Supabase
+Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ .github/                 # Workflows CI/CD (carga de cuadros, builds, tests)
 ```
 
 ---
@@ -26,6 +26,8 @@ estratego-web/
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `ODDS_API_KEY` *(opcional, activa la consulta de cuotas de The Odds API)*
+  - `ODDS_CACHE_TTL_MINUTES` *(opcional, minutos que mantiene la caché; por defecto 180)*
+  - `ODDS_CACHE_DISABLED` *(opcional, establece `true` para saltar la caché)*
 
 ---
 
@@ -37,46 +39,46 @@ npm install
 npm run dev
 ```
 
-La aplicación queda disponible en [http://localhost:3000](http://localhost:3000).
+La aplicaciÃƒÂ³n queda disponible en [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ## Funcionalidades principales
 
-### Análisis Prematch Extendido
+### AnÃƒÂ¡lisis Prematch Extendido
 
 - Endpoint `POST /api/prematch`.
 - Invoca `public.get_extended_prematch_summary` y devuelve, para cada jugador:
-  - % de victorias en el año / superficie / mes actual.
+  - % de victorias en el aÃƒÂ±o / superficie / mes actual.
   - % de victorias frente a TOP10.
-  - Score de adaptación a la pista (court speed).
-  - Ranking más reciente + score normalizado (transformación exponencial).
-  - Días desde el último partido; se generan alertas si hay exceso o falta de ritmo.
-  - Head to head y último enfrentamiento.
-  - Ronda defendida respecto al año anterior.
+  - Score de adaptaciÃƒÂ³n a la pista (court speed).
+  - Ranking mÃƒÂ¡s reciente + score normalizado (transformaciÃƒÂ³n exponencial).
+  - DÃƒÂ­as desde el ÃƒÂºltimo partido; se generan alertas si hay exceso o falta de ritmo.
+  - Head to head y ÃƒÂºltimo enfrentamiento.
+  - Ronda defendida respecto al aÃƒÂ±o anterior.
   - **Nuevos scores**: `ranking_score`, `h2h_score`, `motivation_score`.
   - **Alertas** (mensajes):
-    - Falta de ritmo (≥ 20 días sin competir).
-    - Carga de partidos (>6 partidos en 15 días).
-    - Retiro en el último partido.
-  - Ventaja de localía: se compara el `ioc` del jugador con el país del torneo (`estratego_v1.tournaments.country`).
+    - Falta de ritmo (Ã¢â€°Â¥ 20 dÃƒÂ­as sin competir).
+    - Carga de partidos (>6 partidos en 15 dÃƒÂ­as).
+    - Retiro en el ÃƒÂºltimo partido.
+  - Ventaja de localÃƒÂ­a: se compara el `ioc` del jugador con el paÃƒÂ­s del torneo (`estratego_v1.tournaments.country`).
   - Cuotas h2h (The Odds API): muestra la cuota decimal (Pinnacle por defecto) y resalta cuando el modelo detecta valor frente al precio ofrecido.
 
-> Los pesos de cada métrica se mantienen en `estratego_v1.prematch_metric_weights`.  
-> Puedes ajustarlos o actualizarlos con los INSERT/UPDATE indicados en la sección de **Notas técnicas**.
+> Los pesos de cada mÃƒÂ©trica se mantienen en `estratego_v1.prematch_metric_weights`.  
+> Puedes ajustarlos o actualizarlos con los INSERT/UPDATE indicados en la secciÃƒÂ³n de **Notas tÃƒÂ©cnicas**.
 
-### Simulación de Torneos
+### SimulaciÃƒÂ³n de Torneos
 
 - `POST /api/simulate`: ejecuta `public.simulate_full_tournament`, tomando la probabilidad prematch para cada partido y promoviendo ganadores hasta la final.
-- `POST /api/simulate/multiple`: lanza la simulación N veces, registra resultados en `public.simulation_results` y borra las tablas temporales después de cada iteración. Usa batching para evitar `statement_timeout`.
+- `POST /api/simulate/multiple`: lanza la simulaciÃƒÂ³n N veces, registra resultados en `public.simulation_results` y borra las tablas temporales despuÃƒÂ©s de cada iteraciÃƒÂ³n. Usa batching para evitar `statement_timeout`.
 - `POST /api/reset`: devuelve el cuadro (`draw_matches`) al estado original.
 - `GET /api/tournament/[tourney_id]`: proporciona el draw actual para renderizarlo en la UI.
 
 ### Analytics de simulaciones
 
-- Página `/simulation/[tourneyId]/analytics`:
+- PÃƒÂ¡gina `/simulation/[tourneyId]/analytics`:
   - Tabla resumida con apariciones por ronda de cada jugador (conteo y porcentaje).
-  - Tarjeta “Top finalistas y semifinalistas” (top 4 jugadores).
+  - Tarjeta Ã¢â‚¬Å“Top finalistas y semifinalistasÃ¢â‚¬Â (top 4 jugadores).
   - Enriquecida con nombres, banderas y marcadores locales (home advantage).
 
 ---
@@ -86,45 +88,44 @@ La aplicación queda disponible en [http://localhost:3000](http://localhost:3000
 ### Tablas clave
 
 - `estratego_v1.matches_full`: historial de partidos.
-- `estratego_v1.players`: información de jugadores (`player_id`, `ioc`, etc.).
+- `estratego_v1.players`: informaciÃƒÂ³n de jugadores (`player_id`, `ioc`, etc.).
 - `estratego_v1.rankings_snapshot_v2`: ranking y puntos asociados a cada match (reemplaza la tabla legacy).
 - `estratego_v1.h2h`: head-to-head normalizado.
-- `estratego_v1.tournaments`: metadatos de torneos (fecha, superficie, país anfitrión).
+- `estratego_v1.tournaments`: metadatos de torneos (fecha, superficie, paÃƒÂ­s anfitriÃƒÂ³n).
 - `estratego_v1.court_speed_ranking_norm`: ranking de velocidad de pista.
-- `estratego_v1.prematch_metric_weights`: pesos configurables para el análisis prematch.
+- `estratego_v1.prematch_metric_weights`: pesos configurables para el anÃƒÂ¡lisis prematch.
 - `public.draw_matches` / `public.draw_entries`: infraestructura del cuadro principal.
 - `public.simulation_results`: resultados acumulados por corrida (tourney_id, run_number, player_id, reached_round).
 
 ### Funciones disponibles en `sql/`
 
-| Script | Descripción |
+| Script | DescripciÃƒÂ³n |
 |--------|-------------|
-| `get_extended_prematch_summary.sql` | Calcula métricas, scores y alertas de dos jugadores en un torneo dado (extrae ranking de `rankings_snapshot_v2`, evalúa localía, etc.). |
+| `get_extended_prematch_summary.sql` | Calcula mÃ©tricas, scores y alertas de dos jugadores en un torneo dado (extrae ranking de `rankings_snapshot_v2`, evalÃºa localÃ­a, etc.). |
 | `build_draw_matches.sql` | Reconstruye los cruces iniciales (`draw_matches`) a partir de `draw_entries`, tomando el `draw_size` de `tournaments_info`. |
-| `simulate_full_tournament.sql` | Restaura draw inicial, ejecuta partidos según probabilidad y promueve ganadores hasta la final. |
-| `simulate_multiple_runs.sql` | Ejecuta la simulación completa N veces, limpia tablas temporales y registra resultados en `simulation_results`. |
-
-> Ejecuta los scripts íntegramente en Supabase (`CREATE OR REPLACE FUNCTION ...`).  
-> Tras cada pull que modifique estos archivos, vuelve a lanzarlos para mantener la lógica sincronizada.
+| `create_odds_cache.sql` | Crea la tabla `odds_cache` y polÃ­ticas bÃ¡sicas para cachear cuotas y reducir llamadas a The Odds API. |
+| `simulate_full_tournament.sql` | Restaura draw inicial, ejecuta partidos segÃºn probabilidad y promueve ganadores hasta la final. |
+| `simulate_multiple_runs.sql` | Ejecuta la simulaciÃ³n completa N veces, limpia tablas temporales y registra resultados en `simulation_results`. |
+> Ejecuta los scripts ÃƒÂ­ntegramente en Supabase (`CREATE OR REPLACE FUNCTION ...`).  
+> Tras cada pull que modifique estos archivos, vuelve a lanzarlos para mantener la lÃƒÂ³gica sincronizada.
 
 ---
 
 ## Workflows (GitHub Actions)
 
-- Carga de cuadros (PDF → CSV → Supabase).
-- Normalización e inserción de jugadores (`draw_entries`).
-- Ejecución de `build_draw_matches`.
-- Build y tests automáticos del frontend.
+- Carga de cuadros (PDF Ã¢â€ â€™ CSV Ã¢â€ â€™ Supabase).
+- NormalizaciÃƒÂ³n e inserciÃƒÂ³n de jugadores (`draw_entries`).
+- EjecuciÃƒÂ³n de `build_draw_matches`.
+- Build y tests automÃƒÂ¡ticos del frontend.
 
 ---
 
-## Notas técnicas
+## Notas tecnicas
 
-- Muchos campos de fechas se almacenan como `INT` (formato `YYYYMMDD`). Usa `TO_DATE`/`EXTRACT` según corresponda.
-- `draw_matches` debe mantener el orden lógico (`R32-1` ... `R32-16`).
-- Aseg?rate de que `tournaments_info.draw_size` refleja 16/32/64 antes de ejecutar `build_draw_matches`; de lo contrario solo generar? la primera ronda disponible.
-- El frontend obtiene nombres desde `players_min`; mantén esa tabla sincronizada para reflejar las últimas altas.
-- Después de simulaciones masivas, puedes rearmar el cuadro llamando a `build_draw_matches`.
+- Muchos campos de fechas se almacenan como `INT` (formato `YYYYMMDD`). Usa `TO_DATE`/`EXTRACT` segun corresponda.
+- `draw_matches` debe mantener el orden logico (`R32-1` ... `R32-16`).
+- Asegurate de que `tournaments_info.draw_size` refleja 16/32/64 antes de ejecutar `build_draw_matches`; de lo contrario solo generara la primera ronda disponible.
+- Las cuotas consultadas se cachean en `public.odds_cache` (TTL configurable con `ODDS_CACHE_TTL_MINUTES`).
 
 ### Ajuste de pesos (ejemplo)
 
@@ -134,12 +135,12 @@ VALUES
   ('ranking_score',     0.30),
   ('h2h_score',         0.10),
   ('motivation_score',  0.05),
-  ('rest_score',        0.00) -- rest_score solo actúa como alerta visual
+  ('rest_score',        0.00) -- rest_score solo actÃƒÂºa como alerta visual
 ON CONFLICT (metric)
 DO UPDATE SET weight = EXCLUDED.weight;
 ```
 
-### Asignación de países
+### AsignaciÃƒÂ³n de paÃƒÂ­ses
 
 ```
 ALTER TABLE estratego_v1.tournaments ADD COLUMN IF NOT EXISTS country CHAR(3);
@@ -149,18 +150,16 @@ SET country = 'SUI' -- (ejemplo: Basel)
 WHERE tourney_id IN ('2024-0328','2025-0328');
 ```
 
-> `country` debe usar el mismo IOC que `estratego_v1.players.ioc` para que la localía funcione.
+> `country` debe usar el mismo IOC que `estratego_v1.players.ioc` para que la localÃƒÂ­a funcione.
 
 ---
 
-## Documentación complementaria
+## DocumentaciÃƒÂ³n complementaria
 
-- `sql/get_extended_prematch_summary.sql`: lógica detallada del análisis prematch y generación de alertas.
-- `frontend/app/api/prematch/route.ts`: formatea la respuesta, añade metadatos del torneo y exporta a `/api/prematch`.
-- `frontend/app/simulation/[tourneyId]/analytics/page.tsx`: obtención y visualización del dashboard de resultados acumulados.
+- `sql/get_extended_prematch_summary.sql`: lÃƒÂ³gica detallada del anÃƒÂ¡lisis prematch y generaciÃƒÂ³n de alertas.
+- `frontend/app/api/prematch/route.ts`: formatea la respuesta, aÃƒÂ±ade metadatos del torneo y exporta a `/api/prematch`.
+- `frontend/app/simulation/[tourneyId]/analytics/page.tsx`: obtenciÃƒÂ³n y visualizaciÃƒÂ³n del dashboard de resultados acumulados.
 
 ---
 
-Última actualización: **octubre 2025**
-
-
+Ultima actualizacion: **octubre 2025**
