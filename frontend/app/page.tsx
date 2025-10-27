@@ -1737,8 +1737,8 @@ export function EstrategoBracketApp() {
       playerB_id: playerBId,
       tourney_id: bracket.tourney_id,
       year: new Date().getFullYear(),
-      playerA_name: match?.top?.name ?? null,
-      playerB_name: match?.bottom?.name ?? null,
+      playerA_name: m.top?.name ?? null,
+      playerB_name: m.bottom?.name ?? null,
     };
 
     console.log("Payload prematch:", payload);
