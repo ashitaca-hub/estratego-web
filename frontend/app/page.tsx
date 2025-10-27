@@ -115,6 +115,7 @@ type PlayerPrematchStats = {
   rest_score?: number | null;
   motivation_score?: number | null;
   alerts?: string[];
+  last_results?: string[];
 };
 
 type TournamentSummary = {
@@ -235,6 +236,19 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     alerts: (() => {
       const arr = asStringArray(p?.alerts);
       return arr.length ? arr : undefined;
+    })(),
+    last_results: (() => {
+      const arr = asStringArray(p?.last_results);
+      if (!arr.length) return undefined;
+      const normalized = arr
+        .map((item) => item.trim().toUpperCase())
+        .map((item) => {
+          if (item.startsWith("W")) return "W";
+          if (item.startsWith("L")) return "L";
+          return item;
+        })
+        .slice(0, 5);
+      return normalized.length ? normalized : undefined;
     })(),
   });
 
@@ -477,6 +491,74 @@ const renderCourtSpeedBadge = (score?: number | null) => {
       <span className="text-xs text-slate-400">
         {tier.percent}% {tier.label}
       </span>
+    </div>
+  );
+};
+
+const RECENT_FORM_LIMIT = 5;
+
+const renderRecentForm = (
+  results?: string[] | null,
+  align: "left" | "right" | "center" = "center",
+) => {
+  const normalized = Array.from({ length: RECENT_FORM_LIMIT }, (_, idx) => {
+    const raw = results?.[idx] ?? null;
+    if (!raw) return null;
+    const upper = raw.trim().toUpperCase();
+    if (upper.startsWith("W")) return "W";
+    if (upper.startsWith("L")) return "L";
+    return upper;
+  });
+
+  const ariaLabel = normalized
+    .map((outcome, idx) => {
+      const position = idx === 0 ? "más reciente" : `#${idx + 1}`;
+      if (outcome === "W") return `Victoria (${position})`;
+      if (outcome === "L") return `Derrota (${position})`;
+      return `Sin dato (${position})`;
+    })
+    .join(", ");
+
+  const justifyClass =
+    align === "left" ? "justify-start" : align === "right" ? "justify-end" : "justify-center";
+
+  return (
+    <div
+      className={`mt-1 flex ${justifyClass} gap-1`}
+      role="img"
+      aria-label={`Ultimos ${RECENT_FORM_LIMIT} partidos: ${ariaLabel}`}
+    >
+      {normalized.map((outcome, idx) => {
+        const isWin = outcome === "W";
+        const isLoss = outcome === "L";
+        const colorClass = isWin ? "bg-emerald-400" : isLoss ? "bg-rose-500" : "bg-slate-700";
+        const opacityClass = outcome ? "" : "opacity-40";
+        const highlightClass = idx === 0 ? "ring-2 ring-offset-1 ring-white/40 ring-offset-slate-950" : "";
+        const titleText =
+          outcome === "W"
+            ? idx === 0
+              ? "Ultimo partido: victoria"
+              : "Victoria"
+            : outcome === "L"
+            ? idx === 0
+              ? "Ultimo partido: derrota"
+              : "Derrota"
+            : idx === 0
+            ? "Ultimo partido: sin registro"
+            : "Sin registro";
+        return (
+          <span
+            key={`recent-form-${idx}`}
+            className="relative flex h-3.5 w-3.5 items-center justify-center"
+            aria-hidden="true"
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${colorClass} ${opacityClass} ${highlightClass}`}
+              title={titleText}
+            />
+          </span>
+        );
+      })}
     </div>
   );
 };
@@ -787,6 +869,7 @@ const highlight = useMemo(() => {
                           </div>
                         );
                       })()}
+                      {renderRecentForm(summary?.playerA?.last_results)}
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
@@ -839,6 +922,7 @@ const highlight = useMemo(() => {
                           </div>
                         );
                       })()}
+                      {renderRecentForm(summary?.playerB?.last_results)}
                       {(() => {
                         const chips: any[] = [];
                         const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));

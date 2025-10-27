@@ -19,6 +19,7 @@ type PlayerSummary = {
   rest_score?: number | null;
   motivation_score?: number | null;
   alerts?: string[] | null;
+  last_results?: string[] | null;
 };
 
 type TournamentSummary = {
@@ -390,6 +391,23 @@ const buildPlayer = (
       return asStringArray(fromPrefix);
     });
 
+  const rawLastResults =
+    asStringArray(playerRecord?.["last_results"]) ??
+    getFromPrefixes((source, prefix) => {
+      const fromPrefix = source[`${prefix}_last_results`] ?? source[`last_results_${prefix}`];
+      return asStringArray(fromPrefix);
+    });
+
+  const normalizedLastResults =
+    rawLastResults
+      ?.map((value) => {
+        const upper = value.trim().toUpperCase();
+        if (upper.startsWith("W")) return "W";
+        if (upper.startsWith("L")) return "L";
+        return upper;
+      })
+      .slice(0, 5) ?? null;
+
   return {
     win_pct_year: winPctYear,
     win_pct_surface: winPctSurface,
@@ -407,6 +425,7 @@ const buildPlayer = (
     rest_score: restScore,
     motivation_score: motivationScore,
     alerts,
+    last_results: normalizedLastResults && normalizedLastResults.length > 0 ? normalizedLastResults : undefined,
   };
 };
 

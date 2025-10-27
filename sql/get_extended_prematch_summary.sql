@@ -59,6 +59,8 @@ DECLARE
 
   alerts_a TEXT[] := ARRAY[]::TEXT[];
   alerts_b TEXT[] := ARRAY[]::TEXT[];
+  last_results_a TEXT[] := NULL;
+  last_results_b TEXT[] := NULL;
 
   round_last_a TEXT := NULL;
   round_last_b TEXT := NULL;
@@ -233,6 +235,24 @@ BEGIN
       ORDER BY mf.tourney_date DESC
       LIMIT 1
     ) AS last_match_b;
+
+  SELECT ARRAY(
+           SELECT CASE WHEN winner_id = player_a_id THEN 'W' ELSE 'L' END
+           FROM estratego_v1.matches_full mf
+           WHERE winner_id = player_a_id OR loser_id = player_a_id
+           ORDER BY mf.tourney_date DESC, mf.match_id DESC NULLS LAST
+           LIMIT 5
+         )
+    INTO last_results_a;
+
+  SELECT ARRAY(
+           SELECT CASE WHEN winner_id = player_b_id THEN 'W' ELSE 'L' END
+           FROM estratego_v1.matches_full mf
+           WHERE winner_id = player_b_id OR loser_id = player_b_id
+           ORDER BY mf.tourney_date DESC, mf.match_id DESC NULLS LAST
+           LIMIT 5
+         )
+    INTO last_results_b;
 
   IF days_since_a IS NOT NULL THEN
     rest_score_a := 1 / (1 + ABS(days_since_a - 7)::FLOAT / 7);
@@ -513,7 +533,8 @@ BEGIN
       'h2h_score', h2h_score_a,
       'rest_score', rest_score_a,
       'motivation_score', motivation_score_a,
-      'alerts', to_jsonb(alerts_a)
+      'alerts', to_jsonb(alerts_a),
+      'last_results', to_jsonb(COALESCE(last_results_a, ARRAY[]::TEXT[]))
     ),
     'playerB', jsonb_build_object(
       'win_pct_year', CASE WHEN rec_b_year.total > 0 THEN rec_b_year.wins * 100.0 / rec_b_year.total ELSE NULL END,
@@ -532,7 +553,8 @@ BEGIN
       'h2h_score', h2h_score_b,
       'rest_score', rest_score_b,
       'motivation_score', motivation_score_b,
-      'alerts', to_jsonb(alerts_b)
+      'alerts', to_jsonb(alerts_b),
+      'last_results', to_jsonb(COALESCE(last_results_b, ARRAY[]::TEXT[]))
     ),
     'h2h', jsonb_build_object(
       'wins', h2h_rec.wins,
