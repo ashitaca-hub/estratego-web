@@ -73,6 +73,7 @@ DECLARE
   defend_label_a TEXT := NULL;
   defend_label_b TEXT := NULL;
   tourney_base TEXT;
+  tourney_base_int INT;
   prev_year INT;
   tourney_prev_id TEXT;
   meta_defend_round TEXT := NULL;
@@ -467,8 +468,28 @@ BEGIN
   END IF;
 
   tourney_base := split_part(p_tourney_id, '-', 2);
+  IF tourney_base ~ '^\d+$' THEN
+    tourney_base_int := tourney_base::INT;
+  ELSE
+    tourney_base_int := NULL;
+  END IF;
+
   prev_year := p_year - 1;
-  tourney_prev_id := prev_year::TEXT || '-' || tourney_base;
+
+  IF tourney_base_int IS NOT NULL THEN
+    SELECT t.tourney_id
+      INTO tourney_prev_id
+      FROM estratego_v1.tournaments t
+     WHERE LEFT(t.tourney_id, 4)::INT = prev_year
+       AND split_part(t.tourney_id, '-', 2) ~ '^\d+$'
+       AND split_part(t.tourney_id, '-', 2)::INT = tourney_base_int
+     ORDER BY t.tourney_date DESC
+     LIMIT 1;
+  END IF;
+
+  IF tourney_prev_id IS NULL THEN
+    tourney_prev_id := prev_year::TEXT || '-' || tourney_base;
+  END IF;
 
   SELECT CASE
            WHEN winner_id = player_a_id THEN winner_rank_points
