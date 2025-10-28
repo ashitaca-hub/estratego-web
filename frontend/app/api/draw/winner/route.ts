@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -34,7 +34,15 @@ const parseMatchNumber = (id: string): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-async function promoteWinners(client: ReturnType<typeof createClient>, tourneyId: string) {
+type RawMatchRow = {
+  id: unknown;
+  round: unknown;
+  top_id: unknown;
+  bot_id: unknown;
+  winner_id: unknown;
+};
+
+async function promoteWinners(client: SupabaseClient, tourneyId: string) {
   const { data, error } = await client
     .from("draw_matches")
     .select("id, round, top_id, bot_id, winner_id")
@@ -44,13 +52,23 @@ async function promoteWinners(client: ReturnType<typeof createClient>, tourneyId
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []).map((row) => ({
-    id: String(row.id),
-    round: String(row.round),
-    top_id: toStr(row.top_id),
-    bot_id: toStr(row.bot_id),
-    winner_id: toStr(row.winner_id),
-  })) as MatchRow[];
+  const source = Array.isArray(data) ? (data as RawMatchRow[]) : [];
+  const rows = source
+    .map((row) => {
+      const id = toStr(row.id);
+      const round = toStr(row.round);
+      if (!id || !round) {
+        return null;
+      }
+      return {
+        id,
+        round,
+        top_id: toStr(row.top_id),
+        bot_id: toStr(row.bot_id),
+        winner_id: toStr(row.winner_id),
+      } satisfies MatchRow;
+    })
+    .filter((row): row is MatchRow => row !== null);
 
   const rowsByRound = new Map<string, MatchRow[]>();
   for (const round of roundOrder) {
@@ -135,9 +153,12 @@ async function promoteWinners(client: ReturnType<typeof createClient>, tourneyId
       throw new Error(upsertError.message);
     }
 
-    rowsByRound.set(
-      next,
-      upserts.map(
+    const unaffected = existingNext.filter(
+      (row) => !upserts.some((item) => item.id === row.id),
+    );
+    const nextRows = [
+      ...unaffected,
+      ...upserts.map(
         ({ id, round: roundName, top_id, bot_id, winner_id }): MatchRow => ({
           id,
           round: roundName,
@@ -146,7 +167,8 @@ async function promoteWinners(client: ReturnType<typeof createClient>, tourneyId
           winner_id,
         }),
       ),
-    );
+    ];
+    rowsByRound.set(next, nextRows);
   }
 }
 
@@ -160,7 +182,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
 
   const tourneyId = typeof body.tourney_id === "string" ? body.tourney_id.trim() : "";
@@ -170,7 +192,7 @@ export async function POST(request: Request) {
 
   if (!tourneyId || !matchId || !winnerId) {
     return NextResponse.json(
-      { error: "Parámetros incompletos" },
+      { error: "Parametros incompletos" },
       { status: 400 },
     );
   }
