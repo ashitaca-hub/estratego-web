@@ -1,64 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-type RawMatchRow = {
-  tourney_id: unknown;
-  best_of: unknown;
-  surface: unknown;
-  winner_id: unknown;
-  loser_id: unknown;
-  w_ace: unknown;
-  w_df: unknown;
-  l_ace: unknown;
-  l_df: unknown;
-};
-
-type Role = "winner" | "loser";
-
-type MetricAccumulator = {
-  sum: number;
-  count: number;
-};
-
-const makeMetric = (): MetricAccumulator => ({ sum: 0, count: 0 });
-
-const toNumber = (value: unknown): number | null => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === "bigint") {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : null;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-
-const addValue = (metric: MetricAccumulator, value: unknown) => {
-  const num = toNumber(value);
-  if (num === null) return;
-  metric.sum += num;
-  metric.count += 1;
-};
-
-const average = (metric: MetricAccumulator): number | null => {
-  if (!metric.count) return null;
-  return metric.sum / metric.count;
-};
-
-const normalizeSurface = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed.toUpperCase();
-};
-
 const normalizePlayerId = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
   if (typeof value === "string") {
@@ -74,7 +16,14 @@ const normalizePlayerId = (value: unknown): string | null => {
   return null;
 };
 
-const previousTourneyId = (tourneyId: string | null): string | null => {
+const normalizeSurface = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.toUpperCase();
+};
+
+const derivePreviousTourney = (tourneyId: string | null): string | null => {
   if (!tourneyId) return null;
   const match = tourneyId.match(/^(\d{4})(-.+)$/);
   if (!match) return null;
@@ -83,9 +32,6 @@ const previousTourneyId = (tourneyId: string | null): string | null => {
   return `${year - 1}${match[2]}`;
 };
 
-const MATCH_FIELDS =
-  "tourney_id,best_of,surface,winner_id,loser_id,w_ace,w_df,l_ace,l_df";
-
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -93,8 +39,8 @@ export async function POST(request: Request) {
   }
 
   const rawPlayerId = (body as Record<string, unknown>).player_id;
-  const surfaceRaw = (body as Record<string, unknown>).surface;
-  const tourneyIdRaw = (body as Record<string, unknown>).tourney_id;
+  const rawSurface = (body as Record<string, unknown>).surface;
+  const rawTourneyId = (body as Record<string, unknown>).tourney_id;
 
   const playerId = normalizePlayerId(rawPlayerId);
   if (!playerId) {
@@ -104,158 +50,69 @@ export async function POST(request: Request) {
     );
   }
 
-  const normalizedSurface = normalizeSurface(surfaceRaw);
+  const normalizedSurface = normalizeSurface(rawSurface);
   const tourneyId =
-    typeof tourneyIdRaw === "string" ? tourneyIdRaw.trim() : null;
-  const previousTourney = previousTourneyId(tourneyId ?? null);
+    typeof rawTourneyId === "string" ? rawTourneyId.trim() : null;
+  const previousTourney = derivePreviousTourney(tourneyId);
 
   const numericPlayer = Number.parseInt(playerId, 10);
-  const filterValue: string | number = Number.isFinite(numericPlayer)
-    ? numericPlayer
-    : playerId;
-
-  const [winnerResult, loserResult] = await Promise.all([
-    supabase
-      .schema("estratego_v1")
-      .from("matches")
-      .select(MATCH_FIELDS)
-      .eq("winner_id", filterValue)
-      .limit(2000),
-    supabase
-      .schema("estratego_v1")
-      .from("matches")
-      .select(MATCH_FIELDS)
-      .eq("loser_id", filterValue)
-      .limit(2000),
-  ]);
-
-  if (winnerResult.error || loserResult.error) {
-    const message =
-      winnerResult.error?.message ??
-      loserResult.error?.message ??
-      "Error consultando estratego_v1.matches";
-    const status = (winnerResult.error?.code === "42501" || loserResult.error?.code === "42501")
-      ? 403
-      : 500;
-    return NextResponse.json({ error: message }, { status });
+  if (!Number.isFinite(numericPlayer)) {
+    return NextResponse.json(
+      { error: "player_id debe ser numerico" },
+      { status: 400 },
+    );
   }
 
-  const entries: Array<{ row: RawMatchRow; role: Role }> = [];
+  const { data, error } = await supabase
+    .rpc("player_stats_summary", {
+      p_player_id: numericPlayer,
+      p_surface: normalizedSurface,
+      p_tourney_id: tourneyId,
+    })
+    .maybeSingle();
 
-  (winnerResult.data as RawMatchRow[] | null)?.forEach((row) => {
-    entries.push({ row, role: "winner" });
-  });
-  (loserResult.data as RawMatchRow[] | null)?.forEach((row) => {
-    entries.push({ row, role: "loser" });
-  });
-
-  const metrics = {
-    aces_best_of_3: makeMetric(),
-    aces_same_surface: makeMetric(),
-    aces_previous_tournament: makeMetric(),
-    df_best_of_3: makeMetric(),
-    df_same_surface: makeMetric(),
-    df_previous_tournament: makeMetric(),
-    opponent_aces_best_of_3_same_surface: makeMetric(),
-    opponent_df_best_of_3_same_surface: makeMetric(),
-  };
-
-  const counts: Record<keyof typeof metrics, number> = {
-    aces_best_of_3: 0,
-    aces_same_surface: 0,
-    aces_previous_tournament: 0,
-    df_best_of_3: 0,
-    df_same_surface: 0,
-    df_previous_tournament: 0,
-    opponent_aces_best_of_3_same_surface: 0,
-    opponent_df_best_of_3_same_surface: 0,
-  };
-
-  for (const { row, role } of entries) {
-    const bestOf = toNumber(row.best_of);
-    const currentSurface = normalizeSurface(row.surface);
-    const matchTourneyId = normalizePlayerId(row.tourney_id);
-
-    const acesFor = role === "winner" ? row.w_ace : row.l_ace;
-    const dfFor = role === "winner" ? row.w_df : row.l_df;
-    const acesAgainst = role === "winner" ? row.l_ace : row.w_ace;
-    const dfAgainst = role === "winner" ? row.l_df : row.w_df;
-
-    if (bestOf === 3) {
-      addValue(metrics.aces_best_of_3, acesFor);
-      if (toNumber(acesFor) !== null) counts.aces_best_of_3 += 1;
-
-      addValue(metrics.df_best_of_3, dfFor);
-      if (toNumber(dfFor) !== null) counts.df_best_of_3 += 1;
-    }
-
-    if (normalizedSurface && currentSurface === normalizedSurface) {
-      addValue(metrics.aces_same_surface, acesFor);
-      if (toNumber(acesFor) !== null) counts.aces_same_surface += 1;
-
-      addValue(metrics.df_same_surface, dfFor);
-      if (toNumber(dfFor) !== null) counts.df_same_surface += 1;
-
-      if (bestOf === 3) {
-        addValue(
-          metrics.opponent_aces_best_of_3_same_surface,
-          acesAgainst,
-        );
-        if (toNumber(acesAgainst) !== null) {
-          counts.opponent_aces_best_of_3_same_surface += 1;
-        }
-
-        addValue(
-          metrics.opponent_df_best_of_3_same_surface,
-          dfAgainst,
-        );
-        if (toNumber(dfAgainst) !== null) {
-          counts.opponent_df_best_of_3_same_surface += 1;
-        }
-      }
-    }
-
-    if (previousTourney && matchTourneyId === previousTourney) {
-      addValue(metrics.aces_previous_tournament, acesFor);
-      if (toNumber(acesFor) !== null) counts.aces_previous_tournament += 1;
-
-      addValue(metrics.df_previous_tournament, dfFor);
-      if (toNumber(dfFor) !== null) counts.df_previous_tournament += 1;
-    }
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const payload = data ?? null;
 
   return NextResponse.json({
-    player_id: playerId,
+    player_id: payload?.player_id ?? playerId,
     filters: {
-      surface: normalizedSurface,
-      tourney_id: tourneyId,
-      previous_tourney_id: previousTourney,
+      surface: payload?.surface_used ?? normalizedSurface,
+      tourney_id: payload?.tourney_id ?? tourneyId,
+      previous_tourney_id:
+        payload?.previous_tourney_id ?? previousTourney,
     },
     stats: {
-      aces_best_of_3: average(metrics.aces_best_of_3),
-      aces_same_surface: average(metrics.aces_same_surface),
-      aces_previous_tournament: average(metrics.aces_previous_tournament),
-      double_faults_best_of_3: average(metrics.df_best_of_3),
-      double_faults_same_surface: average(metrics.df_same_surface),
-      double_faults_previous_tournament: average(metrics.df_previous_tournament),
-      opponent_aces_best_of_3_same_surface: average(
-        metrics.opponent_aces_best_of_3_same_surface,
-      ),
-      opponent_double_faults_best_of_3_same_surface: average(
-        metrics.opponent_df_best_of_3_same_surface,
-      ),
+      aces_best_of_3: payload?.aces_best_of_3 ?? null,
+      aces_same_surface: payload?.aces_same_surface ?? null,
+      aces_previous_tournament: payload?.aces_previous_tournament ?? null,
+      double_faults_best_of_3: payload?.double_faults_best_of_3 ?? null,
+      double_faults_same_surface: payload?.double_faults_same_surface ?? null,
+      double_faults_previous_tournament:
+        payload?.double_faults_previous_tournament ?? null,
+      opponent_aces_best_of_3_same_surface:
+        payload?.opponent_aces_best_of_3_same_surface ?? null,
+      opponent_double_faults_best_of_3_same_surface:
+        payload?.opponent_double_faults_best_of_3_same_surface ?? null,
     },
     samples: {
-      aces_best_of_3: counts.aces_best_of_3,
-      aces_same_surface: counts.aces_same_surface,
-      aces_previous_tournament: counts.aces_previous_tournament,
-      double_faults_best_of_3: counts.df_best_of_3,
-      double_faults_same_surface: counts.df_same_surface,
-      double_faults_previous_tournament: counts.df_previous_tournament,
+      aces_best_of_3: payload?.sample_aces_best_of_3 ?? 0,
+      aces_same_surface: payload?.sample_aces_same_surface ?? 0,
+      aces_previous_tournament:
+        payload?.sample_aces_previous_tournament ?? 0,
+      double_faults_best_of_3:
+        payload?.sample_double_faults_best_of_3 ?? 0,
+      double_faults_same_surface:
+        payload?.sample_double_faults_same_surface ?? 0,
+      double_faults_previous_tournament:
+        payload?.sample_double_faults_previous_tournament ?? 0,
       opponent_aces_best_of_3_same_surface:
-        counts.opponent_aces_best_of_3_same_surface,
+        payload?.sample_opponent_aces_best_of_3_same_surface ?? 0,
       opponent_double_faults_best_of_3_same_surface:
-        counts.opponent_df_best_of_3_same_surface,
+        payload?.sample_opponent_double_faults_best_of_3_same_surface ?? 0,
     },
   });
 }
