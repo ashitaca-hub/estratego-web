@@ -76,13 +76,13 @@ begin
   ),
   calc as (
     select
-      best_of,
-      surface_norm,
-      tourney_id as match_tourney_id,
-      case when is_winner then w_ace else l_ace end as aces_for,
-      case when is_winner then w_df else l_df end as df_for,
-      case when is_winner then l_ace else w_ace end as aces_against,
-      case when is_winner then l_df else w_df end as df_against
+      base.best_of,
+      base.surface_norm,
+      base.tourney_id as match_tourney_id,
+      case when base.is_winner then base.w_ace else base.l_ace end as aces_for,
+      case when base.is_winner then base.w_df else base.l_df end as df_for,
+      case when base.is_winner then base.l_ace else base.w_ace end as aces_against,
+      case when base.is_winner then base.l_df else base.w_df end as df_against
     from base
   )
   select
