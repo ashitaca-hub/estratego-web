@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3 } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -51,12 +51,14 @@ function MatchCard({
   onSelectWinner,
   disableSelection,
   isSaving,
+  onOpenPlayerStats,
 }: {
   m: Match;
   onClick?: (m: Match) => void;
   onSelectWinner?: (m: Match, winner: "top" | "bottom") => void;
   disableSelection?: boolean;
   isSaving?: boolean;
+  onOpenPlayerStats?: (m: Match, player: Player) => void;
 }) {
   const isTopWinner = m.winnerId === m.top.id;
   const isBottomWinner = m.winnerId === m.bottom.id;
@@ -86,6 +88,15 @@ function MatchCard({
     isWinner: boolean,
     selectable: boolean,
   ) => {
+    const statsAvailable = selectable && typeof onOpenPlayerStats === "function";
+    const onStatsClick = (
+      event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
+    ) => {
+      event.stopPropagation();
+      if (!statsAvailable) return;
+      onOpenPlayerStats?.(m, player);
+    };
+
     const buttonClasses = [
       "inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs transition",
       isWinner ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-slate-500 hover:bg-slate-100",
@@ -111,6 +122,16 @@ function MatchCard({
             {player.name}
             {player.seed ? ` (${player.seed})` : ""}
           </span>
+          {statsAvailable && (
+            <button
+              type="button"
+              aria-label={`Ver estadísticas de ${player.name}`}
+              className="text-slate-500 transition hover:text-slate-200 focus-visible:outline-none"
+              onClick={onStatsClick}
+            >
+              <BarChart3 className="h-4 w-4" />
+            </button>
+          )}
         </div>
         {isWinner && !isSaving && (
           <span className="text-xs font-medium text-emerald-400">Ganador</span>
@@ -446,6 +467,39 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
     tournament,
     odds,
   };
+};
+
+type PlayerStatsMetrics = {
+  aces_best_of_3: number | null;
+  aces_same_surface: number | null;
+  aces_previous_tournament: number | null;
+  double_faults_best_of_3: number | null;
+  double_faults_same_surface: number | null;
+  double_faults_previous_tournament: number | null;
+  opponent_aces_best_of_3_same_surface: number | null;
+  opponent_double_faults_best_of_3_same_surface: number | null;
+};
+
+type PlayerStatsSamples = {
+  aces_best_of_3: number;
+  aces_same_surface: number;
+  aces_previous_tournament: number;
+  double_faults_best_of_3: number;
+  double_faults_same_surface: number;
+  double_faults_previous_tournament: number;
+  opponent_aces_best_of_3_same_surface: number;
+  opponent_double_faults_best_of_3_same_surface: number;
+};
+
+type PlayerStatsResponse = {
+  player_id: string;
+  filters: {
+    surface: string | null;
+    tourney_id: string | null;
+    previous_tourney_id: string | null;
+  };
+  stats: PlayerStatsMetrics;
+  samples: PlayerStatsSamples;
 };
 
 function formatPct(value: number | null) {
@@ -1556,6 +1610,172 @@ const highlight = useMemo(() => {
 }
 
 
+function PlayerStatsDialog({
+  open,
+  onOpenChange,
+  player,
+  match,
+  bracket,
+  data,
+  loading,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  player: Player | null;
+  match: Match | null;
+  bracket: Bracket | null;
+  data: PlayerStatsResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const playerName = player?.name ?? "Jugador";
+  const playerSeed = player?.seed;
+  const surfaceLabel = bracket?.surface ?? data?.filters.surface ?? null;
+  const tournamentName = bracket?.event ?? data?.filters.tourney_id ?? null;
+  const roundLabel = match?.round ?? null;
+
+  const metrics: Array<{
+    key: keyof PlayerStatsMetrics;
+    label: string;
+  }> = [
+    {
+      key: "aces_best_of_3",
+      label: "Media de aces (partidos a 3 sets)",
+    },
+    {
+      key: "aces_same_surface",
+      label: "Media de aces (misma superficie del torneo actual)",
+    },
+    {
+      key: "aces_previous_tournament",
+      label: "Media de aces en el torneo del año anterior",
+    },
+    {
+      key: "double_faults_best_of_3",
+      label: "Media de dobles faltas (partidos a 3 sets)",
+    },
+    {
+      key: "double_faults_same_surface",
+      label: "Media de dobles faltas (misma superficie del torneo actual)",
+    },
+    {
+      key: "double_faults_previous_tournament",
+      label: "Media de dobles faltas en el torneo del año anterior",
+    },
+    {
+      key: "opponent_aces_best_of_3_same_surface",
+      label: "Aces recibidos (partidos a 3 sets, misma superficie)",
+    },
+    {
+      key: "opponent_double_faults_best_of_3_same_surface",
+      label:
+        "Dobles faltas cometidas por el rival (partidos a 3 sets, misma superficie)",
+    },
+  ];
+
+  const formatValue = (value: number | null): string =>
+    value === null ? "Sin datos" : value.toFixed(2);
+
+  const renderSamples = (key: keyof PlayerStatsSamples): string => {
+    const sample = data?.samples?.[key] ?? 0;
+    return sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "Sin datos";
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-100">
+            <BarChart3 className="h-5 w-5 text-emerald-400" />
+            Estadísticas de {playerName}
+            {typeof playerSeed === "number" ? (
+              <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs text-slate-300">
+                Seed {playerSeed}
+              </span>
+            ) : null}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <div className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300 md:grid-cols-2">
+            <div>
+              <span className="text-slate-500">Torneo actual:</span>{" "}
+              <span className="font-medium text-slate-100">
+                {tournamentName ?? "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">Superficie:</span>{" "}
+              <span className="font-medium text-slate-100">
+                {surfaceLabel ?? "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">Ronda:</span>{" "}
+              <span className="font-medium text-slate-100">
+                {roundLabel ?? "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">ID jugador:</span>{" "}
+              <span className="font-mono text-slate-300">{player?.id ?? "N/A"}</span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-sm text-slate-400">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando promedios...
+            </div>
+          ) : error ? (
+            <div className="flex items-start gap-2 rounded-xl border border-red-600/50 bg-red-950/40 p-3 text-sm text-red-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <span>{error}</span>
+            </div>
+          ) : data ? (
+            <div className="grid gap-3">
+              {metrics.map(({ key, label }) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
+                >
+                  <div className="max-w-xs text-sm text-slate-200">{label}</div>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold text-emerald-300">
+                      {formatValue(data.stats?.[key] ?? null)}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Muestras: {renderSamples(key as keyof PlayerStatsSamples)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400">
+              Selecciona un jugador válido para ver sus estadísticas.
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-500">
+            Los promedios se calculan a partir de <code>estratego_v1.matches</code>,
+            considerando <span className="font-medium">best_of = 3</span> y la
+            superficie indicada cuando aplica. Los valores nulos no influyen en la media.
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-6 py-4">
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 export function EstrategoBracketApp() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -1569,6 +1789,11 @@ export function EstrategoBracketApp() {
   const [multiSimLoading, setMultiSimLoading] = useState(false);
   const [multiSimProgress, setMultiSimProgress] = useState<{ done: number; total: number } | null>(null);
   const [savingMatchId, setSavingMatchId] = useState<string | null>(null);
+  const [playerStatsOpen, setPlayerStatsOpen] = useState(false);
+  const [playerStatsTarget, setPlayerStatsTarget] = useState<{ match: Match; player: Player } | null>(null);
+  const [playerStatsData, setPlayerStatsData] = useState<PlayerStatsResponse | null>(null);
+  const [playerStatsLoading, setPlayerStatsLoading] = useState(false);
+  const [playerStatsError, setPlayerStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -1628,6 +1853,89 @@ export function EstrategoBracketApp() {
     }
     return map;
   }, [bracket, rounds]);
+
+  useEffect(() => {
+    if (!playerStatsOpen || !playerStatsTarget || !bracket) {
+      return;
+    }
+
+    const rawId = playerStatsTarget.player?.id;
+    const normalizedId =
+      typeof rawId === "string"
+        ? rawId.trim()
+        : rawId !== null && rawId !== undefined
+          ? String(rawId).trim()
+          : "";
+
+    if (!normalizedId) {
+      setPlayerStatsError("Jugador sin identificador valido.");
+      setPlayerStatsData(null);
+      setPlayerStatsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setPlayerStatsLoading(true);
+    setPlayerStatsError(null);
+    setPlayerStatsData(null);
+
+    const payload = {
+      player_id: normalizedId,
+      surface: bracket.surface ?? null,
+      tourney_id: bracket.tourney_id ?? null,
+    };
+
+    (async () => {
+      try {
+        const response = await fetch("/api/player/stats", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          let message = `Error ${response.status}`;
+          try {
+            const data = await response.json();
+            if (data && typeof data.error === "string" && data.error.trim()) {
+              message = data.error.trim();
+            }
+          } catch {
+            const text = await response.text();
+            if (text.trim()) {
+              message = text.trim();
+            }
+          }
+          if (!controller.signal.aborted) {
+            setPlayerStatsError(message);
+          }
+          return;
+        }
+
+        const payloadJson = (await response.json()) as PlayerStatsResponse;
+        if (!controller.signal.aborted) {
+          setPlayerStatsData(payloadJson);
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setPlayerStatsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!controller.signal.aborted) {
+          setPlayerStatsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    playerStatsOpen,
+    playerStatsTarget,
+    bracket?.surface,
+    bracket?.tourney_id,
+  ]);
 
   const onSelectWinner = async (match: Match, slot: "top" | "bottom") => {
     if (!bracket) return;
@@ -1693,6 +2001,36 @@ export function EstrategoBracketApp() {
       alert("Ocurrio un error al guardar el ganador.");
     } finally {
       setSavingMatchId(null);
+    }
+  };
+
+  const onOpenPlayerStats = (match: Match, player: Player) => {
+    const rawId = player?.id;
+    const normalizedId =
+      typeof rawId === "string"
+        ? rawId.trim()
+        : rawId !== null && rawId !== undefined
+          ? String(rawId).trim()
+          : "";
+    if (!normalizedId) return;
+    const upper = normalizedId.toUpperCase();
+    if (!upper || upper === "TBD" || upper === "BYE") return;
+    setPlayerStatsTarget({
+      match,
+      player: { ...player, id: normalizedId },
+    });
+    setPlayerStatsOpen(true);
+  };
+
+  const handlePlayerStatsOpenChange = (open: boolean) => {
+    if (!open) {
+      setPlayerStatsOpen(false);
+      setPlayerStatsTarget(null);
+      setPlayerStatsData(null);
+      setPlayerStatsError(null);
+      setPlayerStatsLoading(false);
+    } else if (playerStatsTarget) {
+      setPlayerStatsOpen(true);
     }
   };
 
@@ -1953,6 +2291,7 @@ export function EstrategoBracketApp() {
                       m={m}
                       onClick={onOpenPrematch}
                       onSelectWinner={onSelectWinner}
+                      onOpenPlayerStats={onOpenPlayerStats}
                       disableSelection={Boolean(savingMatchId) && savingMatchId !== m.id}
                       isSaving={savingMatchId === m.id}
                     />
@@ -1972,6 +2311,16 @@ export function EstrategoBracketApp() {
       </div>
 
       <PrematchDialog open={pmOpen} onOpenChange={setPmOpen} match={pmMatch} bracket={bracket} />
+      <PlayerStatsDialog
+        open={playerStatsOpen}
+        onOpenChange={handlePlayerStatsOpenChange}
+        player={playerStatsTarget?.player ?? null}
+        match={playerStatsTarget?.match ?? null}
+        bracket={bracket}
+        data={playerStatsData}
+        loading={playerStatsLoading}
+        error={playerStatsError}
+      />
     </div>
   );
 }
