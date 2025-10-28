@@ -88,42 +88,75 @@ begin
     v_surface,
     v_tourney,
     v_previous,
-    avg(aces_for) filter (where best_of = 3 and aces_for is not null),
-    avg(aces_for) filter (where v_surface is not null and surface_norm = v_surface and aces_for is not null),
-    avg(aces_for) filter (where v_previous is not null and calc.tourney_id = v_previous and aces_for is not null),
-    avg(df_for) filter (where best_of = 3 and df_for is not null),
-    avg(df_for) filter (where v_surface is not null and surface_norm = v_surface and df_for is not null),
-    avg(df_for) filter (where v_previous is not null and calc.tourney_id = v_previous and df_for is not null),
-    avg(aces_against) filter (
-      where best_of = 3
-        and v_surface is not null
-        and surface_norm = v_surface
-        and aces_against is not null
+    avg(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null),
+    avg(calc.aces_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.aces_for is not null
     ),
-    avg(df_against) filter (
-      where best_of = 3
-        and v_surface is not null
-        and surface_norm = v_surface
-        and df_against is not null
+    avg(calc.aces_for) filter (
+      where v_previous is not null
+        and calc.tourney_id = v_previous
+        and calc.aces_for is not null
     ),
-    count(aces_for) filter (where best_of = 3 and aces_for is not null),
-    count(aces_for) filter (where v_surface is not null and surface_norm = v_surface and aces_for is not null),
-    count(aces_for) filter (where v_previous is not null and calc.tourney_id = v_previous and aces_for is not null),
-    count(df_for) filter (where best_of = 3 and df_for is not null),
-    count(df_for) filter (where v_surface is not null and surface_norm = v_surface and df_for is not null),
-    count(df_for) filter (where v_previous is not null and calc.tourney_id = v_previous and df_for is not null),
-    count(aces_against) filter (
-      where best_of = 3
-        and v_surface is not null
-        and surface_norm = v_surface
-        and aces_against is not null
+    avg(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
+    avg(calc.df_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.df_for is not null
     ),
-    count(df_against) filter (
-      where best_of = 3
+    avg(calc.df_for) filter (
+      where v_previous is not null
+        and calc.tourney_id = v_previous
+        and calc.df_for is not null
+    ),
+    avg(calc.aces_against) filter (
+      where calc.best_of = 3
         and v_surface is not null
-        and surface_norm = v_surface
-        and df_against is not null
-    );
+        and calc.surface_norm = v_surface
+        and calc.aces_against is not null
+    ),
+    avg(calc.df_against) filter (
+      where calc.best_of = 3
+        and v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.df_against is not null
+    ),
+    count(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null),
+    count(calc.aces_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.aces_for is not null
+    ),
+    count(calc.aces_for) filter (
+      where v_previous is not null
+        and calc.tourney_id = v_previous
+        and calc.aces_for is not null
+    ),
+    count(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
+    count(calc.df_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.df_for is not null
+    ),
+    count(calc.df_for) filter (
+      where v_previous is not null
+        and calc.tourney_id = v_previous
+        and calc.df_for is not null
+    ),
+    count(calc.aces_against) filter (
+      where calc.best_of = 3
+        and v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.aces_against is not null
+    ),
+    count(calc.df_against) filter (
+      where calc.best_of = 3
+        and v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.df_against is not null
+    )
+  from calc;
 end;
 $$;
 
