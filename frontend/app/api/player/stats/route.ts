@@ -1,6 +1,29 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+type PlayerStatsRow = {
+  player_id: string | null;
+  surface_used: string | null;
+  tourney_id: string | null;
+  previous_tourney_id: string | null;
+  aces_best_of_3: number | null;
+  aces_same_surface: number | null;
+  aces_previous_tournament: number | null;
+  double_faults_best_of_3: number | null;
+  double_faults_same_surface: number | null;
+  double_faults_previous_tournament: number | null;
+  opponent_aces_best_of_3_same_surface: number | null;
+  opponent_double_faults_best_of_3_same_surface: number | null;
+  sample_aces_best_of_3: number | null;
+  sample_aces_same_surface: number | null;
+  sample_aces_previous_tournament: number | null;
+  sample_double_faults_best_of_3: number | null;
+  sample_double_faults_same_surface: number | null;
+  sample_double_faults_previous_tournament: number | null;
+  sample_opponent_aces_best_of_3_same_surface: number | null;
+  sample_opponent_double_faults_best_of_3_same_surface: number | null;
+};
+
 const normalizePlayerId = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
   if (typeof value === "string") {
@@ -30,6 +53,24 @@ const derivePreviousTourney = (tourneyId: string | null): string | null => {
   const year = Number.parseInt(match[1], 10);
   if (!Number.isFinite(year)) return null;
   return `${year - 1}${match[2]}`;
+};
+
+const coerceNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "bigint") {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 };
 
 export async function POST(request: Request) {
@@ -64,12 +105,12 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabase
-    .rpc("player_stats_summary", {
+    .rpc<PlayerStatsRow>("player_stats_summary", {
       p_player_id: numericPlayer,
       p_surface: normalizedSurface,
       p_tourney_id: tourneyId,
     })
-    .maybeSingle();
+    .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -78,7 +119,7 @@ export async function POST(request: Request) {
   const payload = data ?? null;
 
   return NextResponse.json({
-    player_id: payload?.player_id ?? playerId,
+    player_id: payload?.player_id ?? String(numericPlayer),
     filters: {
       surface: payload?.surface_used ?? normalizedSurface,
       tourney_id: payload?.tourney_id ?? tourneyId,
@@ -86,33 +127,36 @@ export async function POST(request: Request) {
         payload?.previous_tourney_id ?? previousTourney,
     },
     stats: {
-      aces_best_of_3: payload?.aces_best_of_3 ?? null,
-      aces_same_surface: payload?.aces_same_surface ?? null,
-      aces_previous_tournament: payload?.aces_previous_tournament ?? null,
-      double_faults_best_of_3: payload?.double_faults_best_of_3 ?? null,
-      double_faults_same_surface: payload?.double_faults_same_surface ?? null,
-      double_faults_previous_tournament:
-        payload?.double_faults_previous_tournament ?? null,
-      opponent_aces_best_of_3_same_surface:
-        payload?.opponent_aces_best_of_3_same_surface ?? null,
-      opponent_double_faults_best_of_3_same_surface:
-        payload?.opponent_double_faults_best_of_3_same_surface ?? null,
+      aces_best_of_3: coerceNumber(payload?.aces_best_of_3),
+      aces_same_surface: coerceNumber(payload?.aces_same_surface),
+      aces_previous_tournament: coerceNumber(payload?.aces_previous_tournament),
+      double_faults_best_of_3: coerceNumber(payload?.double_faults_best_of_3),
+      double_faults_same_surface: coerceNumber(payload?.double_faults_same_surface),
+      double_faults_previous_tournament: coerceNumber(
+        payload?.double_faults_previous_tournament,
+      ),
+      opponent_aces_best_of_3_same_surface: coerceNumber(
+        payload?.opponent_aces_best_of_3_same_surface,
+      ),
+      opponent_double_faults_best_of_3_same_surface: coerceNumber(
+        payload?.opponent_double_faults_best_of_3_same_surface,
+      ),
     },
     samples: {
-      aces_best_of_3: payload?.sample_aces_best_of_3 ?? 0,
-      aces_same_surface: payload?.sample_aces_same_surface ?? 0,
+      aces_best_of_3: coerceNumber(payload?.sample_aces_best_of_3) ?? 0,
+      aces_same_surface: coerceNumber(payload?.sample_aces_same_surface) ?? 0,
       aces_previous_tournament:
-        payload?.sample_aces_previous_tournament ?? 0,
+        coerceNumber(payload?.sample_aces_previous_tournament) ?? 0,
       double_faults_best_of_3:
-        payload?.sample_double_faults_best_of_3 ?? 0,
+        coerceNumber(payload?.sample_double_faults_best_of_3) ?? 0,
       double_faults_same_surface:
-        payload?.sample_double_faults_same_surface ?? 0,
+        coerceNumber(payload?.sample_double_faults_same_surface) ?? 0,
       double_faults_previous_tournament:
-        payload?.sample_double_faults_previous_tournament ?? 0,
+        coerceNumber(payload?.sample_double_faults_previous_tournament) ?? 0,
       opponent_aces_best_of_3_same_surface:
-        payload?.sample_opponent_aces_best_of_3_same_surface ?? 0,
+        coerceNumber(payload?.sample_opponent_aces_best_of_3_same_surface) ?? 0,
       opponent_double_faults_best_of_3_same_surface:
-        payload?.sample_opponent_double_faults_best_of_3_same_surface ?? 0,
+        coerceNumber(payload?.sample_opponent_double_faults_best_of_3_same_surface) ?? 0,
     },
   });
 }
