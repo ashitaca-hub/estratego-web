@@ -61,9 +61,11 @@ function MatchCard({
   const isTopWinner = m.winnerId === m.top.id;
   const isBottomWinner = m.winnerId === m.bottom.id;
   const selectionLocked = Boolean(disableSelection) || Boolean(isSaving);
-  const isValidPlayer = (value: string | undefined) => {
-    if (!value) return false;
-    const normalized = value.trim().toUpperCase();
+  const isValidPlayer = (value: unknown) => {
+    if (value === null || value === undefined) return false;
+    const text = typeof value === "string" ? value : String(value);
+    const normalized = text.trim().toUpperCase();
+    if (!normalized) return false;
     return normalized !== "TBD" && normalized !== "BYE";
   };
   const topSelectable = isValidPlayer(m.top?.id);
@@ -1632,7 +1634,13 @@ export function EstrategoBracketApp() {
     if (savingMatchId) return;
 
     const player = slot === "top" ? match.top : match.bottom;
-    const winnerId = (player?.id ?? "").trim();
+    const rawId = player?.id;
+    const winnerId =
+      typeof rawId === "string"
+        ? rawId.trim()
+        : rawId !== null && rawId !== undefined
+          ? String(rawId).trim()
+          : "";
     if (!winnerId) return;
     const normalized = winnerId.toUpperCase();
     if (normalized === "TBD" || normalized === "BYE") return;

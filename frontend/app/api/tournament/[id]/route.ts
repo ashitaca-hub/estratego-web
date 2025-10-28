@@ -196,9 +196,28 @@ export async function GET(
     return null;
   };
 
+  const normalizePlayerId = (value: unknown): string => {
+    if (value === null || value === undefined) {
+      return "TBD";
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed === "" ? "TBD" : trimmed;
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? String(value) : "TBD";
+    }
+    if (typeof value === "bigint") {
+      return String(value);
+    }
+    return "TBD";
+  };
+
   const matches: Match[] = list.map((row) => {
-    const topIdNum = Number(row.top_id);
-    const botIdNum = Number(row.bot_id);
+    const topIdString = normalizePlayerId(row.top_id);
+    const botIdString = normalizePlayerId(row.bot_id);
+    const topIdNum = Number(topIdString);
+    const botIdNum = Number(botIdString);
     const tp = Number.isFinite(topIdNum) ? pmap.get(topIdNum) : null;
     const bp = Number.isFinite(botIdNum) ? pmap.get(botIdNum) : null;
 
@@ -214,7 +233,7 @@ export async function GET(
           })()
         : null;
     const top: Player = {
-      id: row.top_id ?? "TBD",
+      id: topIdString,
       name: tp?.name ?? "TBD",
       seed: seedTop,
       entryType: entryTop,
@@ -233,7 +252,7 @@ export async function GET(
           })()
         : null;
     const bottom: Player = {
-      id: row.bot_id ?? "TBD",
+      id: botIdString,
       name: bp?.name ?? "TBD",
       seed: seedBot,
       entryType: entryBot,
@@ -245,7 +264,10 @@ export async function GET(
       round: row.round,
       top,
       bottom,
-      winnerId: row.winner_id ?? undefined,
+      winnerId:
+        row.winner_id === null || row.winner_id === undefined
+          ? undefined
+          : normalizePlayerId(row.winner_id),
     };
   });
 
