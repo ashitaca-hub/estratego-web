@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabase
-    .rpc<PlayerStatsRow>("player_stats_summary", {
+    .rpc("player_stats_summary", {
       p_player_id: numericPlayer,
       p_surface: normalizedSurface,
       p_tourney_id: tourneyId,
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const payload = data ?? null;
+  const payload = (data ?? null) as PlayerStatsRow | null;
 
   return NextResponse.json({
     player_id: payload?.player_id ?? String(numericPlayer),
