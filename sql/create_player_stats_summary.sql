@@ -86,79 +86,78 @@ begin
     from base
   )
   select
-    v_player_id::text as player_id,
-    v_surface as surface_used,
-    v_tourney as tourney_id,
-    v_previous as previous_tourney_id,
-    avg(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null) as aces_best_of_3,
+    v_player_id::text,
+    v_surface,
+    v_tourney,
+    v_previous,
+    avg(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null),
     avg(calc.aces_for) filter (
       where v_surface is not null
         and calc.surface_norm = v_surface
         and calc.aces_for is not null
-    ) as aces_same_surface,
+    ),
     avg(calc.aces_for) filter (
       where v_previous is not null
         and calc.match_tourney_id = v_previous
         and calc.aces_for is not null
-    ) as aces_previous_tournament,
-    avg(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null) as double_faults_best_of_3,
+    ),
+    avg(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
     avg(calc.df_for) filter (
       where v_surface is not null
         and calc.surface_norm = v_surface
         and calc.df_for is not null
-    ) as double_faults_same_surface,
+    ),
     avg(calc.df_for) filter (
       where v_previous is not null
         and calc.match_tourney_id = v_previous
         and calc.df_for is not null
-    ) as double_faults_previous_tournament,
+    ),
     avg(calc.aces_against) filter (
       where calc.best_of = 3
         and v_surface is not null
         and calc.surface_norm = v_surface
         and calc.aces_against is not null
-    ) as opponent_aces_best_of_3_same_surface,
+    ),
     avg(calc.df_against) filter (
       where calc.best_of = 3
         and v_surface is not null
         and calc.surface_norm = v_surface
         and calc.df_against is not null
-    ) as opponent_double_faults_best_of_3_same_surface,
-    count(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null) as sample_aces_best_of_3,
+    ),
+    count(calc.aces_for) filter (where calc.best_of = 3 and calc.aces_for is not null),
     count(calc.aces_for) filter (
       where v_surface is not null
         and calc.surface_norm = v_surface
         and calc.aces_for is not null
-    ) as sample_aces_same_surface,
+    ),
     count(calc.aces_for) filter (
       where v_previous is not null
         and calc.match_tourney_id = v_previous
         and calc.aces_for is not null
-    ) as sample_aces_previous_tournament,
-    count(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null) as sample_double_faults_best_of_3,
+    ),
+    count(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
     count(calc.df_for) filter (
       where v_surface is not null
         and calc.surface_norm = v_surface
         and calc.df_for is not null
-    ) as sample_double_faults_same_surface,
+    ),
     count(calc.df_for) filter (
       where v_previous is not null
         and calc.match_tourney_id = v_previous
         and calc.df_for is not null
-    ) as sample_double_faults_previous_tournament,
+    ),
     count(calc.aces_against) filter (
       where calc.best_of = 3
         and v_surface is not null
         and calc.surface_norm = v_surface
         and calc.aces_against is not null
-    ) as sample_opponent_aces_best_of_3_same_surface,
+    ),
     count(calc.df_against) filter (
       where calc.best_of = 3
         and v_surface is not null
         and calc.surface_norm = v_surface
         and calc.df_against is not null
-    ) as sample_opponent_double_faults_best_of_3_same_surface
-  from calc;
+    );
 end;
 $$;
 
