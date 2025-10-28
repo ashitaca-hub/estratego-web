@@ -76,7 +76,7 @@ begin
     select
       best_of,
       surface_norm,
-      tourney_id,
+      tourney_id as match_tourney_id,
       case when is_winner then w_ace else l_ace end as aces_for,
       case when is_winner then w_df else l_df end as df_for,
       case when is_winner then l_ace else w_ace end as aces_against,
@@ -96,7 +96,7 @@ begin
     ),
     avg(calc.aces_for) filter (
       where v_previous is not null
-        and calc.tourney_id = v_previous
+        and calc.match_tourney_id = v_previous
         and calc.aces_for is not null
     ),
     avg(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
@@ -107,7 +107,7 @@ begin
     ),
     avg(calc.df_for) filter (
       where v_previous is not null
-        and calc.tourney_id = v_previous
+        and calc.match_tourney_id = v_previous
         and calc.df_for is not null
     ),
     avg(calc.aces_against) filter (
@@ -130,7 +130,7 @@ begin
     ),
     count(calc.aces_for) filter (
       where v_previous is not null
-        and calc.tourney_id = v_previous
+        and calc.match_tourney_id = v_previous
         and calc.aces_for is not null
     ),
     count(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null),
@@ -141,7 +141,7 @@ begin
     ),
     count(calc.df_for) filter (
       where v_previous is not null
-        and calc.tourney_id = v_previous
+        and calc.match_tourney_id = v_previous
         and calc.df_for is not null
     ),
     count(calc.aces_against) filter (
