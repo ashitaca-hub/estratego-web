@@ -90,10 +90,10 @@ begin
     v_previous,
     avg(aces_for) filter (where best_of = 3 and aces_for is not null),
     avg(aces_for) filter (where v_surface is not null and surface_norm = v_surface and aces_for is not null),
-    avg(aces_for) filter (where v_previous is not null and tourney_id = v_previous and aces_for is not null),
+    avg(aces_for) filter (where v_previous is not null and calc.tourney_id = v_previous and aces_for is not null),
     avg(df_for) filter (where best_of = 3 and df_for is not null),
     avg(df_for) filter (where v_surface is not null and surface_norm = v_surface and df_for is not null),
-    avg(df_for) filter (where v_previous is not null and tourney_id = v_previous and df_for is not null),
+    avg(df_for) filter (where v_previous is not null and calc.tourney_id = v_previous and df_for is not null),
     avg(aces_against) filter (
       where best_of = 3
         and v_surface is not null
@@ -108,10 +108,10 @@ begin
     ),
     count(aces_for) filter (where best_of = 3 and aces_for is not null),
     count(aces_for) filter (where v_surface is not null and surface_norm = v_surface and aces_for is not null),
-    count(aces_for) filter (where v_previous is not null and tourney_id = v_previous and aces_for is not null),
+    count(aces_for) filter (where v_previous is not null and calc.tourney_id = v_previous and aces_for is not null),
     count(df_for) filter (where best_of = 3 and df_for is not null),
     count(df_for) filter (where v_surface is not null and surface_norm = v_surface and df_for is not null),
-    count(df_for) filter (where v_previous is not null and tourney_id = v_previous and df_for is not null),
+    count(df_for) filter (where v_previous is not null and calc.tourney_id = v_previous and df_for is not null),
     count(aces_against) filter (
       where best_of = 3
         and v_surface is not null
