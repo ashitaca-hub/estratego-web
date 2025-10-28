@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { supabase } from "@/lib/supabase";
 
 type RawMatchRow = {
   tourney_id: unknown;
@@ -90,13 +87,6 @@ const MATCH_FIELDS =
   "tourney_id,best_of,surface,winner_id,loser_id,w_ace,w_df,l_ace,l_df";
 
 export async function POST(request: Request) {
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return NextResponse.json(
-      { error: "Supabase service role no configurado" },
-      { status: 500 },
-    );
-  }
-
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
@@ -124,18 +114,14 @@ export async function POST(request: Request) {
     ? numericPlayer
     : playerId;
 
-  const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
-
   const [winnerResult, loserResult] = await Promise.all([
-    supabaseAdmin
+    supabase
       .schema("estratego_v1")
       .from("matches")
       .select(MATCH_FIELDS)
       .eq("winner_id", filterValue)
       .limit(2000),
-    supabaseAdmin
+    supabase
       .schema("estratego_v1")
       .from("matches")
       .select(MATCH_FIELDS)
@@ -143,11 +129,15 @@ export async function POST(request: Request) {
       .limit(2000),
   ]);
 
-  if (winnerResult.error) {
-    return NextResponse.json({ error: winnerResult.error.message }, { status: 500 });
-  }
-  if (loserResult.error) {
-    return NextResponse.json({ error: loserResult.error.message }, { status: 500 });
+  if (winnerResult.error || loserResult.error) {
+    const message =
+      winnerResult.error?.message ??
+      loserResult.error?.message ??
+      "Error consultando estratego_v1.matches";
+    const status = (winnerResult.error?.code === "42501" || loserResult.error?.code === "42501")
+      ? 403
+      : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 
   const entries: Array<{ row: RawMatchRow; role: Role }> = [];
