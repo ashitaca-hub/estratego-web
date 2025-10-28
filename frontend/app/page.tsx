@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Play, Flame, Star } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2 } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -45,45 +45,98 @@ export type Bracket = {
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
 
-function MatchCard({ m, onClick }: { m: Match; onClick?: (m: Match) => void }) {
-  const winnerBadge = m.winnerId ? (m.winnerId === m.top.id ? "TOP" : "BOT") : null;
+function MatchCard({
+  m,
+  onClick,
+  onSelectWinner,
+  disableSelection,
+  isSaving,
+}: {
+  m: Match;
+  onClick?: (m: Match) => void;
+  onSelectWinner?: (m: Match, winner: "top" | "bottom") => void;
+  disableSelection?: boolean;
+  isSaving?: boolean;
+}) {
+  const isTopWinner = m.winnerId === m.top.id;
+  const isBottomWinner = m.winnerId === m.bottom.id;
+  const selectionLocked = Boolean(disableSelection) || Boolean(isSaving);
+  const isValidPlayer = (value: string | undefined) => {
+    if (!value) return false;
+    const normalized = value.trim().toUpperCase();
+    return normalized !== "TBD" && normalized !== "BYE";
+  };
+  const topSelectable = isValidPlayer(m.top?.id);
+  const bottomSelectable = isValidPlayer(m.bottom?.id);
+
+  const handleSelect = (
+    event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
+    slot: "top" | "bottom",
+  ) => {
+    event.stopPropagation();
+    if (selectionLocked) return;
+    onSelectWinner?.(m, slot);
+  };
+
+  const renderRow = (
+    player: Player,
+    slot: "top" | "bottom",
+    isWinner: boolean,
+    selectable: boolean,
+  ) => {
+    const buttonClasses = [
+      "inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs transition",
+      isWinner ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-slate-500 hover:bg-slate-100",
+      selectable && !selectionLocked ? "cursor-pointer" : "cursor-not-allowed opacity-40",
+    ].join(" ");
+
+    return (
+      <div
+        className={`flex items-center justify-between gap-3 text-sm ${isWinner ? "font-semibold text-slate-100" : "text-slate-200"}`}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={isWinner}
+            aria-label={`Marcar ganador: ${player.name}`}
+            className={buttonClasses}
+            disabled={!selectable || selectionLocked}
+            onClick={(event) => handleSelect(event, slot)}
+          >
+            {isWinner ? <Check className="h-3 w-3" /> : null}
+          </button>
+          <span className="truncate">
+            {player.name}
+            {player.seed ? ` (${player.seed})` : ""}
+          </span>
+        </div>
+        {isWinner && !isSaving && (
+          <span className="text-xs font-medium text-emerald-400">Ganador</span>
+        )}
+        {isSaving && isWinner && (
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-300" />
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card
-      className="rounded-2xl shadow-sm hover:shadow transition cursor-pointer"
+      className={`rounded-2xl shadow-sm transition ${onClick ? "cursor-pointer hover:shadow" : ""}`}
       onClick={() => onClick?.(m)}
     >
-      <CardContent className="p-3">
-        <div className="text-xs text-gray-500 mb-2">{m.round}</div>
-        <div
-          className={`flex items-center justify-between text-sm ${
-            winnerBadge === "TOP" ? "font-semibold" : ""
-          }`}
-        >
-          <span>
-            {m.top.name}
-            {m.top.seed ? ` (${m.top.seed})` : ""}
-          </span>
-          {winnerBadge === "TOP" && (
-            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
-              Ganador
+      <CardContent className="space-y-3 p-3">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>{m.round}</span>
+          {isSaving && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Guardando...
             </span>
           )}
         </div>
-        <div
-          className={`flex items-center justify-between text-sm ${
-            winnerBadge === "BOT" ? "font-semibold" : ""
-          }`}
-        >
-          <span>
-            {m.bottom.name}
-            {m.bottom.seed ? ` (${m.bottom.seed})` : ""}
-          </span>
-          {winnerBadge === "BOT" && (
-            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
-              Ganador
-            </span>
-          )}
-        </div>
+        {renderRow(m.top, "top", isTopWinner, topSelectable)}
+        {renderRow(m.bottom, "bottom", isBottomWinner, bottomSelectable)}
       </CardContent>
     </Card>
   );
@@ -1513,6 +1566,7 @@ export function EstrategoBracketApp() {
   const [tournaments, setTournaments] = useState<Array<{ tourney_id: string; name: string; surface?: string; draw_size?: number }>>([]);
   const [multiSimLoading, setMultiSimLoading] = useState(false);
   const [multiSimProgress, setMultiSimProgress] = useState<{ done: number; total: number } | null>(null);
+  const [savingMatchId, setSavingMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -1573,22 +1627,65 @@ export function EstrategoBracketApp() {
     return map;
   }, [bracket, rounds]);
 
-  const onSimulate = async () => {
+  const onSelectWinner = async (match: Match, slot: "top" | "bottom") => {
     if (!bracket) return;
-    const simRes = await fetch("/api/simulate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tourney_id: bracket.tourney_id }),
-    });
+    if (savingMatchId) return;
 
-    if (!simRes.ok) {
-      console.error("Error al simular torneo:", await simRes.text());
-      return;
+    const player = slot === "top" ? match.top : match.bottom;
+    const winnerId = (player?.id ?? "").trim();
+    if (!winnerId) return;
+    const normalized = winnerId.toUpperCase();
+    if (normalized === "TBD" || normalized === "BYE") return;
+    if (match.winnerId && match.winnerId === winnerId) return;
+
+    setSavingMatchId(match.id);
+
+    try {
+      const response = await fetch("/api/draw/winner", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tourney_id: bracket.tourney_id,
+          match_id: match.id,
+          winner_id: winnerId,
+        }),
+      });
+
+      if (!response.ok) {
+        let message = "No se pudo guardar el ganador.";
+        try {
+          const payload = await response.json();
+          if (payload && typeof (payload as any).error === "string") {
+            const trimmed = ((payload as any).error as string).trim();
+            if (trimmed) {
+              message = trimmed;
+            }
+          }
+        } catch {
+          // no-op si la respuesta no es JSON
+        }
+        alert(message);
+        return;
+      }
+
+      const latest = await fetch(`/api/tournament/${bracket.tourney_id}`);
+      if (latest.ok) {
+        const data = (await latest.json()) as Bracket;
+        setBracket(data);
+        setPmMatch((prev) => {
+          if (!prev || prev.id !== match.id) return prev;
+          const updated = data.matches.find((item) => item.id === match.id);
+          return updated ?? prev;
+        });
+      } else {
+        console.warn("No se pudo recargar el cuadro tras marcar ganador.");
+      }
+    } catch (err) {
+      console.error("Error al guardar ganador:", err);
+      alert("Ocurrio un error al guardar el ganador.");
+    } finally {
+      setSavingMatchId(null);
     }
-
-    const res = await fetch(`/api/tournament/${bracket.tourney_id}`);
-    const data = (await res.json()) as Bracket;
-    setBracket(data);
   };
 
   const onSimulateMultiple = async () => {
@@ -1683,18 +1780,10 @@ export function EstrategoBracketApp() {
         await new Promise((resolve) => setTimeout(resolve, 120));
       }
 
-      if (processed > 0) {
-        const latest = await fetch(`/api/tournament/${bracket.tourney_id}`);
-        if (latest.ok) {
-          const data = (await latest.json()) as Bracket;
-          setBracket(data);
-        }
-
-        if (processed === runs) {
-          router.push(
-            `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
-          );
-        }
+      if (processed > 0 && processed === runs) {
+        router.push(
+          `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
+        );
       }
     } catch (err) {
       console.error("Error ejecutando simulaciones múltiples:", err);
@@ -1823,9 +1912,6 @@ export function EstrategoBracketApp() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button className="rounded-2xl" onClick={onSimulate}>
-            <Play className="w-4 h-4 mr-2" /> Simular
-          </Button>
           <Button
             variant="outline"
             className="rounded-2xl"
@@ -1854,7 +1940,14 @@ export function EstrategoBracketApp() {
               <Column title={r}>
                 {matchesByRound[r].length ? (
                   matchesByRound[r].map((m) => (
-                    <MatchCard key={m.id} m={m} onClick={onOpenPrematch} />
+                    <MatchCard
+                      key={m.id}
+                      m={m}
+                      onClick={onOpenPrematch}
+                      onSelectWinner={onSelectWinner}
+                      disableSelection={Boolean(savingMatchId) && savingMatchId !== m.id}
+                      isSaving={savingMatchId === m.id}
+                    />
                   ))
                 ) : (
                   <EmptyRound />
