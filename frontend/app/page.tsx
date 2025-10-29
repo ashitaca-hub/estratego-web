@@ -472,11 +472,9 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
 type PlayerStatsMetrics = {
   aces_best_of_3: number | null;
   aces_same_surface: number | null;
-  aces_current_tournament: number | null;
   aces_previous_tournament: number | null;
   double_faults_best_of_3: number | null;
   double_faults_same_surface: number | null;
-  double_faults_current_tournament: number | null;
   double_faults_previous_tournament: number | null;
   aces_current_minus_previous: number | null;
   double_faults_current_minus_previous: number | null;
@@ -487,11 +485,9 @@ type PlayerStatsMetrics = {
 type PlayerStatsSamples = {
   aces_best_of_3: number;
   aces_same_surface: number;
-  aces_current_tournament: number;
   aces_previous_tournament: number;
   double_faults_best_of_3: number;
   double_faults_same_surface: number;
-  double_faults_current_tournament: number;
   double_faults_previous_tournament: number;
   opponent_aces_best_of_3_same_surface: number;
   opponent_double_faults_best_of_3_same_surface: number;
@@ -1659,16 +1655,11 @@ function PlayerStatsDialog({
       sampleKey: "aces_same_surface",
     },
     {
-      key: "aces_current_tournament",
-      label: "Media de aces en este torneo",
-      sampleKey: "aces_current_tournament",
-      diffKey: "aces_current_minus_previous",
-      diffLabel: "vs año anterior",
-    },
-    {
       key: "aces_previous_tournament",
       label: "Media de aces en el torneo del año anterior",
       sampleKey: "aces_previous_tournament",
+      diffKey: "aces_current_minus_previous",
+      diffLabel: "vs media 3 sets",
     },
     {
       key: "double_faults_best_of_3",
@@ -1681,16 +1672,11 @@ function PlayerStatsDialog({
       sampleKey: "double_faults_same_surface",
     },
     {
-      key: "double_faults_current_tournament",
-      label: "Media de dobles faltas en este torneo",
-      sampleKey: "double_faults_current_tournament",
-      diffKey: "double_faults_current_minus_previous",
-      diffLabel: "vs año anterior",
-    },
-    {
       key: "double_faults_previous_tournament",
       label: "Media de dobles faltas en el torneo del año anterior",
       sampleKey: "double_faults_previous_tournament",
+      diffKey: "double_faults_current_minus_previous",
+      diffLabel: "vs media 3 sets",
     },
     {
       key: "opponent_aces_best_of_3_same_surface",
@@ -1716,7 +1702,7 @@ function PlayerStatsDialog({
   const renderDiff = (value: number | null, label: string): { text: string; className: string } | null => {
     if (value === null) return null;
     const formatted = value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
-    const prefix = label.trim() ? `Δ ${label}:` : "Δ:";
+    const prefix = label.trim() ? `Delta ${label}:` : "Delta:";
     if (value === 0) {
       return {
         text: `${prefix} ${formatted}`,
@@ -1731,8 +1717,8 @@ function PlayerStatsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md">
-        <DialogHeader className="space-y-1">
+      <DialogContent className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
           <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-100">
             <BarChart3 className="h-5 w-5 text-emerald-400" />
             Estadísticas de {playerName}
@@ -1744,7 +1730,7 @@ function PlayerStatsDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="space-y-5 px-6 pb-6 max-h-[70vh] overflow-y-auto">
           <div className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300 md:grid-cols-2">
             <div>
               <span className="text-slate-500">Torneo actual:</span>{" "}
@@ -1823,7 +1809,7 @@ function PlayerStatsDialog({
           </div>
         </div>
 
-        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-6 py-4">
+        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-6 py-4 mt-auto">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>

@@ -8,11 +8,9 @@ type PlayerStatsRow = {
   previous_tourney_id: string | null;
   aces_best_of_3: number | null;
   aces_same_surface: number | null;
-  aces_current_tournament: number | null;
   aces_previous_tournament: number | null;
   double_faults_best_of_3: number | null;
   double_faults_same_surface: number | null;
-  double_faults_current_tournament: number | null;
   double_faults_previous_tournament: number | null;
   aces_current_minus_previous: number | null;
   double_faults_current_minus_previous: number | null;
@@ -20,11 +18,9 @@ type PlayerStatsRow = {
   opponent_double_faults_best_of_3_same_surface: number | null;
   sample_aces_best_of_3: number | null;
   sample_aces_same_surface: number | null;
-  sample_aces_current_tournament: number | null;
   sample_aces_previous_tournament: number | null;
   sample_double_faults_best_of_3: number | null;
   sample_double_faults_same_surface: number | null;
-  sample_double_faults_current_tournament: number | null;
   sample_double_faults_previous_tournament: number | null;
   sample_opponent_aces_best_of_3_same_surface: number | null;
   sample_opponent_double_faults_best_of_3_same_surface: number | null;
@@ -135,11 +131,9 @@ export async function POST(request: Request) {
     stats: {
       aces_best_of_3: coerceNumber(payload?.aces_best_of_3),
       aces_same_surface: coerceNumber(payload?.aces_same_surface),
-      aces_current_tournament: coerceNumber(payload?.aces_current_tournament),
       aces_previous_tournament: coerceNumber(payload?.aces_previous_tournament),
       double_faults_best_of_3: coerceNumber(payload?.double_faults_best_of_3),
       double_faults_same_surface: coerceNumber(payload?.double_faults_same_surface),
-      double_faults_current_tournament: coerceNumber(payload?.double_faults_current_tournament),
       double_faults_previous_tournament: coerceNumber(
         payload?.double_faults_previous_tournament,
       ),
@@ -159,16 +153,12 @@ export async function POST(request: Request) {
     samples: {
       aces_best_of_3: coerceNumber(payload?.sample_aces_best_of_3) ?? 0,
       aces_same_surface: coerceNumber(payload?.sample_aces_same_surface) ?? 0,
-      aces_current_tournament:
-        coerceNumber(payload?.sample_aces_current_tournament) ?? 0,
       aces_previous_tournament:
         coerceNumber(payload?.sample_aces_previous_tournament) ?? 0,
       double_faults_best_of_3:
         coerceNumber(payload?.sample_double_faults_best_of_3) ?? 0,
       double_faults_same_surface:
         coerceNumber(payload?.sample_double_faults_same_surface) ?? 0,
-      double_faults_current_tournament:
-        coerceNumber(payload?.sample_double_faults_current_tournament) ?? 0,
       double_faults_previous_tournament:
         coerceNumber(payload?.sample_double_faults_previous_tournament) ?? 0,
       opponent_aces_best_of_3_same_surface:
