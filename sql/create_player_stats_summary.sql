@@ -16,8 +16,8 @@ returns table (
   double_faults_best_of_3 numeric,
   double_faults_same_surface numeric,
   double_faults_previous_tournament numeric,
-  aces_current_minus_previous numeric,
-  double_faults_current_minus_previous numeric,
+  aces_previous_minus_best_of_3 numeric,
+  double_faults_previous_minus_best_of_3 numeric,
   opponent_aces_best_of_3_same_surface numeric,
   opponent_double_faults_best_of_3_same_surface numeric,
   sample_aces_best_of_3 integer,
@@ -192,15 +192,15 @@ begin
     stats.double_faults_same_surface,
     stats.double_faults_previous_tournament,
     case
-      when stats.aces_best_of_3 is null or stats.aces_previous_tournament is null
+      when stats.aces_previous_tournament is null or stats.aces_best_of_3 is null
       then null
-      else stats.aces_best_of_3 - stats.aces_previous_tournament
-    end as aces_current_minus_previous,
+      else stats.aces_previous_tournament - stats.aces_best_of_3
+    end as aces_previous_minus_best_of_3,
     case
-      when stats.double_faults_best_of_3 is null or stats.double_faults_previous_tournament is null
+      when stats.double_faults_previous_tournament is null or stats.double_faults_best_of_3 is null
       then null
-      else stats.double_faults_best_of_3 - stats.double_faults_previous_tournament
-    end as double_faults_current_minus_previous,
+      else stats.double_faults_previous_tournament - stats.double_faults_best_of_3
+    end as double_faults_previous_minus_best_of_3,
     stats.opponent_aces_best_of_3_same_surface,
     stats.opponent_double_faults_best_of_3_same_surface,
     stats.sample_aces_best_of_3,

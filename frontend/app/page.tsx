@@ -476,8 +476,8 @@ type PlayerStatsMetrics = {
   double_faults_best_of_3: number | null;
   double_faults_same_surface: number | null;
   double_faults_previous_tournament: number | null;
-  aces_current_minus_previous: number | null;
-  double_faults_current_minus_previous: number | null;
+  aces_previous_minus_best_of_3: number | null;
+  double_faults_previous_minus_best_of_3: number | null;
   opponent_aces_best_of_3_same_surface: number | null;
   opponent_double_faults_best_of_3_same_surface: number | null;
 };
@@ -1645,6 +1645,20 @@ function PlayerStatsDialog({
     diffLabel?: string;
   }> = [
     {
+      key: "aces_previous_tournament",
+      label: "Media de aces en el torneo del año anterior",
+      sampleKey: "aces_previous_tournament",
+      diffKey: "aces_previous_minus_best_of_3",
+      diffLabel: "vs media 3 sets",
+    },
+    {
+      key: "double_faults_previous_tournament",
+      label: "Media de dobles faltas en el torneo del año anterior",
+      sampleKey: "double_faults_previous_tournament",
+      diffKey: "double_faults_previous_minus_best_of_3",
+      diffLabel: "vs media 3 sets",
+    },
+    {
       key: "aces_best_of_3",
       label: "Media de aces (partidos a 3 sets)",
       sampleKey: "aces_best_of_3",
@@ -1655,13 +1669,6 @@ function PlayerStatsDialog({
       sampleKey: "aces_same_surface",
     },
     {
-      key: "aces_previous_tournament",
-      label: "Media de aces en el torneo del año anterior",
-      sampleKey: "aces_previous_tournament",
-      diffKey: "aces_current_minus_previous",
-      diffLabel: "vs media 3 sets",
-    },
-    {
       key: "double_faults_best_of_3",
       label: "Media de dobles faltas (partidos a 3 sets)",
       sampleKey: "double_faults_best_of_3",
@@ -1670,13 +1677,6 @@ function PlayerStatsDialog({
       key: "double_faults_same_surface",
       label: "Media de dobles faltas (misma superficie del torneo actual)",
       sampleKey: "double_faults_same_surface",
-    },
-    {
-      key: "double_faults_previous_tournament",
-      label: "Media de dobles faltas en el torneo del año anterior",
-      sampleKey: "double_faults_previous_tournament",
-      diffKey: "double_faults_current_minus_previous",
-      diffLabel: "vs media 3 sets",
     },
     {
       key: "opponent_aces_best_of_3_same_surface",
