@@ -36,6 +36,9 @@ declare
   v_surface text;
   v_tourney text;
   v_previous text;
+  v_previous_candidates text[] := array[]::text[];
+  v_suffix text;
+  v_year integer;
 begin
   if p_player_id is null then
     raise exception 'player_id requerido';
@@ -51,12 +54,30 @@ begin
     else trim(p_tourney_id)
   end;
 
-  if v_tourney ~ '^[0-9]{4}-.+' then
-    v_previous :=
-      ((substring(v_tourney from 1 for 4)::integer - 1)::text) ||
-      substring(v_tourney from 5);
+  if v_tourney ~ '^\d{4}-.+' then
+    v_year := substring(v_tourney from 1 for 4)::integer;
+    v_suffix := (regexp_match(v_tourney, '^\d{4}-(.+)$'))[1];
+    if v_suffix is not null then
+      v_previous := (v_year - 1)::text || '-' || v_suffix;
+      v_previous_candidates := array[v_previous];
+      if v_suffix ~ '^\d+$' then
+        v_previous_candidates := array_append(
+          v_previous_candidates,
+          (v_year - 1)::text || '-' || lpad(v_suffix, 4, '0')
+        );
+      end if;
+      if array_length(v_previous_candidates, 1) > 1 then
+        select array_agg(distinct elem)
+          into v_previous_candidates
+        from unnest(v_previous_candidates) as elem;
+      end if;
+    else
+      v_previous := (v_year - 1)::text || '-' || substring(v_tourney from 5);
+      v_previous_candidates := array[v_previous];
+    end if;
   else
     v_previous := null;
+    v_previous_candidates := array[]::text[];
   end if;
 
   return query
@@ -72,8 +93,8 @@ begin
         and calc.aces_for is not null
     ) as aces_same_surface,
     avg(calc.aces_for) filter (
-      where v_previous is not null
-        and calc.match_tourney_id = v_previous
+      where array_length(v_previous_candidates, 1) > 0
+        and calc.match_tourney_id = any(v_previous_candidates)
         and calc.aces_for is not null
     ) as aces_previous_tournament,
     avg(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null) as double_faults_best_of_3,
@@ -83,8 +104,8 @@ begin
         and calc.df_for is not null
     ) as double_faults_same_surface,
     avg(calc.df_for) filter (
-      where v_previous is not null
-        and calc.match_tourney_id = v_previous
+      where array_length(v_previous_candidates, 1) > 0
+        and calc.match_tourney_id = any(v_previous_candidates)
         and calc.df_for is not null
     ) as double_faults_previous_tournament,
     avg(calc.aces_against) filter (
@@ -106,8 +127,8 @@ begin
         and calc.aces_for is not null
     ))::integer as sample_aces_same_surface,
     (count(calc.aces_for) filter (
-      where v_previous is not null
-        and calc.match_tourney_id = v_previous
+      where array_length(v_previous_candidates, 1) > 0
+        and calc.match_tourney_id = any(v_previous_candidates)
         and calc.aces_for is not null
     ))::integer as sample_aces_previous_tournament,
     (count(calc.df_for) filter (where calc.best_of = 3 and calc.df_for is not null))::integer as sample_double_faults_best_of_3,
@@ -117,8 +138,8 @@ begin
         and calc.df_for is not null
     ))::integer as sample_double_faults_same_surface,
     (count(calc.df_for) filter (
-      where v_previous is not null
-        and calc.match_tourney_id = v_previous
+      where array_length(v_previous_candidates, 1) > 0
+        and calc.match_tourney_id = any(v_previous_candidates)
         and calc.df_for is not null
     ))::integer as sample_double_faults_previous_tournament,
     (count(calc.aces_against) filter (
