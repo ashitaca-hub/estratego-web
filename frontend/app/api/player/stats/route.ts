@@ -14,8 +14,8 @@ type PlayerStatsRow = {
   double_faults_same_surface: number | null;
   double_faults_current_tournament: number | null;
   double_faults_previous_tournament: number | null;
-  aces_current_minus_surface: number | null;
-  double_faults_current_minus_surface: number | null;
+  aces_current_minus_previous: number | null;
+  double_faults_current_minus_previous: number | null;
   opponent_aces_best_of_3_same_surface: number | null;
   opponent_double_faults_best_of_3_same_surface: number | null;
   sample_aces_best_of_3: number | null;
@@ -143,11 +143,11 @@ export async function POST(request: Request) {
       double_faults_previous_tournament: coerceNumber(
         payload?.double_faults_previous_tournament,
       ),
-      aces_current_minus_surface: coerceNumber(
-        payload?.aces_current_minus_surface,
+      aces_current_minus_previous: coerceNumber(
+        payload?.aces_current_minus_previous,
       ),
-      double_faults_current_minus_surface: coerceNumber(
-        payload?.double_faults_current_minus_surface,
+      double_faults_current_minus_previous: coerceNumber(
+        payload?.double_faults_current_minus_previous,
       ),
       opponent_aces_best_of_3_same_surface: coerceNumber(
         payload?.opponent_aces_best_of_3_same_surface,

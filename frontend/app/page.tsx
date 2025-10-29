@@ -478,8 +478,8 @@ type PlayerStatsMetrics = {
   double_faults_same_surface: number | null;
   double_faults_current_tournament: number | null;
   double_faults_previous_tournament: number | null;
-  aces_current_minus_surface: number | null;
-  double_faults_current_minus_surface: number | null;
+  aces_current_minus_previous: number | null;
+  double_faults_current_minus_previous: number | null;
   opponent_aces_best_of_3_same_surface: number | null;
   opponent_double_faults_best_of_3_same_surface: number | null;
 };
@@ -1662,8 +1662,8 @@ function PlayerStatsDialog({
       key: "aces_current_tournament",
       label: "Media de aces en este torneo",
       sampleKey: "aces_current_tournament",
-      diffKey: "aces_current_minus_surface",
-      diffLabel: "vs superficie",
+      diffKey: "aces_current_minus_previous",
+      diffLabel: "vs año anterior",
     },
     {
       key: "aces_previous_tournament",
@@ -1684,8 +1684,8 @@ function PlayerStatsDialog({
       key: "double_faults_current_tournament",
       label: "Media de dobles faltas en este torneo",
       sampleKey: "double_faults_current_tournament",
-      diffKey: "double_faults_current_minus_surface",
-      diffLabel: "vs superficie",
+      diffKey: "double_faults_current_minus_previous",
+      diffLabel: "vs año anterior",
     },
     {
       key: "double_faults_previous_tournament",
