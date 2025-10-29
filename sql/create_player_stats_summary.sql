@@ -12,17 +12,23 @@ returns table (
   previous_tourney_id text,
   aces_best_of_3 numeric,
   aces_same_surface numeric,
+  aces_current_tournament numeric,
   aces_previous_tournament numeric,
   double_faults_best_of_3 numeric,
   double_faults_same_surface numeric,
+  double_faults_current_tournament numeric,
   double_faults_previous_tournament numeric,
+  aces_current_minus_surface numeric,
+  double_faults_current_minus_surface numeric,
   opponent_aces_best_of_3_same_surface numeric,
   opponent_double_faults_best_of_3_same_surface numeric,
   sample_aces_best_of_3 integer,
   sample_aces_same_surface integer,
+  sample_aces_current_tournament integer,
   sample_aces_previous_tournament integer,
   sample_double_faults_best_of_3 integer,
   sample_double_faults_same_surface integer,
+  sample_double_faults_current_tournament integer,
   sample_double_faults_previous_tournament integer,
   sample_opponent_aces_best_of_3_same_surface integer,
   sample_opponent_double_faults_best_of_3_same_surface integer
@@ -93,6 +99,11 @@ begin
         and calc.aces_for is not null
     ) as aces_same_surface,
     avg(calc.aces_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.aces_for is not null
+    ) as aces_current_tournament,
+    avg(calc.aces_for) filter (
       where array_length(v_previous_candidates, 1) > 0
         and calc.match_tourney_id = any(v_previous_candidates)
         and calc.aces_for is not null
@@ -104,10 +115,35 @@ begin
         and calc.df_for is not null
     ) as double_faults_same_surface,
     avg(calc.df_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.df_for is not null
+    ) as double_faults_current_tournament,
+    avg(calc.df_for) filter (
       where array_length(v_previous_candidates, 1) > 0
         and calc.match_tourney_id = any(v_previous_candidates)
         and calc.df_for is not null
     ) as double_faults_previous_tournament,
+    (avg(calc.aces_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.aces_for is not null
+    )) -
+    (avg(calc.aces_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.aces_for is not null
+    )) as aces_current_minus_surface,
+    (avg(calc.df_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.df_for is not null
+    )) -
+    (avg(calc.df_for) filter (
+      where v_surface is not null
+        and calc.surface_norm = v_surface
+        and calc.df_for is not null
+    )) as double_faults_current_minus_surface,
     avg(calc.aces_against) filter (
       where calc.best_of = 3
         and v_surface is not null
@@ -127,6 +163,11 @@ begin
         and calc.aces_for is not null
     ))::integer as sample_aces_same_surface,
     (count(calc.aces_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.aces_for is not null
+    ))::integer as sample_aces_current_tournament,
+    (count(calc.aces_for) filter (
       where array_length(v_previous_candidates, 1) > 0
         and calc.match_tourney_id = any(v_previous_candidates)
         and calc.aces_for is not null
@@ -137,6 +178,11 @@ begin
         and calc.surface_norm = v_surface
         and calc.df_for is not null
     ))::integer as sample_double_faults_same_surface,
+    (count(calc.df_for) filter (
+      where v_tourney is not null
+        and calc.match_tourney_id = v_tourney
+        and calc.df_for is not null
+    ))::integer as sample_double_faults_current_tournament,
     (count(calc.df_for) filter (
       where array_length(v_previous_candidates, 1) > 0
         and calc.match_tourney_id = any(v_previous_candidates)

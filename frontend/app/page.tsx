@@ -472,10 +472,14 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
 type PlayerStatsMetrics = {
   aces_best_of_3: number | null;
   aces_same_surface: number | null;
+  aces_current_tournament: number | null;
   aces_previous_tournament: number | null;
   double_faults_best_of_3: number | null;
   double_faults_same_surface: number | null;
+  double_faults_current_tournament: number | null;
   double_faults_previous_tournament: number | null;
+  aces_current_minus_surface: number | null;
+  double_faults_current_minus_surface: number | null;
   opponent_aces_best_of_3_same_surface: number | null;
   opponent_double_faults_best_of_3_same_surface: number | null;
 };
@@ -483,9 +487,11 @@ type PlayerStatsMetrics = {
 type PlayerStatsSamples = {
   aces_best_of_3: number;
   aces_same_surface: number;
+  aces_current_tournament: number;
   aces_previous_tournament: number;
   double_faults_best_of_3: number;
   double_faults_same_surface: number;
+  double_faults_current_tournament: number;
   double_faults_previous_tournament: number;
   opponent_aces_best_of_3_same_surface: number;
   opponent_double_faults_best_of_3_same_surface: number;
@@ -1638,48 +1644,89 @@ function PlayerStatsDialog({
   const metrics: Array<{
     key: keyof PlayerStatsMetrics;
     label: string;
+    sampleKey: keyof PlayerStatsSamples;
+    diffKey?: keyof PlayerStatsMetrics;
+    diffLabel?: string;
   }> = [
     {
       key: "aces_best_of_3",
       label: "Media de aces (partidos a 3 sets)",
+      sampleKey: "aces_best_of_3",
     },
     {
       key: "aces_same_surface",
       label: "Media de aces (misma superficie del torneo actual)",
+      sampleKey: "aces_same_surface",
+    },
+    {
+      key: "aces_current_tournament",
+      label: "Media de aces en este torneo",
+      sampleKey: "aces_current_tournament",
+      diffKey: "aces_current_minus_surface",
+      diffLabel: "vs superficie",
     },
     {
       key: "aces_previous_tournament",
       label: "Media de aces en el torneo del año anterior",
+      sampleKey: "aces_previous_tournament",
     },
     {
       key: "double_faults_best_of_3",
       label: "Media de dobles faltas (partidos a 3 sets)",
+      sampleKey: "double_faults_best_of_3",
     },
     {
       key: "double_faults_same_surface",
       label: "Media de dobles faltas (misma superficie del torneo actual)",
+      sampleKey: "double_faults_same_surface",
+    },
+    {
+      key: "double_faults_current_tournament",
+      label: "Media de dobles faltas en este torneo",
+      sampleKey: "double_faults_current_tournament",
+      diffKey: "double_faults_current_minus_surface",
+      diffLabel: "vs superficie",
     },
     {
       key: "double_faults_previous_tournament",
       label: "Media de dobles faltas en el torneo del año anterior",
+      sampleKey: "double_faults_previous_tournament",
     },
     {
       key: "opponent_aces_best_of_3_same_surface",
       label: "Aces recibidos (partidos a 3 sets, misma superficie)",
+      sampleKey: "opponent_aces_best_of_3_same_surface",
     },
     {
       key: "opponent_double_faults_best_of_3_same_surface",
       label:
         "Dobles faltas cometidas por el rival (partidos a 3 sets, misma superficie)",
+      sampleKey: "opponent_double_faults_best_of_3_same_surface",
     },
   ];
 
   const formatValue = (value: number | null): string =>
     value === null ? "Sin datos" : value.toFixed(2);
 
-  const renderSamples = (key: keyof PlayerStatsSamples): string => {
-    const sample = data?.samples?.[key] ?? 0;
+  const renderSamples = (sampleKey: keyof PlayerStatsSamples): string => {
+    const sample = data?.samples?.[sampleKey] ?? 0;
     return sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "Sin datos";
+  };
+
+  const renderDiff = (value: number | null, label: string): { text: string; className: string } | null => {
+    if (value === null) return null;
+    const formatted = value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
+    const prefix = label.trim() ? `Δ ${label}:` : "Δ:";
+    if (value === 0) {
+      return {
+        text: `${prefix} ${formatted}`,
+        className: "text-slate-400",
+      };
+    }
+    return {
+      text: `${prefix} ${formatted}`,
+      className: value > 0 ? "text-emerald-400" : "text-red-400",
+    };
   };
 
   return (
@@ -1735,22 +1782,33 @@ function PlayerStatsDialog({
             </div>
           ) : data ? (
             <div className="grid gap-3">
-              {metrics.map(({ key, label }) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
-                >
-                  <div className="max-w-xs text-sm text-slate-200">{label}</div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold text-emerald-300">
-                      {formatValue(data.stats?.[key] ?? null)}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      Muestras: {renderSamples(key as keyof PlayerStatsSamples)}
+              {metrics.map(({ key, label, sampleKey, diffKey, diffLabel }) => {
+                const value = data.stats?.[key] ?? null;
+                const diffInfo = diffKey
+                  ? renderDiff(data.stats?.[diffKey] ?? null, diffLabel ?? "")
+                  : null;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
+                  >
+                    <div className="max-w-xs text-sm text-slate-200">{label}</div>
+                    <div className="text-right space-y-1">
+                      <div className="text-lg font-semibold text-white">
+                        {formatValue(value)}
+                      </div>
+                      {diffInfo && (
+                        <div className={`text-xs font-medium ${diffInfo.className}`}>
+                          {diffInfo.text}
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-500">
+                        Muestras: {renderSamples(sampleKey)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400">
