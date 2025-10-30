@@ -359,16 +359,16 @@ begin
     v_previous as previous_tourney_id,
     aces.player_id::text as aces_player_id,
     aces.player_name as aces_player_name,
-    aces.aces_value,
+    aces.aces_value::numeric,
     double_faults.player_id::text as double_faults_player_id,
     double_faults.player_name as double_faults_player_name,
-    double_faults.double_faults_value,
+    double_faults.double_faults_value::numeric,
     received_aces.player_id::text as received_aces_player_id,
     received_aces.player_name as received_aces_player_name,
-    received_aces.received_aces_value,
+    received_aces.received_aces_value::numeric,
     received_double_faults.player_id::text as received_double_faults_player_id,
     received_double_faults.player_name as received_double_faults_player_name,
-    received_double_faults.received_double_faults_value
+    received_double_faults.received_double_faults_value::numeric
   from (select 1) dummy
   left join aces on true
   left join double_faults on true
