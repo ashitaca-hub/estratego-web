@@ -220,3 +220,162 @@ grant execute on function public.player_stats_summary(
   text,
   text
 ) to anon, authenticated, service_role;
+
+drop function if exists public.tournament_highs_summary(text);
+
+create or replace function public.tournament_highs_summary(
+  p_tourney_id text
+)
+returns table (
+  tourney_id text,
+  previous_tourney_id text,
+  aces_player_id text,
+  aces_player_name text,
+  aces_value numeric,
+  double_faults_player_id text,
+  double_faults_player_name text,
+  double_faults_value numeric,
+  received_aces_player_id text,
+  received_aces_player_name text,
+  received_aces_value numeric,
+  received_double_faults_player_id text,
+  received_double_faults_player_name text,
+  received_double_faults_value numeric
+)
+language plpgsql
+security definer
+set search_path = public, estratego_v1
+as $$
+declare
+  v_tourney text;
+  v_previous text;
+  v_suffix text;
+  v_year integer;
+  v_previous_candidates text[] := array[]::text[];
+begin
+  v_tourney := case
+    when p_tourney_id is null then null
+    else trim(p_tourney_id)
+  end;
+
+  if v_tourney ~ '^\d{4}-.+' then
+    v_year := substring(v_tourney from 1 for 4)::integer;
+    v_suffix := (regexp_match(v_tourney, '^\d{4}-(.+)$'))[1];
+    if v_suffix is not null then
+      v_previous := (v_year - 1)::text || '-' || v_suffix;
+      v_previous_candidates := array[v_previous];
+      if v_suffix ~ '^\d+$' then
+        v_previous_candidates := array_append(
+          v_previous_candidates,
+          (v_year - 1)::text || '-' || lpad(v_suffix, 4, '0')
+        );
+      end if;
+      if array_length(v_previous_candidates, 1) > 1 then
+        select array_agg(distinct elem)
+          into v_previous_candidates
+        from unnest(v_previous_candidates) as elem;
+      end if;
+    else
+      v_previous := (v_year - 1)::text || '-' || substring(v_tourney from 5);
+      v_previous_candidates := array[v_previous];
+    end if;
+  else
+    v_previous := null;
+    v_previous_candidates := array[]::text[];
+  end if;
+
+  return query
+  with matches as (
+    select
+      m.tourney_id,
+      m.winner_id,
+      m.loser_id,
+      m.w_ace,
+      m.l_ace,
+      m.w_df,
+      m.l_df
+    from matches_full m
+    where array_length(v_previous_candidates, 1) > 0
+      and m.tourney_id = any(v_previous_candidates)
+  ),
+  player_rows as (
+    select
+      winner_id as player_id,
+      w_ace as aces_value,
+      w_df as double_faults_value,
+      l_ace as received_aces_value,
+      l_df as received_double_faults_value
+    from matches
+    union all
+    select
+      loser_id as player_id,
+      l_ace as aces_value,
+      l_df as double_faults_value,
+      w_ace as received_aces_value,
+      w_df as received_double_faults_value
+    from matches
+  ),
+  decorated as (
+    select
+      r.player_id,
+      p.name as player_name,
+      r.aces_value,
+      r.double_faults_value,
+      r.received_aces_value,
+      r.received_double_faults_value
+    from player_rows r
+    left join players_min p on p.player_id = r.player_id
+  ),
+  aces as (
+    select d.player_id, coalesce(d.player_name, d.player_id::text) as player_name, d.aces_value
+    from decorated d
+    where d.aces_value is not null
+    order by d.aces_value desc
+    limit 1
+  ),
+  double_faults as (
+    select d.player_id, coalesce(d.player_name, d.player_id::text) as player_name, d.double_faults_value
+    from decorated d
+    where d.double_faults_value is not null
+    order by d.double_faults_value desc
+    limit 1
+  ),
+  received_aces as (
+    select d.player_id, coalesce(d.player_name, d.player_id::text) as player_name, d.received_aces_value
+    from decorated d
+    where d.received_aces_value is not null
+    order by d.received_aces_value desc
+    limit 1
+  ),
+  received_double_faults as (
+    select d.player_id, coalesce(d.player_name, d.player_id::text) as player_name, d.received_double_faults_value
+    from decorated d
+    where d.received_double_faults_value is not null
+    order by d.received_double_faults_value desc
+    limit 1
+  )
+  select
+    v_tourney as tourney_id,
+    v_previous as previous_tourney_id,
+    aces.player_id::text as aces_player_id,
+    aces.player_name as aces_player_name,
+    aces.aces_value,
+    double_faults.player_id::text as double_faults_player_id,
+    double_faults.player_name as double_faults_player_name,
+    double_faults.double_faults_value,
+    received_aces.player_id::text as received_aces_player_id,
+    received_aces.player_name as received_aces_player_name,
+    received_aces.received_aces_value,
+    received_double_faults.player_id::text as received_double_faults_player_id,
+    received_double_faults.player_name as received_double_faults_player_name,
+    received_double_faults.received_double_faults_value
+  from (select 1) dummy
+  left join aces on true
+  left join double_faults on true
+  left join received_aces on true
+  left join received_double_faults on true;
+end;
+$$;
+
+grant execute on function public.tournament_highs_summary(text)
+  to anon, authenticated, service_role;

@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3 } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -502,6 +502,23 @@ type PlayerStatsResponse = {
   };
   stats: PlayerStatsMetrics;
   samples: PlayerStatsSamples;
+};
+
+type TournamentHighs = {
+  tourney_id: string | null;
+  previous_tourney_id: string | null;
+  aces_player_id: string | null;
+  aces_player_name: string | null;
+  aces_value: number | null;
+  double_faults_player_id: string | null;
+  double_faults_player_name: string | null;
+  double_faults_value: number | null;
+  received_aces_player_id: string | null;
+  received_aces_player_name: string | null;
+  received_aces_value: number | null;
+  received_double_faults_player_id: string | null;
+  received_double_faults_player_name: string | null;
+  received_double_faults_value: number | null;
 };
 
 function formatPct(value: number | null) {
@@ -1820,6 +1837,117 @@ function PlayerStatsDialog({
 }
 
 
+function HighsDialog({
+  open,
+  onOpenChange,
+  data,
+  loading,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  data: TournamentHighs | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const items = [
+    {
+      label: "Más aces en un partido",
+      playerName: data?.aces_player_name ?? null,
+      playerId: data?.aces_player_id ?? null,
+      value: data?.aces_value ?? null,
+    },
+    {
+      label: "Más dobles faltas en un partido",
+      playerName: data?.double_faults_player_name ?? null,
+      playerId: data?.double_faults_player_id ?? null,
+      value: data?.double_faults_value ?? null,
+    },
+    {
+      label: "Jugador que recibió más aces",
+      playerName: data?.received_aces_player_name ?? null,
+      playerId: data?.received_aces_player_id ?? null,
+      value: data?.received_aces_value ?? null,
+    },
+    {
+      label: "Jugador que recibió más dobles faltas",
+      playerName: data?.received_double_faults_player_name ?? null,
+      playerId: data?.received_double_faults_player_id ?? null,
+      value: data?.received_double_faults_value ?? null,
+    },
+  ];
+
+  const formatValue = (value: number | null): string =>
+    value === null ? "Sin datos" : `${Number(value).toFixed(0)}`;
+
+  const formatName = (name: string | null, id: string | null): string =>
+    name?.trim()?.length
+      ? name
+      : id?.trim()?.length
+        ? `Jugador ${id}`
+        : "Sin datos";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-1 px-5 pb-3 pt-5">
+          <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-slate-100">
+            <Trophy className="h-5 w-5 text-amber-400" />
+            Highs del torneo
+          </DialogTitle>
+          <div className="text-xs text-slate-400">
+            Referencia: {data?.previous_tourney_id ?? "sin torneo anterior registrado"}
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 px-5 pb-5 max-h-[65vh] overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-sm text-slate-400">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando highs...
+            </div>
+          ) : error ? (
+            <div className="flex items-start gap-2 rounded-xl border border-red-600/50 bg-red-950/40 p-3 text-sm text-red-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <span>{error}</span>
+            </div>
+          ) : !data ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
+              Sin datos para el torneo anterior.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {items.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
+                >
+                  <div className="text-sm text-slate-300">{item.label}</div>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <div className="text-base font-semibold text-white">
+                      {formatName(item.playerName, item.playerId)}
+                    </div>
+                    <div className="text-lg font-semibold text-emerald-300">
+                      {formatValue(item.value)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-5 py-4 mt-auto">
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 export function EstrategoBracketApp() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -1838,6 +1966,10 @@ export function EstrategoBracketApp() {
   const [playerStatsData, setPlayerStatsData] = useState<PlayerStatsResponse | null>(null);
   const [playerStatsLoading, setPlayerStatsLoading] = useState(false);
   const [playerStatsError, setPlayerStatsError] = useState<string | null>(null);
+  const [highsOpen, setHighsOpen] = useState(false);
+  const [highsData, setHighsData] = useState<TournamentHighs | null>(null);
+  const [highsLoading, setHighsLoading] = useState(false);
+  const [highsError, setHighsError] = useState<string | null>(null);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -1981,6 +2113,59 @@ export function EstrategoBracketApp() {
     bracket?.tourney_id,
   ]);
 
+  useEffect(() => {
+    if (!highsOpen || !bracket?.tourney_id) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setHighsLoading(true);
+    setHighsError(null);
+    setHighsData(null);
+
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/tournament/${encodeURIComponent(bracket.tourney_id)}/highs`,
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          let message = `Error ${response.status}`;
+          try {
+            const payload = await response.json();
+            if (payload && typeof payload.error === "string" && payload.error.trim()) {
+              message = payload.error.trim();
+            }
+          } catch {
+            const text = await response.text();
+            if (text.trim()) {
+              message = text.trim();
+            }
+          }
+          if (!controller.signal.aborted) {
+            setHighsError(message);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as TournamentHighs | null;
+        if (!controller.signal.aborted) {
+          setHighsData(payload ?? null);
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setHighsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!controller.signal.aborted) {
+          setHighsLoading(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [highsOpen, bracket?.tourney_id]);
+
   const onSelectWinner = async (match: Match, slot: "top" | "bottom") => {
     if (!bracket) return;
     if (savingMatchId) return;
@@ -2075,6 +2260,17 @@ export function EstrategoBracketApp() {
       setPlayerStatsLoading(false);
     } else if (playerStatsTarget) {
       setPlayerStatsOpen(true);
+    }
+  };
+
+  const handleHighsOpenChange = (open: boolean) => {
+    if (!open) {
+      setHighsOpen(false);
+      setHighsData(null);
+      setHighsError(null);
+      setHighsLoading(false);
+    } else {
+      setHighsOpen(true);
     }
   };
 
@@ -2311,6 +2507,15 @@ export function EstrategoBracketApp() {
             <Flame className="w-4 h-4 mr-2" />
             {multiSimLoading ? "Simulando..." : "Simular xN"}
           </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() => setHighsOpen(true)}
+            disabled={highsLoading || !bracket}
+          >
+            <Trophy className="w-4 h-4 mr-2" />
+            Highs
+          </Button>
           <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
             Resetear
           </Button>
@@ -2355,6 +2560,13 @@ export function EstrategoBracketApp() {
       </div>
 
       <PrematchDialog open={pmOpen} onOpenChange={setPmOpen} match={pmMatch} bracket={bracket} />
+      <HighsDialog
+        open={highsOpen}
+        onOpenChange={handleHighsOpenChange}
+        data={highsData}
+        loading={highsLoading}
+        error={highsError}
+      />
       <PlayerStatsDialog
         open={playerStatsOpen}
         onOpenChange={handlePlayerStatsOpenChange}
