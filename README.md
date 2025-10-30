@@ -85,6 +85,7 @@ Disponible en http://localhost:3000.
 | `get_extended_prematch_summary.sql` | Calcula metricas, scores y alertas de dos jugadores (usa `rankings_snapshot_v2`, evalua localia, genera alertas). |
 | `build_draw_matches.sql` | Reconstruye la primera ronda en `draw_matches` apoyandose en `draw_entries` y `tournaments_info.draw_size`. |
 | `create_odds_cache.sql` | Define la tabla `odds_cache`, indices y politicas basicas para cachear cuotas y reducir llamadas a The Odds API. |
+| `create_prematch_metric_weights_api.sql` | Expone funciones en `public` para leer y actualizar los pesos de `estratego_v1.prematch_metric_weights` desde la API. |
 | `simulate_full_tournament.sql` | Simula un torneo completo promoviendo ganadores segun la probabilidad estimada. |
 | `simulate_multiple_runs.sql` | Ejecuta la simulacion completa N veces y persiste los resultados en `simulation_results`. |
 
@@ -108,6 +109,7 @@ Disponible en http://localhost:3000.
 - `draw_matches` debe mantener el orden logico (`R32-1` ... `R32-16`).
 - Asegurate de que `tournaments_info.draw_size` refleja 16/32/64 antes de ejecutar `build_draw_matches`; de lo contrario solo generara la primera ronda disponible.
 - Las cuotas consultadas se cachean en `public.odds_cache` (TTL configurable con `ODDS_CACHE_TTL_MINUTES` o desactivable via `ODDS_CACHE_DISABLED`).
+- Para exponer los pesos en la API, ejecuta `sql/create_prematch_metric_weights_api.sql` (define funciones `public.prematch_metric_weights_get` y `_upsert`).
 
 ### Ajuste de pesos (ejemplo)
 

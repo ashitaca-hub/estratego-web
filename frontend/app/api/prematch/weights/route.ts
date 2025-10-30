@@ -45,13 +45,17 @@ export async function GET() {
     auth: { persistSession: false },
   });
 
-  const { data, error } = await supabaseAdmin
-    .schema("estratego_v1")
-    .from("prematch_metric_weights")
-    .select("metric, weight");
+  const { data, error } = await supabaseAdmin.rpc("prematch_metric_weights_get");
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error.message ?? "";
+    if (message.includes("prematch_metric_weights_get")) {
+      return NextResponse.json(
+        { error: "Ejecuta sql/create_prematch_metric_weights_api.sql en Supabase para exponer los pesos." },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ error: message || "Error inesperado" }, { status: 500 });
   }
 
   const rows = Array.isArray(data) ? (data as WeightRow[]) : [];
@@ -107,14 +111,19 @@ export async function POST(request: Request) {
     auth: { persistSession: false },
   });
 
-  const { error } = await supabaseAdmin
-    .schema("estratego_v1")
-    .from("prematch_metric_weights")
-    // @ts-ignore onConflict requires PostgREST extension
-    .upsert(rows, { onConflict: "metric" });
+  const { error } = await supabaseAdmin.rpc("prematch_metric_weights_upsert", {
+    p_weights: rows,
+  });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error.message ?? "";
+    if (message.includes("prematch_metric_weights_upsert")) {
+      return NextResponse.json(
+        { error: "Ejecuta sql/create_prematch_metric_weights_api.sql en Supabase para habilitar el guardado." },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ error: message || "Error inesperado" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, rows: rows.length });
