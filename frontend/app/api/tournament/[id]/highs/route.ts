@@ -12,14 +12,21 @@ export async function GET(
     return NextResponse.json({ error: "tourney_id requerido" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .rpc("tournament_highs_summary", { p_tourney_id: tourneyId })
-    .catch((err) => ({ data: null, error: err as Error }));
+  try {
+    const { data, error } = await supabase.rpc("tournament_highs_summary", {
+      p_tourney_id: tourneyId,
+    });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const row = Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+    return NextResponse.json(row);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
-
-  const row = Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
-  return NextResponse.json(row);
 }
