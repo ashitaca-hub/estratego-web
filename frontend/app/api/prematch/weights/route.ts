@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -35,7 +34,18 @@ const DEFAULT_WEIGHTS: Record<(typeof METRIC_KEYS)[number], number> = {
 };
 
 export async function GET() {
-  const { data, error } = await supabase
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY no configurada" },
+      { status: 500 },
+    );
+  }
+
+  const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const { data, error } = await supabaseAdmin
     .schema("estratego_v1")
     .from("prematch_metric_weights")
     .select("metric, weight");
