@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, SlidersHorizontal } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -245,6 +245,13 @@ type PrematchSummary = {
   };
   tournament?: TournamentSummary;
   odds?: MatchOddsSummary;
+};
+
+type PrematchSummaryResponse = {
+  playerA: PlayerPrematchStats;
+  playerB: PlayerPrematchStats;
+  prob_player?: number | null;
+  [key: string]: unknown;
 };
 
 const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
@@ -519,6 +526,47 @@ type TournamentHighs = {
   received_double_faults_player_id: string | null;
   received_double_faults_player_name: string | null;
   received_double_faults_value: number | null;
+};
+
+type MetricConfig = {
+  key: string;
+  label: string;
+  defaultValue: number;
+};
+
+const WEIGHT_METRICS: MetricConfig[] = [
+  { key: "win_pct_year", label: "Win % año (best of 3)", defaultValue: 0.15 },
+  { key: "win_pct_surface", label: "Win % en superficie actual", defaultValue: 0.15 },
+  { key: "win_pct_month", label: "Win % último mes", defaultValue: 0.1 },
+  { key: "win_pct_vs_top10", label: "Win % vs top 10", defaultValue: 0.1 },
+  { key: "court_speed_score", label: "Adaptación velocidad pista", defaultValue: 0 },
+  { key: "rest_score", label: "Descanso relativo", defaultValue: 0.05 },
+  { key: "ranking_score", label: "Ranking score", defaultValue: 0.3 },
+  { key: "h2h_score", label: "Head-to-head score", defaultValue: 0.1 },
+  { key: "motivation_score", label: "Motivación", defaultValue: 0.05 },
+];
+
+const WEIGHTS_DEFAULTS: Record<string, number> = WEIGHT_METRICS.reduce(
+  (acc, item) => {
+    acc[item.key] = item.defaultValue;
+    return acc;
+  },
+  {} as Record<string, number>,
+);
+
+const METRIC_EXTRACTORS: Record<
+  string,
+  (player: PlayerPrematchStats | null | undefined) => number | null
+> = {
+  win_pct_year: (player) => player?.win_pct_year ?? null,
+  win_pct_surface: (player) => player?.win_pct_surface ?? null,
+  win_pct_month: (player) => player?.win_pct_month ?? null,
+  win_pct_vs_top10: (player) => player?.win_pct_vs_top10 ?? null,
+  court_speed_score: (player) => player?.court_speed_score ?? null,
+  rest_score: (player) => player?.rest_score ?? null,
+  ranking_score: (player) => player?.ranking_score ?? null,
+  h2h_score: (player) => player?.h2h_score ?? null,
+  motivation_score: (player) => player?.motivation_score ?? null,
 };
 
 function formatPct(value: number | null) {
@@ -1947,6 +1995,194 @@ function HighsDialog({
   );
 }
 
+function WeightsDialog({
+  open,
+  onOpenChange,
+  weightsDraft,
+  loading,
+  saving,
+  error,
+  success,
+  onChange,
+  onReset,
+  onSave,
+  weightsSum,
+  weightsDirty,
+  preview,
+  match,
+  summary,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  weightsDraft: Record<string, number> | null;
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  success: string | null;
+  onChange: (metric: string, value: number) => void;
+  onReset: () => void;
+  onSave: () => void;
+  weightsSum: number;
+  weightsDirty: boolean;
+  preview: {
+    playerAName: string;
+    playerBName: string;
+    scoreA: number;
+    scoreB: number;
+    probA: number | null;
+    probB: number | null;
+  } | null;
+  match: Match | null;
+  summary: PrematchSummaryResponse | null;
+}) {
+  const disableInputs = loading || !weightsDraft;
+  const playerAName = preview?.playerAName ?? match?.top.name ?? "Jugador A";
+  const playerBName = preview?.playerBName ?? match?.bottom.name ?? "Jugador B";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
+          <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-100">
+            <SlidersHorizontal className="h-5 w-5 text-sky-400" />
+            Ajustar pesos prematch
+          </DialogTitle>
+          <div className="text-xs text-slate-400">
+            Modifica los pesos usados en la probabilidad y prueba con los últimos jugadores consultados.
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-5 px-6 pb-5 max-h-[68vh] overflow-y-auto">
+          {loading && (
+            <div className="flex items-center justify-center py-6 text-sm text-slate-400">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando pesos...
+            </div>
+          )}
+
+          {!loading && !weightsDraft && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
+              No se pudieron cargar los pesos actuales.
+            </div>
+          )}
+
+          {!loading && weightsDraft && (
+            <>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-500">
+                Suma total: <span className="font-semibold text-slate-200">{weightsSum.toFixed(2)}</span>
+                <button
+                  type="button"
+                  className="ml-3 text-xs text-sky-400 hover:underline"
+                  disabled={disableInputs}
+                  onClick={onReset}
+                >
+                  Restablecer por defecto
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {WEIGHT_METRICS.map((metric) => {
+                  const current = weightsDraft[metric.key] ?? WEIGHTS_DEFAULTS[metric.key] ?? 0;
+                  return (
+                    <div key={metric.key} className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3">
+                      <div className="mb-2 flex items-center justify-between text-sm text-slate-200">
+                        <span>{metric.label}</span>
+                        <span className="text-xs text-slate-500">{current.toFixed(2)}</span>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={current}
+                          disabled={disableInputs}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            onChange(metric.key, Number.isFinite(value) ? value : 0);
+                          }}
+                          className="flex-1"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={current.toFixed(2)}
+                          disabled={disableInputs}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            onChange(metric.key, Number.isFinite(value) ? value : 0);
+                          }}
+                          className="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3">
+            <div className="text-sm text-slate-200">Vista previa con jugadores recientes</div>
+            {summary ? (
+              preview ? (
+                <div className="grid gap-2 text-sm text-slate-300">
+                  <div className="flex items-center justify-between">
+                    <span>{playerAName}</span>
+                    <span className="font-semibold text-emerald-300">
+                      {preview.probA == null ? "N/A" : `${(preview.probA * 100).toFixed(1)}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>{playerBName}</span>
+                    <span className="font-semibold text-emerald-300">
+                      {preview.probB == null ? "N/A" : `${(preview.probB * 100).toFixed(1)}%`}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400">No se pudo calcular la vista previa con los datos actuales.</div>
+              )
+            ) : (
+              <div className="text-xs text-slate-400">Abre primero un modal prematch para disponer de datos y previsualizar la probabilidad.</div>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-600/50 bg-red-950/40 p-3 text-sm text-red-200">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded-xl border border-emerald-600/40 bg-emerald-950/40 p-3 text-sm text-emerald-200">
+              {success}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-6 py-4 mt-auto">
+          <div className="flex w-full flex-col justify-end gap-2 sm:flex-row sm:items-center">
+            <Button variant="outline" onClick={onReset} disabled={disableInputs || saving}>
+              Restablecer
+            </Button>
+            <div className="ml-auto flex gap-2">
+              <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
+                Cerrar
+              </Button>
+              <Button onClick={onSave} disabled={!weightsDraft || !weightsDirty || saving}>
+                {saving ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 export function EstrategoBracketApp() {
   const router = useRouter();
@@ -1970,6 +2206,15 @@ export function EstrategoBracketApp() {
   const [highsData, setHighsData] = useState<TournamentHighs | null>(null);
   const [highsLoading, setHighsLoading] = useState(false);
   const [highsError, setHighsError] = useState<string | null>(null);
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [weightsData, setWeightsData] = useState<Record<string, number> | null>(null);
+  const [weightsDraft, setWeightsDraft] = useState<Record<string, number> | null>(null);
+  const [weightsLoading, setWeightsLoading] = useState(false);
+  const [weightsSaving, setWeightsSaving] = useState(false);
+  const [weightsError, setWeightsError] = useState<string | null>(null);
+  const [weightsSuccess, setWeightsSuccess] = useState<string | null>(null);
+  const [lastPrematchSummary, setLastPrematchSummary] = useState<PrematchSummaryResponse | null>(null);
+  const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     setTidInput(tParam);
@@ -2015,6 +2260,59 @@ export function EstrategoBracketApp() {
   () => ["R64", "R32", "R16", "QF", "SF", "F"],
   []
 );
+
+  const weightsKeys = useMemo(() => WEIGHT_METRICS.map((m) => m.key), []);
+
+  const weightsSum = useMemo(() => {
+    if (!weightsDraft) return 0;
+    return weightsKeys.reduce((total, key) => total + (weightsDraft[key] ?? 0), 0);
+  }, [weightsDraft, weightsKeys]);
+
+  const weightsDirty = useMemo(() => {
+    if (!weightsDraft || !weightsData) return false;
+    return weightsKeys.some((key) => {
+      const base = weightsData[key] ?? WEIGHTS_DEFAULTS[key] ?? 0;
+      const current = weightsDraft[key] ?? 0;
+      return Math.abs(base - current) > 1e-6;
+    });
+  }, [weightsDraft, weightsData, weightsKeys]);
+
+  const weightsPreview = useMemo(() => {
+    if (!weightsDraft || !lastPrematchSummary) return null;
+    let scoreA = 0;
+    let scoreB = 0;
+    for (const key of weightsKeys) {
+      const weight = weightsDraft[key] ?? 0;
+      if (!Number.isFinite(weight) || weight === 0) continue;
+      const extractor = METRIC_EXTRACTORS[key];
+      if (!extractor) continue;
+      const valueA = extractor(lastPrematchSummary.playerA) ?? 0;
+      const valueB = extractor(lastPrematchSummary.playerB) ?? 0;
+      scoreA += weight * valueA;
+      scoreB += weight * valueB;
+    }
+    const total = scoreA + scoreB;
+    if (!Number.isFinite(total) || total <= 0) {
+      return {
+        playerAName: lastPrematchMatch?.top.name ?? "Jugador A",
+        playerBName: lastPrematchMatch?.bottom.name ?? "Jugador B",
+        scoreA,
+        scoreB,
+        probA: null,
+        probB: null,
+      };
+    }
+    const probA = scoreA / total;
+    const probB = scoreB / total;
+    return {
+      playerAName: lastPrematchMatch?.top.name ?? "Jugador A",
+      playerBName: lastPrematchMatch?.bottom.name ?? "Jugador B",
+      scoreA,
+      scoreB,
+      probA,
+      probB,
+    };
+  }, [weightsDraft, lastPrematchSummary, lastPrematchMatch, weightsKeys]);
 
   const matchesByRound = useMemo(() => {
     const map: Record<string, Match[]> = {};
@@ -2166,6 +2464,53 @@ export function EstrategoBracketApp() {
     return () => controller.abort();
   }, [highsOpen, bracket?.tourney_id]);
 
+  useEffect(() => {
+    if (!weightsOpen) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setWeightsLoading(true);
+    setWeightsError(null);
+    setWeightsSuccess(null);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/prematch/weights", { signal: controller.signal });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Error ${res.status}`);
+        }
+        const payload = await res.json();
+        const list = Array.isArray((payload as any)?.weights) ? (payload as any).weights : [];
+        const merged: Record<string, number> = { ...WEIGHTS_DEFAULTS };
+        for (const item of list) {
+          if (item && typeof item.metric === "string") {
+            const num = Number(item.weight);
+            if (Number.isFinite(num)) {
+              merged[item.metric.trim()] = num;
+            }
+          }
+        }
+        if (!controller.signal.aborted) {
+          setWeightsData(merged);
+          setWeightsDraft({ ...merged });
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setWeightsError(err instanceof Error ? err.message : String(err));
+        setWeightsData({ ...WEIGHTS_DEFAULTS });
+        setWeightsDraft({ ...WEIGHTS_DEFAULTS });
+      } finally {
+        if (!controller.signal.aborted) {
+          setWeightsLoading(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [weightsOpen]);
+
   const onSelectWinner = async (match: Match, slot: "top" | "bottom") => {
     if (!bracket) return;
     if (savingMatchId) return;
@@ -2271,6 +2616,61 @@ export function EstrategoBracketApp() {
       setHighsLoading(false);
     } else {
       setHighsOpen(true);
+    }
+  };
+
+  const handleWeightsOpenChange = (open: boolean) => {
+    if (!open) {
+      setWeightsOpen(false);
+      setWeightsError(null);
+      setWeightsSuccess(null);
+      setWeightsLoading(false);
+      setWeightsSaving(false);
+    } else {
+      setWeightsOpen(true);
+    }
+  };
+
+  const handleWeightChange = (metric: string, value: number) => {
+    setWeightsDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, [metric]: value };
+    });
+    setWeightsSuccess(null);
+  };
+
+  const handleWeightsReset = () => {
+    setWeightsDraft({ ...WEIGHTS_DEFAULTS });
+    setWeightsSuccess(null);
+  };
+
+  const handleWeightsSave = async () => {
+    if (!weightsDraft) return;
+    setWeightsSaving(true);
+    setWeightsError(null);
+    setWeightsSuccess(null);
+    try {
+      const payload = {
+        weights: WEIGHT_METRICS.map((metric) => ({
+          metric: metric.key,
+          weight: weightsDraft[metric.key] ?? 0,
+        })),
+      };
+      const res = await fetch("/api/prematch/weights", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const textResponse = await res.text();
+        throw new Error(textResponse || `Error ${res.status}`);
+      }
+      setWeightsData(weightsDraft ? { ...weightsDraft } : null);
+      setWeightsSuccess("Pesos guardados correctamente.");
+    } catch (err) {
+      setWeightsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWeightsSaving(false);
     }
   };
 
@@ -2428,6 +2828,8 @@ export function EstrategoBracketApp() {
       });
 
       const summary = await res.json();
+      setLastPrematchSummary(summary);
+      setLastPrematchMatch(m);
       console.log("Prematch summary:", summary);
     } catch (err) {
       console.error("Error en prematch", err);
@@ -2510,6 +2912,15 @@ export function EstrategoBracketApp() {
           <Button
             variant="outline"
             className="rounded-2xl"
+            onClick={() => setWeightsOpen(true)}
+            disabled={weightsLoading}
+          >
+            <SlidersHorizontal className="w-4 h-4 mr-2" />
+            Pesos
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl"
             onClick={() => setHighsOpen(true)}
             disabled={highsLoading || !bracket}
           >
@@ -2566,6 +2977,23 @@ export function EstrategoBracketApp() {
         data={highsData}
         loading={highsLoading}
         error={highsError}
+      />
+      <WeightsDialog
+        open={weightsOpen}
+        onOpenChange={handleWeightsOpenChange}
+        weightsDraft={weightsDraft}
+        loading={weightsLoading}
+        saving={weightsSaving}
+        error={weightsError}
+        success={weightsSuccess}
+        onChange={handleWeightChange}
+        onReset={handleWeightsReset}
+        onSave={handleWeightsSave}
+        weightsSum={weightsSum}
+        weightsDirty={weightsDirty}
+        preview={weightsPreview}
+        match={lastPrematchMatch}
+        summary={lastPrematchSummary}
       />
       <PlayerStatsDialog
         open={playerStatsOpen}
