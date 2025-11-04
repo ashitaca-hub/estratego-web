@@ -75,6 +75,12 @@ function TopOutcomeLinesChart({
     { label: "Final", color: "hsl(2 88% 58%)" },
     { label: "Semifinal", color: "hsl(210 86% 55%)" },
   ];
+  const maxPercent = 20;
+  const tickValues = [5, 10, 15, 20];
+  const formatPercentage = (value: number) => {
+    if (value >= 100) return "100%";
+    return value % 1 === 0 ? `${value.toFixed(0)}%` : `${value.toFixed(1)}%`;
+  };
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
@@ -84,7 +90,7 @@ function TopOutcomeLinesChart({
             Top 5 finales y semifinales
           </h2>
           <p className="text-xs text-slate-400">
-            Lineas verticales: rojo para finales, azul para semifinales. La altura refleja el porcentaje de runs alcanzados.
+            Lineas verticales: rojo para finales, azul para semifinales. Escala ajustada al 20% de runs alcanzados.
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-slate-400">
@@ -103,15 +109,17 @@ function TopOutcomeLinesChart({
       <div className="relative mt-6 overflow-x-auto">
         <div className="relative h-[260px] min-w-[420px]">
           <div className="absolute inset-0 border-l border-b border-slate-800/80" />
-          {Array.from({ length: 5 }).map((_, idx) => {
-            const value = (idx + 1) * 20;
+          {tickValues.map((value) => {
+            const normalized = Math.min(100, Math.max(0, (value / maxPercent) * 100));
             return (
               <div
                 key={value}
                 className="absolute inset-x-0 border-t border-slate-800/40 text-[11px] text-slate-500"
-                style={{ bottom: `${value}%` }}
+                style={{ bottom: `${normalized}%` }}
               >
-                <span className="absolute -left-14 -translate-y-1/2">{value}%</span>
+                <span className="absolute -left-14 -translate-y-1/2">
+                  {value}%
+                </span>
               </div>
             );
           })}
@@ -122,16 +130,15 @@ function TopOutcomeLinesChart({
                   ? "hsl(2 88% 58%)"
                   : "hsl(210 86% 55%)";
               const muted = entry.kind === "final" ? "hsl(2 80% 80%)" : "hsl(210 65% 76%)";
-              const height = Math.max(4, Math.min(chartHeight, (entry.percentage / 100) * chartHeight));
+              const cappedValue = Math.min(entry.percentage, maxPercent);
+              const height = Math.max(4, Math.min(chartHeight, (cappedValue / maxPercent) * chartHeight));
+              const displayValue = formatPercentage(entry.percentage);
 
               return (
                 <div
                   key={`${entry.kind}-${entry.key}`}
                   className="flex min-w-[85px] flex-col items-center gap-2 text-center"
                 >
-                  <div className="text-xs font-semibold text-slate-100">
-                    {entry.percentage.toFixed(entry.percentage === 100 ? 0 : 1)}%
-                  </div>
                   <div className="flex h-[220px] w-10 items-end justify-center">
                     <div className="relative flex w-px flex-col items-center justify-end">
                       <div
@@ -144,9 +151,21 @@ function TopOutcomeLinesChart({
                         &nbsp;
                       </div>
                       <div
-                        className="absolute -top-2 h-2.5 w-2.5 rounded-full border border-slate-950"
-                        style={{ background: color }}
-                      />
+                        className="pointer-events-none absolute flex items-center gap-1"
+                        style={{
+                          bottom: `${height}px`,
+                          transform: "translateY(50%)",
+                          color,
+                        }}
+                      >
+                        <span
+                          className="block h-2.5 w-2.5 rounded-full border border-slate-950"
+                          style={{ background: color }}
+                        />
+                        <span className="text-[11px] font-semibold text-current whitespace-nowrap">
+                          {displayValue}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
