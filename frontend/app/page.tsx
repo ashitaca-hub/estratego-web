@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -2215,10 +2215,59 @@ export function EstrategoBracketApp() {
   const [weightsSuccess, setWeightsSuccess] = useState<string | null>(null);
   const [lastPrematchSummary, setLastPrematchSummary] = useState<PrematchSummaryResponse | null>(null);
   const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
+  const [simulationRunCount, setSimulationRunCount] = useState<number | null>(null);
+  const [simulationStatusLoading, setSimulationStatusLoading] = useState(false);
+
+  const refreshSimulationStatus = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!tParam) return null;
+      try {
+        const res = await fetch(
+          `/api/simulation/${encodeURIComponent(tParam)}/status`,
+          { signal },
+        );
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(text || `HTTP ${res.status}`);
+        }
+        const payload = await res.json().catch(() => ({}));
+        if (signal?.aborted) {
+          return payload ?? null;
+        }
+        const count =
+          typeof payload?.run_count === "number" && Number.isFinite(payload.run_count)
+            ? payload.run_count
+            : 0;
+        setSimulationRunCount(count);
+        return payload ?? null;
+      } catch (err) {
+        if (signal?.aborted) {
+          return null;
+        }
+        console.warn("No se pudo cargar estado de simulaciones:", err);
+        setSimulationRunCount(null);
+        return null;
+      }
+    },
+    [tParam],
+  );
 
   useEffect(() => {
     setTidInput(tParam);
   }, [tParam]);
+
+  useEffect(() => {
+    if (!tParam) return;
+    const controller = new AbortController();
+    setSimulationStatusLoading(true);
+    setSimulationRunCount(null);
+    refreshSimulationStatus(controller.signal).finally(() => {
+      if (!controller.signal.aborted) {
+        setSimulationStatusLoading(false);
+      }
+    });
+    return () => controller.abort();
+  }, [tParam, refreshSimulationStatus]);
 
   // Load tournaments list (recent)
   useEffect(() => {
@@ -2276,6 +2325,11 @@ export function EstrategoBracketApp() {
       return Math.abs(base - current) > 1e-6;
     });
   }, [weightsDraft, weightsData, weightsKeys]);
+
+  const analyticsAvailable = useMemo(
+    () => (simulationRunCount ?? 0) > 0,
+    [simulationRunCount],
+  );
 
   const weightsPreview = useMemo(() => {
     if (!weightsDraft || !lastPrematchSummary) return null;
@@ -2767,6 +2821,12 @@ export function EstrategoBracketApp() {
       }
 
       if (processed > 0 && processed === runs) {
+        setSimulationStatusLoading(true);
+        try {
+          await refreshSimulationStatus();
+        } finally {
+          setSimulationStatusLoading(false);
+        }
         router.push(
           `/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`,
         );
@@ -2908,6 +2968,15 @@ export function EstrategoBracketApp() {
           >
             <Flame className="w-4 h-4 mr-2" />
             {multiSimLoading ? "Simulando..." : "Simular xN"}
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() => router.push(`/simulation/${encodeURIComponent(bracket.tourney_id)}/analytics`)}
+            disabled={!analyticsAvailable || simulationStatusLoading || !bracket}
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Analytics
           </Button>
           <Button
             variant="outline"

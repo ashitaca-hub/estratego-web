@@ -10,16 +10,6 @@ type MultipleSimPayload = {
   reset?: boolean;
 };
 
-const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
-const nextRound: Record<(typeof roundOrder)[number], string | null> = {
-  R64: "R32",
-  R32: "R16",
-  R16: "QF",
-  QF: "SF",
-  SF: "F",
-  F: null,
-};
-
 async function ensureDraw(tourneyId: string) {
   const { data: existing, error: checkError } = await supabase
     .from("draw_matches")
@@ -38,71 +28,6 @@ async function ensureDraw(tourneyId: string) {
 
     if (buildError) {
       throw new Error(`Error in build_draw_matches: ${buildError.message}`);
-    }
-  }
-}
-
-async function promoteWinners(tourneyId: string) {
-  const { data: roundsRows, error: roundsErr } = await supabase
-    .from("draw_matches")
-    .select("id, round, winner_id")
-    .eq("tourney_id", tourneyId);
-
-  if (roundsErr || !roundsRows || roundsRows.length === 0) {
-    return;
-  }
-
-  const present = new Set(roundsRows.map((r: any) => r.round));
-  for (const r of roundOrder) {
-    if (!present.has(r)) continue;
-    const next = nextRound[r];
-    if (!next) break;
-
-    const cur = roundsRows
-      .filter((row: any) => row.round === r)
-      .sort((a: any, b: any) => {
-        const na = parseInt(String(a.id).split("-")[1] || "0", 10);
-        const nb = parseInt(String(b.id).split("-")[1] || "0", 10);
-        return na - nb;
-      });
-
-    const winners = cur.map((row: any) => row.winner_id as string | null);
-    const upserts: Array<{
-      id: string;
-      tourney_id: string;
-      round: string;
-      top_id: string;
-      bot_id: string;
-    }> = [];
-
-    for (let i = 0; i < winners.length; i += 2) {
-      const top = winners[i];
-      const bot = winners[i + 1] ?? null;
-      if (!top || !bot) continue;
-      const matchNum = i / 2 + 1;
-      upserts.push({
-        id: `${next}-${matchNum}`,
-        tourney_id: tourneyId,
-        round: next,
-        top_id: top,
-        bot_id: bot,
-      });
-    }
-
-    if (upserts.length > 0) {
-      const { error: upErr } = await supabase
-        .from("draw_matches")
-        // @ts-ignore onConflict option is passed to PostgREST
-        .upsert(upserts, { onConflict: "tourney_id,id" });
-
-      if (upErr) {
-        console.warn(
-          "No se pudieron crear/actualizar emparejamientos de la siguiente ronda:",
-          upErr.message,
-        );
-      } else {
-        console.log(`Emparejamientos listos para ${next}:`, upserts.length);
-      }
     }
   }
 }
@@ -162,15 +87,6 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: simError.message }), {
       status: 500,
     });
-  }
-
-  try {
-    await promoteWinners(tourneyId);
-  } catch (err) {
-    console.warn(
-      "Post multi-run pairing step failed:",
-      err instanceof Error ? err.message : String(err),
-    );
   }
 
   return new Response(
