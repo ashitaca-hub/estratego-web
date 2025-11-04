@@ -28,6 +28,201 @@ type AggregatedPlayer = {
 };
 
 const roundPriority = ["F", "SF", "QF", "R16", "R32", "R64", "R128"] as const;
+const roundLevelMap = new Map<string, number>(
+  roundPriority.map((round, index) => [round, roundPriority.length - index]),
+);
+
+type BellChartBar = {
+  key: string;
+  name: string;
+  displayId: string;
+  country: string | null;
+  highestRound: string;
+  highestLevel: number;
+  highestCount: number;
+  averageLevel: number;
+  totalAppearances: number;
+  intensity: number;
+};
+
+const arrangeBellOrder = <T,>(items: T[]): T[] => {
+  if (items.length === 0) return [];
+  if (items.length === 1) return items.slice();
+
+  const slots: Array<T | null> = new Array(items.length).fill(null);
+  let centre = Math.floor(items.length / 2);
+  slots[centre] = items[0];
+
+  let left = centre - 1;
+  let right = centre + 1;
+  let index = 1;
+
+  while (index < items.length) {
+    if (left >= 0) {
+      slots[left] = items[index];
+      left -= 1;
+      index += 1;
+      if (index >= items.length) break;
+    }
+
+    if (right < items.length) {
+      slots[right] = items[index];
+      right += 1;
+      index += 1;
+    }
+  }
+
+  return slots.filter((slot): slot is T => slot !== null);
+};
+
+function BellCurveChart({
+  data,
+  axisRounds,
+  maxLevel,
+  totalRuns,
+}: {
+  data: BellChartBar[];
+  axisRounds: string[];
+  maxLevel: number;
+  totalRuns: number;
+}) {
+  if (!data.length) {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 text-sm text-slate-400">
+        Aun no hay datos de simulaciones para graficar.
+      </div>
+    );
+  }
+
+  const axisEntries = axisRounds
+    .map((round) => {
+      const level = roundLevelMap.get(round) ?? 0;
+      const normalized =
+        maxLevel > 1 ? ((level - 1) / (maxLevel - 1)) * 100 : 100;
+      return {
+        round,
+        level,
+        position: Math.max(0, Math.min(100, normalized)),
+      };
+    })
+    .sort((a, b) => a.level - b.level);
+
+  const normalizeLevel = (level: number) => {
+    if (maxLevel <= 1) return 100;
+    const raw = ((level - 1) / (maxLevel - 1)) * 100;
+    return Math.max(6, Math.min(100, raw));
+  };
+
+  const formatPercent = (value: number) =>
+    `${(value * 100).toFixed(value === 1 ? 0 : value >= 0.1 ? 1 : 2)}%`;
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-100">
+            Distribucion de rondas alcanzadas
+          </h2>
+          <p className="text-xs text-slate-400">
+            Barras ordenadas tipo campana: mas avanzan, mas centradas y con color mas intenso.
+          </p>
+        </div>
+        <div className="text-xs text-slate-500">
+          Runs considerados: {totalRuns > 0 ? totalRuns : "0"}
+        </div>
+      </div>
+
+      <div className="relative mt-4">
+        <div className="absolute left-0 top-0 bottom-0 w-16">
+          {axisEntries.map((entry) => (
+            <div
+              key={entry.round}
+              className="absolute right-2 -translate-y-1/2 text-[11px] text-slate-500"
+              style={{ bottom: `${entry.position}%` }}
+            >
+              {entry.round}
+            </div>
+          ))}
+        </div>
+        <div className="pl-16">
+          <div className="relative h-64">
+            <div className="pointer-events-none absolute inset-0">
+              {axisEntries.map((entry) => (
+                <div
+                  key={`line-${entry.round}`}
+                  className="absolute inset-x-0 border-t border-slate-800/60"
+                  style={{ bottom: `${entry.position}%` }}
+                />
+              ))}
+              <div className="absolute inset-y-0 left-0 border-l border-slate-800/80" />
+              <div className="absolute bottom-0 inset-x-0 border-t border-slate-800/80" />
+            </div>
+            <div className="relative h-full overflow-x-auto">
+              <div className="flex h-full items-end justify-center gap-6 px-6">
+                {data.map((bar) => {
+                  const heightPct = normalizeLevel(bar.highestLevel);
+                  const intensity = Math.max(0, Math.min(1, bar.intensity));
+                  const baseHue = 196;
+                  const baseSat = 82;
+                  const maxLight = 70;
+                  const minLight = 28;
+                  const lightness =
+                    maxLight - intensity * (maxLight - minLight);
+                  const gradientTail = Math.max(12, lightness - 6);
+                  const shadowLight = Math.max(8, lightness - 12);
+                  const barColor = `hsl(${baseHue} ${baseSat}% ${lightness}%)`;
+                  const shadowOpacity = 0.25 + intensity * 0.35;
+                  const shadowColor = `hsla(${baseHue}, ${baseSat}%, ${shadowLight}%, ${shadowOpacity})`;
+                  const percentage =
+                    totalRuns > 0 ? bar.highestCount / totalRuns : 0;
+
+                  return (
+                    <div
+                      key={bar.key}
+                      className="flex min-w-[110px] flex-col items-center gap-2 text-center"
+                    >
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                        {bar.highestRound}
+                      </div>
+                      <div className="flex h-full w-14 items-end justify-center">
+                        <div
+                          className="relative flex w-full items-end justify-center"
+                          style={{ height: "100%" }}
+                        >
+                          <div
+                            className="w-full rounded-t-lg border border-slate-700/50"
+                            style={{
+                              height: `${heightPct}%`,
+                              background: `linear-gradient(180deg, ${barColor} 0%, hsl(${baseHue} ${baseSat}% ${gradientTail}%) 100%)`,
+                              boxShadow: `0px 10px 25px ${shadowColor}`,
+                            }}
+                          >
+                            <div className="absolute inset-x-0 top-2 text-[11px] font-semibold text-slate-900/80">
+                              {bar.highestCount}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {percentage > 0 ? formatPercent(percentage) : "0%"}
+                      </div>
+                      <div className="text-xs font-medium text-slate-100">
+                        {bar.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        #{bar.displayId}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SimulationAnalyticsPage() {
   const params = useParams<{ tourneyId: string }>();
@@ -166,6 +361,8 @@ export default function SimulationAnalyticsPage() {
     return set.size;
   }, [rows]);
 
+  const effectiveRunCount = runCount ?? totalRuns;
+
   const aggregated = useMemo(() => {
     const roundsPresent = new Set<string>();
     const byPlayer = new Map<string, AggregatedPlayer>();
@@ -213,6 +410,93 @@ export default function SimulationAnalyticsPage() {
     };
   }, [rows, playersMap]);
 
+  const bellChart = useMemo(() => {
+    if (!aggregated.rows.length) {
+      return {
+        bars: [] as BellChartBar[],
+        axisRounds: aggregated.rounds.length ? aggregated.rounds : Array.from(roundPriority),
+        maxLevel: roundPriority.length,
+      };
+    }
+
+    const bars: BellChartBar[] = [];
+
+    for (const player of aggregated.rows) {
+      let highestLevel = 0;
+      let highestRound = "";
+      let highestCount = 0;
+      let totalAppearances = 0;
+      let weightedLevels = 0;
+
+      for (const round of roundPriority) {
+        const appearances = player.totals[round] ?? 0;
+        if (appearances <= 0) continue;
+        const level = roundLevelMap.get(round) ?? 0;
+        totalAppearances += appearances;
+        weightedLevels += appearances * level;
+
+        if (
+          level > highestLevel ||
+          (level === highestLevel && appearances > highestCount)
+        ) {
+          highestLevel = level;
+          highestRound = round;
+          highestCount = appearances;
+        }
+      }
+
+      if (!totalAppearances || !highestRound) continue;
+
+      const averageLevel =
+        totalAppearances > 0 ? weightedLevels / totalAppearances : 0;
+      const intensity =
+        effectiveRunCount > 0
+          ? Math.max(0, Math.min(1, highestCount / effectiveRunCount))
+          : 0;
+
+      bars.push({
+        key: player.key,
+        name: player.name,
+        displayId: player.displayId,
+        country: player.country ?? null,
+        highestRound,
+        highestLevel,
+        highestCount,
+        averageLevel,
+        totalAppearances,
+        intensity,
+      });
+    }
+
+    const sorted = bars.sort((a, b) => {
+      const avgDiff = b.averageLevel - a.averageLevel;
+      if (Math.abs(avgDiff) > 1e-6) return avgDiff;
+      const levelDiff = b.highestLevel - a.highestLevel;
+      if (levelDiff !== 0) return levelDiff;
+      const intensityDiff = b.intensity - a.intensity;
+      if (Math.abs(intensityDiff) > 1e-6) return intensityDiff;
+      return a.name.localeCompare(b.name);
+    });
+
+    const orderedBars = arrangeBellOrder(sorted);
+    const axisRounds =
+      aggregated.rounds.length > 0 ? aggregated.rounds : Array.from(roundPriority);
+
+    const axisMaxLevel =
+      axisRounds.length > 0
+        ? axisRounds.reduce((max, round) => {
+            const level = roundLevelMap.get(round) ?? 0;
+            return level > max ? level : max;
+          }, 1)
+        : roundPriority.length;
+
+    return {
+      bars: orderedBars,
+      axisRounds,
+      maxLevel: axisMaxLevel,
+    };
+  }, [aggregated.rows, aggregated.rounds, effectiveRunCount]);
+
   const topPerformers = useMemo(() => {
     if (aggregated.rows.length === 0) return [];
 
@@ -242,8 +526,6 @@ export default function SimulationAnalyticsPage() {
       </div>
     );
   }
-
-  const effectiveRunCount = runCount ?? totalRuns;
 
   return (
     <div className="min-h-screen space-y-6 p-6 md:p-10 text-slate-100 bg-slate-950">
@@ -277,10 +559,16 @@ export default function SimulationAnalyticsPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">
-          Aún no hay simulaciones registradas para este torneo.
+          Aun no hay simulaciones registradas para este torneo.
         </div>
       ) : (
         <div className="space-y-6">
+          <BellCurveChart
+            data={bellChart.bars}
+            axisRounds={bellChart.axisRounds}
+            maxLevel={bellChart.maxLevel}
+            totalRuns={effectiveRunCount}
+          />
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
             <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
               <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
