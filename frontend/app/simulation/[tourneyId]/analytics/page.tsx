@@ -304,7 +304,6 @@ export default function SimulationAnalyticsPage() {
     return set.size;
   }, [rows]);
 
-  const effectiveRunCount = runCount ?? totalRuns;
 
   const effectiveRunCount = useMemo(
     () => (runCount != null ? runCount : totalRuns),
