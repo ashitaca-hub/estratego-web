@@ -7,14 +7,18 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $function$
 DECLARE
-  v_size    INT;
-  v_round   TEXT;
-  i         INT;
-  top_pos   INT;
-  bot_pos   INT;
-  v_idx     INT;
-  top_id    INT;
-  bot_id    INT;
+  round_labels CONSTANT TEXT[] := ARRAY['R64','R32','R16','QF','SF','F'];
+  v_size       INT;
+  v_round      TEXT;
+  start_idx    INT;
+  i            INT;
+  top_pos      INT;
+  bot_pos      INT;
+  v_idx        INT;
+  top_id       INT;
+  bot_id       INT;
+  matches_prev INT;
+  r_idx        INT;
 BEGIN
   -- Determine draw size for the requested tournament.
   SELECT draw_size
@@ -32,15 +36,27 @@ BEGIN
    WHERE tourney_id = p_tournament_id;
 
   -- Pick the opening round label based on draw size (defaults to R16).
-  IF v_size = 16 THEN
-    v_round := 'R16';
+  IF v_size = 64 THEN
+    v_round := 'R64';
   ELSIF v_size = 32 THEN
     v_round := 'R32';
-  ELSIF v_size = 64 THEN
-    v_round := 'R64';
+  ELSIF v_size = 16 THEN
+    v_round := 'R16';
+  ELSIF v_size = 8 THEN
+    v_round := 'QF';
+  ELSIF v_size = 4 THEN
+    v_round := 'SF';
+  ELSIF v_size = 2 THEN
+    v_round := 'F';
   ELSE
     v_round := 'R16';
   END IF;
+
+  SELECT idx
+    INTO start_idx
+    FROM unnest(round_labels) WITH ORDINALITY AS t(lbl, idx)
+    WHERE lbl = v_round
+    LIMIT 1;
 
   v_idx := 1;
   i := 1;
@@ -74,5 +90,31 @@ BEGIN
     v_idx := v_idx + 1;
     i := i + 2;
   END LOOP;
+
+  -- Pre-create empty matches for later rounds so simulations can advance.
+  IF start_idx IS NOT NULL THEN
+    matches_prev := (v_size + 1) / 2; -- round up number of matches in the opening round
+
+    FOR r_idx IN start_idx + 1 .. array_length(round_labels, 1) LOOP
+      matches_prev := (matches_prev + 1) / 2; -- round up half the previous round
+
+      IF matches_prev <= 0 THEN
+        EXIT;
+      END IF;
+
+      FOR i IN 1 .. matches_prev LOOP
+        INSERT INTO public.draw_matches (id, tourney_id, round, top_id, bot_id, winner_id)
+        VALUES (
+          CONCAT(round_labels[r_idx], '-', i),
+          p_tournament_id,
+          round_labels[r_idx],
+          NULL,
+          NULL,
+          NULL
+        )
+        ON CONFLICT (tourney_id, id) DO NOTHING;
+      END LOOP;
+    END LOOP;
+  END IF;
 END;
 $function$;

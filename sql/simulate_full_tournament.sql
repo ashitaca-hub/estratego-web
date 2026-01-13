@@ -10,6 +10,9 @@ DECLARE
   rounds          CONSTANT TEXT[] := ARRAY['R64','R32','R16','QF','SF','F'];
   first_round_idx INT;
   first_round     TEXT;
+  first_round_matches INT;
+  matches_prev    INT;
+  gen_match_num   INT;
   round_idx       INT;
   current_round   TEXT;
   next_round      TEXT;
@@ -46,6 +49,34 @@ BEGIN
   IF first_round_idx IS NULL THEN
     RAISE NOTICE 'No hay rondas en draw_matches para %', p_tourney_id;
     RETURN;
+  END IF;
+
+  SELECT COUNT(*)
+    INTO first_round_matches
+    FROM public.draw_matches
+   WHERE tourney_id = p_tourney_id
+     AND round      = first_round;
+
+  -- Ensure downstream rounds exist so winners can be advanced.
+  matches_prev := first_round_matches;
+  IF matches_prev > 0 THEN
+    FOR round_idx IN first_round_idx + 1 .. array_length(rounds, 1) LOOP
+      matches_prev := (matches_prev + 1) / 2;
+      EXIT WHEN matches_prev <= 0;
+
+      FOR gen_match_num IN 1 .. matches_prev LOOP
+        INSERT INTO public.draw_matches (id, tourney_id, round, top_id, bot_id, winner_id)
+        VALUES (
+          CONCAT(rounds[round_idx], '-', gen_match_num),
+          p_tourney_id,
+          rounds[round_idx],
+          NULL,
+          NULL,
+          NULL
+        )
+        ON CONFLICT (tourney_id, id) DO NOTHING;
+      END LOOP;
+    END LOOP;
   END IF;
 
   -- ensure temp table can be recreated within the same session
