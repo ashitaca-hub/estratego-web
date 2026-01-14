@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, SlidersHorizontal, Maximize2, X } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -44,6 +44,14 @@ export type Bracket = {
 
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
+
+const shortenName = (fullName: string | null | undefined): string => {
+  if (!fullName) return "TBD";
+  const clean = fullName.trim();
+  if (!clean) return "TBD";
+  const parts = clean.split(/\s+/);
+  return parts.length ? parts[parts.length - 1] : clean;
+};
 
 function MatchCard({
   m,
@@ -2227,6 +2235,7 @@ export function EstrategoBracketApp() {
   const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
   const [expandedMonths, setExpandedMonths] = useState<Record<string, Record<string, boolean>>>({});
+  const [compactDrawOpen, setCompactDrawOpen] = useState(false);
   const [lastPrematchSummary, setLastPrematchSummary] = useState<PrematchSummaryResponse | null>(null);
   const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
   const [simulationRunCount, setSimulationRunCount] = useState<number | null>(null);
@@ -3226,11 +3235,76 @@ export function EstrategoBracketApp() {
             <Trophy className="w-4 h-4 mr-2" />
             Highs
           </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() => setCompactDrawOpen(true)}
+            disabled={!bracket}
+          >
+            <Maximize2 className="w-4 h-4 mr-2" />
+            Draw compacto
+          </Button>
           <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
             Resetear
           </Button>
         </div>
       </div>
+
+      {compactDrawOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+            <div>
+              <div className="text-sm uppercase tracking-wide text-slate-400">Vista compacta</div>
+              <div className="text-lg font-semibold text-slate-100">{bracket?.event ?? "Cuadro"}</div>
+            </div>
+            <Button variant="secondary" onClick={() => setCompactDrawOpen(false)}>
+              <X className="w-4 h-4 mr-2" />
+              Cerrar
+            </Button>
+          </div>
+          <div className="mx-auto max-w-6xl overflow-auto px-4 pb-6">
+            <div className="flex gap-3">
+              {visibleRounds.map((r) => (
+                <div key={`compact-${r}`} className="min-w-[160px] flex-1 space-y-2">
+                  <div className="rounded-md bg-slate-800 px-2 py-1 text-center text-xs font-semibold uppercase text-slate-100">
+                    {r}
+                  </div>
+                  {matchesByRound[r].length ? (
+                    matchesByRound[r].map((m) => {
+                      const topWin = m.winnerId === m.top.id;
+                      const botWin = m.winnerId === m.bottom.id;
+                      return (
+                        <div
+                          key={`compact-${m.id}`}
+                          className="rounded-md border border-slate-800 bg-slate-900/90 px-2 py-1 text-[12px] text-slate-50"
+                        >
+                          <div className={`flex items-center justify-between ${topWin ? "text-emerald-200" : "text-slate-100"}`}>
+                            <span className="truncate">{shortenName(m.top.name)}</span>
+                            {m.top.seed ? (
+                              <span className="ml-1 text-[10px] text-slate-400">({m.top.seed})</span>
+                            ) : null}
+                          </div>
+                          <div className={`flex items-center justify-between ${botWin ? "text-emerald-200" : "text-slate-100"}`}>
+                            <span className="truncate">{shortenName(m.bottom.name)}</span>
+                            {m.bottom.seed ? (
+                              <span className="ml-1 text-[10px] text-slate-400">({m.bottom.seed})</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-md border border-dashed border-slate-800 px-2 py-3 text-center text-[11px] text-slate-500">
+                      Sin partidos
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {multiSimProgress && (
         <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
           Ejecutando simulaciones {multiSimProgress.done}/{multiSimProgress.total} (
