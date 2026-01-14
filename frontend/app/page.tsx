@@ -105,7 +105,7 @@ function MatchCard({
 
     return (
       <div
-        className={`flex items-center justify-between gap-3 text-sm ${isWinner ? "font-semibold text-slate-100" : "text-slate-200"}`}
+        className={`flex items-center justify-between gap-3 text-sm ${isWinner ? "font-semibold text-emerald-700" : "text-slate-900"}`}
       >
         <div className="flex items-center gap-2">
           <button
@@ -2510,6 +2510,28 @@ export function EstrategoBracketApp() {
     return map;
   }, [bracket, rounds]);
 
+  const visibleRounds = useMemo(() => {
+    const firstWithMatches = rounds.find((r) => (matchesByRound[r] ?? []).length > 0);
+    const drawSize = bracket?.drawSize ?? 64;
+    const expectedFirst =
+      drawSize >= 64
+        ? "R64"
+        : drawSize >= 32
+          ? "R32"
+          : drawSize >= 16
+            ? "R16"
+            : drawSize >= 8
+              ? "QF"
+              : drawSize >= 4
+                ? "SF"
+                : "F";
+
+    const startRound = firstWithMatches ?? expectedFirst;
+    const startIdx = rounds.indexOf(startRound);
+    const idx = startIdx >= 0 ? startIdx : 0;
+    return rounds.slice(idx);
+  }, [rounds, matchesByRound, bracket?.drawSize]);
+
   useEffect(() => {
     if (!playerStatsOpen || !playerStatsTarget || !bracket) {
       return;
@@ -3218,7 +3240,7 @@ export function EstrategoBracketApp() {
 
       <div className="overflow-x-auto">
         <div className="flex gap-6">
-          {rounds.map((r: Match["round"], idx) => (
+          {visibleRounds.map((r: Match["round"], idx) => (
             <React.Fragment key={r}>
               <Column title={r}>
                 {matchesByRound[r].length ? (
@@ -3237,7 +3259,7 @@ export function EstrategoBracketApp() {
                   <EmptyRound />
                 )}
               </Column>
-              {idx < rounds.length - 1 && (
+              {idx < visibleRounds.length - 1 && (
                 <div className="flex items-center">
                   <ChevronRight className="text-gray-400" />
                 </div>
