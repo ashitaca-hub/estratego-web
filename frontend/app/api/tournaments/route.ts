@@ -50,19 +50,32 @@ export async function GET(req: Request) {
   const baseFields = "tourney_id,name,surface,draw_size";
   const dateFields = "tourney_date,start_date,end_date";
 
-  const tmetaRes = await supabase
+  // Intentar con todas las columnas de fecha; si falla, probar con tourney_date; luego sin fechas.
+  let tmeta: any[] | null = null;
+  let tErr: any = null;
+
+  const resFull = await supabase
     .from("tournaments")
     .select(`${baseFields},${dateFields}`)
     .in("tourney_id", ids);
 
-  let tmeta: any[] | null = tmetaRes.data as any[] | null;
-  let tErr = tmetaRes.error;
+  if (!resFull.error) {
+    tmeta = resFull.data as any[] | null;
+    tErr = null;
+  } else {
+    const resDateOnly = await supabase
+      .from("tournaments")
+      .select(`${baseFields},tourney_date`)
+      .in("tourney_id", ids);
 
-  // Fallback si alguna columna de fecha no existe
-  if (tErr) {
-    const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
-    tmeta = fallback.data as any[] | null;
-    tErr = fallback.error;
+    if (!resDateOnly.error) {
+      tmeta = resDateOnly.data as any[] | null;
+      tErr = null;
+    } else {
+      const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
+      tmeta = fallback.data as any[] | null;
+      tErr = fallback.error;
+    }
   }
 
   if (tErr) {

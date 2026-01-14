@@ -2225,6 +2225,8 @@ export function EstrategoBracketApp() {
   const [weightsError, setWeightsError] = useState<string | null>(null);
   const [weightsSuccess, setWeightsSuccess] = useState<string | null>(null);
   const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, Record<string, boolean>>>({});
   const [lastPrematchSummary, setLastPrematchSummary] = useState<PrematchSummaryResponse | null>(null);
   const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
   const [simulationRunCount, setSimulationRunCount] = useState<number | null>(null);
@@ -2420,6 +2422,42 @@ export function EstrategoBracketApp() {
         ),
       }));
   }, [tournaments, monthNames]);
+
+  useEffect(() => {
+    if (!groupedTournaments.length) {
+      setExpandedYears({});
+      setExpandedMonths({});
+      return;
+    }
+    const latestYear = groupedTournaments[0]?.yearKey;
+    const latestMonth = groupedTournaments[0]?.months?.[0]?.monthKey;
+
+    setExpandedYears((prev) => {
+      if (Object.keys(prev).length) return prev;
+      return latestYear ? { [latestYear]: true } : {};
+    });
+
+    setExpandedMonths((prev) => {
+      if (latestYear && latestMonth && !prev[latestYear]) {
+        return { ...prev, [latestYear]: { [latestMonth]: true } };
+      }
+      return prev;
+    });
+  }, [groupedTournaments]);
+
+  const toggleYear = (yearKey: string) => {
+    setExpandedYears((prev) => ({ ...prev, [yearKey]: !prev[yearKey] }));
+  };
+
+  const toggleMonth = (yearKey: string, monthKey: string) => {
+    setExpandedMonths((prev) => {
+      const yearState = prev[yearKey] ?? {};
+      return {
+        ...prev,
+        [yearKey]: { ...yearState, [monthKey]: !yearState[monthKey] },
+      };
+    });
+  };
 
   const weightsPreview = useMemo(() => {
     if (!weightsDraft || !lastPrematchSummary) return null;
@@ -3052,45 +3090,70 @@ export function EstrategoBracketApp() {
 
             <div className="space-y-3">
               {groupedTournaments.map(({ yearKey, months }) => (
-                <div key={yearKey} className="rounded-lg border border-slate-800 bg-slate-950/60">
-                  <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+                <div key={yearKey} className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/60">
+                  <button
+                    type="button"
+                    onClick={() => toggleYear(yearKey)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-900/50"
+                  >
                     <span className="text-sm font-semibold text-slate-100">
                       {yearKey === "sin-fecha" ? "Sin fecha" : yearKey}
                     </span>
-                  </div>
-                  <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {months.map(({ monthKey, monthLabel, items }) => (
-                      <div
-                        key={`${yearKey}-${monthKey}`}
-                        className="rounded-md border border-slate-800 bg-slate-950/80 p-2"
-                      >
-                        <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-                          {monthLabel}
+                    <ChevronRight
+                      className={`h-4 w-4 text-slate-400 transition-transform ${
+                        expandedYears[yearKey] ? "rotate-90" : ""
+                      }`}
+                    />
+                  </button>
+                  {expandedYears[yearKey] && (
+                    <div className="space-y-2 border-t border-slate-800 p-3">
+                      {months.map(({ monthKey, monthLabel, items }) => (
+                        <div
+                          key={`${yearKey}-${monthKey}`}
+                          className="rounded-md border border-slate-800 bg-slate-950/80"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleMonth(yearKey, monthKey)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-900"
+                          >
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
+                              <ChevronRight
+                                className={`h-4 w-4 transition-transform ${
+                                  expandedMonths[yearKey]?.[monthKey] ? "rotate-90" : ""
+                                }`}
+                              />
+                              {monthLabel}
+                            </div>
+                            <span className="text-[11px] text-slate-500">{items.length} torneos</span>
+                          </button>
+                          {expandedMonths[yearKey]?.[monthKey] && (
+                            <div className="space-y-2 border-t border-slate-800 p-2">
+                              {items.map((t) => (
+                                <button
+                                  key={t.tourney_id}
+                                  className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900"
+                                  onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
+                                  type="button"
+                                  title={t.tourney_id}
+                                >
+                                  <div className="min-w-0 flex flex-col">
+                                    <span className="truncate">{t.name || t.tourney_id}</span>
+                                    {t.surface && (
+                                      <span className="text-[11px] text-slate-500">
+                                        {t.surface} · {t.draw_size ?? "?"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="ml-2 text-xs text-slate-500">{t.tourney_id}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="space-y-2">
-                          {items.map((t) => (
-                            <button
-                              key={t.tourney_id}
-                              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900"
-                              onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
-                              type="button"
-                              title={t.tourney_id}
-                            >
-                              <div className="min-w-0 flex flex-col">
-                                <span className="truncate">{t.name || t.tourney_id}</span>
-                                {t.surface && (
-                                  <span className="text-[11px] text-slate-500">
-                                    {t.surface} · {t.draw_size ?? "?"}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="ml-2 text-xs text-slate-500">{t.tourney_id}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
