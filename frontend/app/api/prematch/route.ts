@@ -169,6 +169,9 @@ const ODDS_TOURNAMENT_OVERRIDES: Record<string, string> = {
   "swiss indoors basel": "tennis_atp_basel",
   "atp basel": "tennis_atp_basel",
   "atp geneva open": "tennis_atp_geneva_open",
+  "asb classic": "tennis_atp_auckland",
+  "auckland open": "tennis_atp_auckland",
+  "adelaide international": "tennis_atp_adelaide",
 };
 const ODDS_CACHE_TABLE = process.env.ODDS_CACHE_TABLE ?? "odds_cache";
 const ODDS_CACHE_TTL_MINUTES = (() => {
