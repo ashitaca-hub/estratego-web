@@ -108,12 +108,12 @@ BEGIN
     FROM estratego_v1.court_speed_ranking_norm
     WHERE tourney_id = tourney_speed_id;
 
-  -- Win % on surface during the year
+  -- Win % on surface over the last 5 seasons (incl. current year)
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins_surf,
          COUNT(*) AS total_surf
     INTO rec_a_surf
     FROM estratego_v1.matches_full
-    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+    WHERE EXTRACT(YEAR FROM tourney_date) BETWEEN (p_year - 4) AND p_year
       AND surface = tourney_surf
       AND (winner_id = player_a_id OR loser_id = player_a_id);
 
@@ -121,7 +121,7 @@ BEGIN
          COUNT(*) AS total_surf
     INTO rec_b_surf
     FROM estratego_v1.matches_full
-    WHERE EXTRACT(YEAR FROM tourney_date) = p_year
+    WHERE EXTRACT(YEAR FROM tourney_date) BETWEEN (p_year - 4) AND p_year
       AND surface = tourney_surf
       AND (winner_id = player_b_id OR loser_id = player_b_id);
 
