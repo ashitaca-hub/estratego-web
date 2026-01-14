@@ -38,20 +38,19 @@ export async function GET(req: Request) {
   const baseFields = "tourney_id,name,surface,draw_size";
   const dateFields = "tourney_date,start_date,end_date";
 
-  let tmetaRes = await supabase
+  const tmetaRes = await supabase
     .from("tournaments")
     .select(`${baseFields},${dateFields}`)
     .in("tourney_id", ids);
 
   // Fallback si alguna columna de fecha no existe
-  if (tmetaRes.error) {
-    tmetaRes = await supabase
-      .from("tournaments")
-      .select(baseFields)
-      .in("tourney_id", ids);
+  let tmeta = tmetaRes.data;
+  let tErr = tmetaRes.error;
+  if (tErr) {
+    const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
+    tmeta = fallback.data;
+    tErr = fallback.error;
   }
-
-  const { data: tmeta, error: tErr } = tmetaRes;
 
   if (tErr) {
     return new Response(JSON.stringify({ error: tErr.message, stage: "tournaments" }), { status: 500 });
