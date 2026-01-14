@@ -10,9 +10,21 @@ export async function GET(req: Request) {
   const today = new Date();
 
   const parseDate = (value: unknown): Date | null => {
-    if (!value || (typeof value !== "string" && typeof value !== "number")) return null;
-    const dateStr = String(value).slice(0, 10);
-    const parsed = new Date(dateStr);
+    if (value === null || value === undefined) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+
+    // YYYYMMDD (ej: 20250824)
+    const yyyymmdd = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (yyyymmdd) {
+      const iso = `${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`;
+      const parsed = new Date(iso);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    // ISO parcial YYYY-MM-DD...
+    const isoCandidate = raw.length >= 10 ? raw.slice(0, 10) : raw;
+    const parsed = new Date(isoCandidate);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
@@ -43,9 +55,10 @@ export async function GET(req: Request) {
     .select(`${baseFields},${dateFields}`)
     .in("tourney_id", ids);
 
-  // Fallback si alguna columna de fecha no existe
   let tmeta: any[] | null = tmetaRes.data as any[] | null;
   let tErr = tmetaRes.error;
+
+  // Fallback si alguna columna de fecha no existe
   if (tErr) {
     const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
     tmeta = fallback.data as any[] | null;
@@ -66,16 +79,27 @@ export async function GET(req: Request) {
       const rawStart = (m as any)?.start_date ?? (m as any)?.tourney_date ?? null;
       const rawEnd = (m as any)?.end_date ?? null;
 
-      const startDate = parseDate(rawStart);
+      const parsedStart = parseDate(rawStart);
+      const startDate = parsedStart ?? (() => {
+        // Fallback: derivar year desde tourney_id (prefijo YYYY)
+        const match = String(id).match(/^(\d{4})/);
+        if (match) {
+          return parseDate(`${match[1]}0101`);
+        }
+        return null;
+      })();
       const endDate = parseDate(rawEnd);
 
-      const year = startDate?.getFullYear() ?? null;
+      const year = startDate?.getFullYear() ?? (() => {
+        const match = String(id).match(/^(\d{4})/);
+        return match ? Number(match[1]) : null;
+      })();
       const month = startDate ? startDate.getMonth() + 1 : null;
 
       const isLive = (() => {
-        if (!startDate) return false;
-        const start = startDate.getTime();
-        const end = endDate?.getTime() ?? start + 7 * 24 * 60 * 60 * 1000; // ventana de 7 días
+        if (!parsedStart) return false; // solo consideramos live si tenemos fecha real
+        const start = parsedStart.getTime();
+        const end = endDate?.getTime() ?? start + 7 * 24 * 60 * 60 * 1000; // ventana de 7 dias
         const now = today.getTime();
         return now >= start && now <= end;
       })();
