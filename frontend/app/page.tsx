@@ -221,6 +221,17 @@ type TournamentSummary = {
   month: number | null;
 };
 
+type UITournament = {
+  tourney_id: string;
+  name: string | null;
+  surface?: string | null;
+  draw_size?: number | null;
+  date?: string | null;
+  year?: number | null;
+  month?: number | null;
+  is_live?: boolean;
+};
+
 type PrematchSummary = {
   prob_player: number | null;
   playerA: PlayerPrematchStats;
@@ -2193,7 +2204,7 @@ export function EstrategoBracketApp() {
   const [pmMatch, setPmMatch] = useState<Match | null>(null);
   const [tidInput, setTidInput] = useState<string>(tParam);
   const [listLoading, setListLoading] = useState(false);
-  const [tournaments, setTournaments] = useState<Array<{ tourney_id: string; name: string; surface?: string; draw_size?: number }>>([]);
+  const [tournaments, setTournaments] = useState<UITournament[]>([]);
   const [multiSimLoading, setMultiSimLoading] = useState(false);
   const [multiSimProgress, setMultiSimProgress] = useState<{ done: number; total: number } | null>(null);
   const [savingMatchId, setSavingMatchId] = useState<string | null>(null);
@@ -2213,6 +2224,7 @@ export function EstrategoBracketApp() {
   const [weightsSaving, setWeightsSaving] = useState(false);
   const [weightsError, setWeightsError] = useState<string | null>(null);
   const [weightsSuccess, setWeightsSuccess] = useState<string | null>(null);
+  const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const [lastPrematchSummary, setLastPrematchSummary] = useState<PrematchSummaryResponse | null>(null);
   const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
   const [simulationRunCount, setSimulationRunCount] = useState<number | null>(null);
@@ -2330,6 +2342,84 @@ export function EstrategoBracketApp() {
     () => (simulationRunCount ?? 0) > 0,
     [simulationRunCount],
   );
+
+  const liveTournaments = useMemo(() => {
+    const toTs = (value?: string | null) =>
+      value && typeof value === "string" && value.trim() ? new Date(value).getTime() : 0;
+    return tournaments
+      .filter((t) => t.is_live)
+      .sort((a, b) => {
+        const db = toTs(b.date);
+        const da = toTs(a.date);
+        if (db !== da) return db - da;
+        return a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0;
+      });
+  }, [tournaments]);
+
+  const groupedTournaments = useMemo(() => {
+    const toTs = (value?: string | null) =>
+      value && typeof value === "string" && value.trim() ? new Date(value).getTime() : 0;
+
+    const sorted = [...tournaments.filter((t) => !t.is_live)].sort((a, b) => {
+      const db = toTs(b.date);
+      const da = toTs(a.date);
+      if (db !== da) return db - da;
+      const yb = b.year ?? 0;
+      const ya = a.year ?? 0;
+      if (yb !== ya) return yb - ya;
+      const mb = b.month ?? 0;
+      const ma = a.month ?? 0;
+      if (mb !== ma) return mb - ma;
+      return a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0;
+    });
+
+    const bucket = new Map<
+      string,
+      Map<
+        string,
+        {
+          monthKey: string;
+          monthLabel: string;
+          items: UITournament[];
+        }
+      >
+    >();
+
+    for (const item of sorted) {
+      const yearKey = item.year ? String(item.year) : "sin-fecha";
+      const monthKey = item.month ? String(item.month) : "0";
+      if (!bucket.has(yearKey)) {
+        bucket.set(yearKey, new Map());
+      }
+      const monthsMap = bucket.get(yearKey)!;
+      if (!monthsMap.has(monthKey)) {
+        const label =
+          Number.isFinite(Number(monthKey)) && Number(monthKey) >= 1 && Number(monthKey) <= 12
+            ? monthNames[Number(monthKey) - 1]
+            : "Sin mes";
+        monthsMap.set(monthKey, { monthKey, monthLabel: label, items: [] });
+      }
+      monthsMap.get(monthKey)!.items.push(item);
+    }
+
+    return Array.from(bucket.entries())
+      .sort(([a], [b]) => {
+        const ya = Number(a);
+        const yb = Number(b);
+        const aValid = Number.isFinite(ya);
+        const bValid = Number.isFinite(yb);
+        if (aValid && bValid) return yb - ya;
+        if (aValid) return -1;
+        if (bValid) return 1;
+        return 0;
+      })
+      .map(([yearKey, monthsMap]) => ({
+        yearKey,
+        months: Array.from(monthsMap.values()).sort(
+          (a, b) => Number(b.monthKey) - Number(a.monthKey),
+        ),
+      }));
+  }, [tournaments, monthNames]);
 
   const weightsPreview = useMemo(() => {
     if (!weightsDraft || !lastPrematchSummary) return null;
@@ -2936,19 +3026,74 @@ export function EstrategoBracketApp() {
         ) : tournaments.length === 0 ? (
           <div className="text-xs text-slate-500">Sin datos</div>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {tournaments.map((t) => (
-              <button
-                key={t.tourney_id}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900"
-                onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
-                type="button"
-                title={t.tourney_id}
-              >
-                <span className="truncate">{t.name || t.tourney_id}</span>
-                <span className="ml-2 text-xs text-slate-500">{t.tourney_id}</span>
-              </button>
-            ))}
+          <div className="space-y-4">
+            {liveTournaments.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  En juego hoy
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {liveTournaments.map((t) => (
+                    <button
+                      key={`live-${t.tourney_id}`}
+                      className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-left text-sm text-slate-50 hover:border-emerald-500/70 hover:bg-emerald-500/20"
+                      onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
+                      type="button"
+                      title={t.tourney_id}
+                    >
+                      <span className="truncate">{t.name || t.tourney_id}</span>
+                      <span className="text-[11px] text-emerald-200">{t.tourney_id}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {groupedTournaments.map(({ yearKey, months }) => (
+                <div key={yearKey} className="rounded-lg border border-slate-800 bg-slate-950/60">
+                  <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+                    <span className="text-sm font-semibold text-slate-100">
+                      {yearKey === "sin-fecha" ? "Sin fecha" : yearKey}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {months.map(({ monthKey, monthLabel, items }) => (
+                      <div
+                        key={`${yearKey}-${monthKey}`}
+                        className="rounded-md border border-slate-800 bg-slate-950/80 p-2"
+                      >
+                        <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+                          {monthLabel}
+                        </div>
+                        <div className="space-y-2">
+                          {items.map((t) => (
+                            <button
+                              key={t.tourney_id}
+                              className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900"
+                              onClick={() => router.push(`/?t=${encodeURIComponent(t.tourney_id)}`)}
+                              type="button"
+                              title={t.tourney_id}
+                            >
+                              <div className="min-w-0 flex flex-col">
+                                <span className="truncate">{t.name || t.tourney_id}</span>
+                                {t.surface && (
+                                  <span className="text-[11px] text-slate-500">
+                                    {t.surface} · {t.draw_size ?? "?"}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="ml-2 text-xs text-slate-500">{t.tourney_id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

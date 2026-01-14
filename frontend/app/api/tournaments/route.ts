@@ -7,6 +7,14 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q");
   const limitParam = url.searchParams.get("limit");
   const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 100);
+  const today = new Date();
+
+  const parseDate = (value: unknown): Date | null => {
+    if (!value || (typeof value !== "string" && typeof value !== "number")) return null;
+    const dateStr = String(value).slice(0, 10);
+    const parsed = new Date(dateStr);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
 
   // 1) Obtener todos los tourney_id presentes en draw_matches
   const { data: dmRows, error: dmErr } = await supabase
@@ -27,10 +35,23 @@ export async function GET(req: Request) {
   }
 
   // 2) Cargar metadatos desde tournaments para esos ids
-  const { data: tmeta, error: tErr } = await supabase
+  const baseFields = "tourney_id,name,surface,draw_size";
+  const dateFields = "tourney_date,start_date,end_date";
+
+  let tmetaRes = await supabase
     .from("tournaments")
-    .select("tourney_id,name,surface,draw_size")
+    .select(`${baseFields},${dateFields}`)
     .in("tourney_id", ids);
+
+  // Fallback si alguna columna de fecha no existe
+  if (tmetaRes.error) {
+    tmetaRes = await supabase
+      .from("tournaments")
+      .select(baseFields)
+      .in("tourney_id", ids);
+  }
+
+  const { data: tmeta, error: tErr } = tmetaRes;
 
   if (tErr) {
     return new Response(JSON.stringify({ error: tErr.message, stage: "tournaments" }), { status: 500 });
@@ -43,15 +64,43 @@ export async function GET(req: Request) {
   const enriched = ids
     .map((id) => {
       const m = metaMap.get(id);
+      const rawStart = (m as any)?.start_date ?? (m as any)?.tourney_date ?? null;
+      const rawEnd = (m as any)?.end_date ?? null;
+
+      const startDate = parseDate(rawStart);
+      const endDate = parseDate(rawEnd);
+
+      const year = startDate?.getFullYear() ?? null;
+      const month = startDate ? startDate.getMonth() + 1 : null;
+
+      const isLive = (() => {
+        if (!startDate) return false;
+        const start = startDate.getTime();
+        const end = endDate?.getTime() ?? start + 7 * 24 * 60 * 60 * 1000; // ventana de 7 días
+        const now = today.getTime();
+        return now >= start && now <= end;
+      })();
+
+      const dateStr = startDate ? startDate.toISOString().slice(0, 10) : null;
+
       return {
         tourney_id: id,
         name: m?.name ?? null,
         surface: m?.surface ?? null,
         draw_size: m?.draw_size ?? null,
+        date: dateStr,
+        year,
+        month,
+        is_live: isLive,
       };
     })
-    // Orden por id descendente (YYYY-XXX)
-    .sort((a, b) => (a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0));
+    // Orden por fecha desc y luego id desc
+    .sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      if (db !== da) return db - da;
+      return a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0;
+    });
 
   const needle = (q || "").trim().toLowerCase();
   const filtered = needle
