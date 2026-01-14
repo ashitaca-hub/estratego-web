@@ -1559,8 +1559,8 @@ export async function POST(req: Request) {
   if (!formatted.odds && BETFAIR_APP_KEY && BETFAIR_SESSION_TOKEN) {
     try {
       const bfOdds = await fetchBetfairOdds(
-        playerANameFromBody ?? formatted.extras?.display_p ?? formatted.playerA.name ?? "",
-        playerBNameFromBody ?? formatted.extras?.display_o ?? formatted.playerB.name ?? "",
+        playerANameFromBody ?? formatted.extras?.display_p ?? playerA_name ?? "",
+        playerBNameFromBody ?? formatted.extras?.display_o ?? playerB_name ?? "",
         formatted.tournament?.name ?? null,
       );
       if (bfOdds) {
