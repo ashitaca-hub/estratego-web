@@ -44,11 +44,11 @@ export async function GET(req: Request) {
     .in("tourney_id", ids);
 
   // Fallback si alguna columna de fecha no existe
-  let tmeta = tmetaRes.data;
+  let tmeta: any[] | null = tmetaRes.data as any[] | null;
   let tErr = tmetaRes.error;
   if (tErr) {
     const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
-    tmeta = fallback.data;
+    tmeta = fallback.data as any[] | null;
     tErr = fallback.error;
   }
 
