@@ -179,6 +179,9 @@ const ODDS_CACHE_TTL_MINUTES = (() => {
   return Number.isFinite(raw) ? raw : 180;
 })();
 const ODDS_CACHE_DISABLED = (process.env.ODDS_CACHE_DISABLED ?? "false").toLowerCase() === "true";
+const BETFAIR_APP_KEY = process.env.BETFAIR_APP_KEY;
+const BETFAIR_SESSION_TOKEN = process.env.BETFAIR_SESSION_TOKEN;
+const BETFAIR_BEST_PRICES_DEPTH = Number(process.env.BETFAIR_BEST_PRICES_DEPTH ?? "1") || 1;
 
 type NameMatchData = {
   original: string;
@@ -503,6 +506,119 @@ const formatOddsNumber = (value: unknown): number | null => {
 const computeOddsForOutcome = (price: number | null): { implied: number | null } => {
   if (price == null) return { implied: null };
   return { implied: price > 0 ? 1 / price : null };
+};
+
+type BetfairRunnerPrice = { price: number; size: number };
+type BetfairRunner = { selectionId: number; runnerName: string; ex?: { availableToBack?: BetfairRunnerPrice[] } };
+
+const fetchBetfairOdds = async (
+  playerAName: string,
+  playerBName: string,
+  tournamentName?: string | null,
+): Promise<MatchOddsSummary | null> => {
+  if (!BETFAIR_APP_KEY || !BETFAIR_SESSION_TOKEN) return null;
+  if (!playerAName || !playerBName) return null;
+
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Application": BETFAIR_APP_KEY,
+    "X-Authentication": BETFAIR_SESSION_TOKEN,
+  };
+
+  const textQuery = `${playerAName} ${playerBName}`;
+  const listEventsBody = {
+    filter: {
+      eventTypeIds: ["2"], // tennis
+      textQuery,
+      ...(tournamentName ? { eventName: tournamentName } : {}),
+    },
+    maxResults: 20,
+  };
+
+  const listEvents = await fetch(
+    "https://api.betfair.com/exchange/betting/rest/v1.0/listEvents/",
+    { method: "POST", headers, body: JSON.stringify(listEventsBody), cache: "no-store" },
+  );
+
+  if (!listEvents.ok) return null;
+  const events = (await listEvents.json()) as Array<{ event: { id: string; name: string } }>;
+  if (!Array.isArray(events) || !events.length) return null;
+
+  const normalizedA = playerAName.toLowerCase();
+  const normalizedB = playerBName.toLowerCase();
+
+  const targetEvent = events.find((e) => {
+    const n = (e.event?.name ?? "").toLowerCase();
+    return n.includes(normalizedA) && n.includes(normalizedB);
+  }) ?? events[0];
+
+  const eventId = targetEvent?.event?.id;
+  if (!eventId) return null;
+
+  const listMarketsBody = {
+    filter: { eventIds: [eventId], marketTypeCodes: ["MATCH_ODDS"] },
+    maxResults: 5,
+    marketProjection: ["RUNNER_METADATA"],
+  };
+
+  const listMarkets = await fetch(
+    "https://api.betfair.com/exchange/betting/rest/v1.0/listMarketCatalogue/",
+    { method: "POST", headers, body: JSON.stringify(listMarketsBody), cache: "no-store" },
+  );
+  if (!listMarkets.ok) return null;
+  const markets = (await listMarkets.json()) as Array<{ marketId: string; runners: BetfairRunner[] }>;
+  const marketId = markets?.[0]?.marketId;
+  if (!marketId) return null;
+
+  const listBookBody = {
+    marketIds: [marketId],
+    priceProjection: {
+      priceData: ["EX_BEST_OFFERS"],
+      exBestOffersOverrides: { bestPricesDepth: BETFAIR_BEST_PRICES_DEPTH },
+    },
+  };
+
+  const listBook = await fetch(
+    "https://api.betfair.com/exchange/betting/rest/v1.0/listMarketBook/",
+    { method: "POST", headers, body: JSON.stringify(listBookBody), cache: "no-store" },
+  );
+  if (!listBook.ok) return null;
+  const books = (await listBook.json()) as Array<{ runners: BetfairRunner[] }>;
+  const runners = books?.[0]?.runners ?? [];
+  if (!runners.length) return null;
+
+  const pickPrice = (name: string): number | null => {
+    const norm = name.trim().toLowerCase();
+    const runner = runners.find((r) => (r.runnerName ?? "").toLowerCase().includes(norm));
+    const price = runner?.ex?.availableToBack?.[0]?.price;
+    return typeof price === "number" && price > 0 ? price : null;
+  };
+
+  const priceA = pickPrice(playerAName);
+  const priceB = pickPrice(playerBName);
+
+  if (priceA == null && priceB == null) return null;
+
+  return {
+    sport_key: "betfair",
+    bookmaker: "betfair-exchange",
+    last_update: new Date().toISOString(),
+    playerA: {
+      name: playerAName,
+      price: priceA,
+      implied_probability: priceA ? 1 / priceA : null,
+      value_diff: null,
+      is_value: false,
+    },
+    playerB: {
+      name: playerBName,
+      price: priceB,
+      implied_probability: priceB ? 1 / priceB : null,
+      value_diff: null,
+      is_value: false,
+    },
+  };
 };
 
 type FetchOddsInput = {
@@ -1437,6 +1553,21 @@ export async function POST(req: Request) {
       }
     } catch (err) {
       console.warn("Failed to attach odds information", err);
+    }
+  }
+
+  if (!formatted.odds && BETFAIR_APP_KEY && BETFAIR_SESSION_TOKEN) {
+    try {
+      const bfOdds = await fetchBetfairOdds(
+        playerANameFromBody ?? formatted.extras?.display_p ?? formatted.playerA.name ?? "",
+        playerBNameFromBody ?? formatted.extras?.display_o ?? formatted.playerB.name ?? "",
+        formatted.tournament?.name ?? null,
+      );
+      if (bfOdds) {
+        formatted.odds = bfOdds;
+      }
+    } catch (err) {
+      console.warn("[betfair] fallback odds failed", err);
     }
   }
 
