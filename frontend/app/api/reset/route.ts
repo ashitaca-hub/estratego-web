@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     // Modo soft: usa rondas presentes, pero valida contra draw_size para evitar quedarnos en R16 si debe ser R32
-    const order = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
+    const order = ["R128", "R64", "R32", "R16", "QF", "SF", "F"] as const;
 
     const [{ data: roundsData, error: roundsErr }, { data: tinfo, error: terr }] = await Promise.all([
       supabaseAdmin.from("draw_matches").select("round").eq("tourney_id", tourney_id),
@@ -76,7 +76,19 @@ export async function POST(request: Request) {
     let expectedFirst: (typeof order)[number] | null = null;
     const size = Number(tinfo?.draw_size ?? 0);
     if (!Number.isNaN(size) && size > 0) {
-      expectedFirst = size >= 64 ? "R64" : size >= 32 ? "R32" : size >= 16 ? "R16" : size >= 8 ? "QF" : size >= 4 ? "SF" : "F";
+      expectedFirst = size >= 128
+        ? "R128"
+        : size >= 64
+          ? "R64"
+          : size >= 32
+            ? "R32"
+            : size >= 16
+              ? "R16"
+              : size >= 8
+                ? "QF"
+                : size >= 4
+                  ? "SF"
+                  : "F";
     }
 
     // Si la ronda detectada no coincide con la esperada, hacemos hard rebuild automáticamente

@@ -7,7 +7,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $function$
 DECLARE
-  round_labels CONSTANT TEXT[] := ARRAY['R64','R32','R16','QF','SF','F'];
+  round_labels CONSTANT TEXT[] := ARRAY['R128','R64','R32','R16','QF','SF','F'];
   v_size       INT;
   v_round      TEXT;
   start_idx    INT;
@@ -36,7 +36,9 @@ BEGIN
    WHERE tourney_id = p_tournament_id;
 
   -- Pick the opening round label based on draw size (defaults to R16).
-  IF v_size = 64 THEN
+  IF v_size = 128 THEN
+    v_round := 'R128';
+  ELSIF v_size = 64 THEN
     v_round := 'R64';
   ELSIF v_size = 32 THEN
     v_round := 'R32';

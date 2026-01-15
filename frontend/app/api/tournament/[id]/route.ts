@@ -13,7 +13,7 @@ type Player = {
 
 type Match = {
   id: string;
-  round: "R16" | "QF" | "SF" | "F" | "R32" | "R64";
+  round: "R128" | "R64" | "R32" | "R16" | "QF" | "SF" | "F";
   top: Player;
   bottom: Player;
   winnerId?: string;

@@ -4,8 +4,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"] as const;
+const roundOrder = ["R128", "R64", "R32", "R16", "QF", "SF", "F"] as const;
 const nextRound: Record<(typeof roundOrder)[number], string | null> = {
+  R128: "R64",
   R64: "R32",
   R32: "R16",
   R16: "QF",

@@ -7,7 +7,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $function$
 DECLARE
-  rounds          CONSTANT TEXT[] := ARRAY['R64','R32','R16','QF','SF','F'];
+  rounds          CONSTANT TEXT[] := ARRAY['R128','R64','R32','R16','QF','SF','F'];
   first_round_idx INT;
   first_round     TEXT;
   first_round_matches INT;

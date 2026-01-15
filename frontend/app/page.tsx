@@ -28,7 +28,7 @@ export type Player = {
 
 export type Match = {
   id: string;
-  round: "R64" | "R32" | "R16" | "QF" | "SF" | "F";
+  round: "R128" | "R64" | "R32" | "R16" | "QF" | "SF" | "F";
   top: Player;
   bottom: Player;
   winnerId?: string;
@@ -643,6 +643,8 @@ const formatDefendsRoundLabel = (value?: string | null) => {
       return "32avos de final";
     case "R64":
       return "64avos de final";
+    case "R128":
+      return "128avos de final";
     default:
       return clean;
   }
@@ -2329,9 +2331,9 @@ export function EstrategoBracketApp() {
   }, [tParam]);
 
   const rounds: Match["round"][] = useMemo(
-  () => ["R64", "R32", "R16", "QF", "SF", "F"],
-  []
-);
+    () => ["R128", "R64", "R32", "R16", "QF", "SF", "F"],
+    [],
+  );
 
   const weightsKeys = useMemo(() => WEIGHT_METRICS.map((m) => m.key), []);
 
@@ -2523,17 +2525,19 @@ export function EstrategoBracketApp() {
     const firstWithMatches = rounds.find((r) => (matchesByRound[r] ?? []).length > 0);
     const drawSize = bracket?.drawSize ?? 64;
     const expectedFirst =
-      drawSize >= 64
-        ? "R64"
-        : drawSize >= 32
-          ? "R32"
-          : drawSize >= 16
-            ? "R16"
-            : drawSize >= 8
-              ? "QF"
-              : drawSize >= 4
-                ? "SF"
-                : "F";
+      drawSize >= 128
+        ? "R128"
+        : drawSize >= 64
+          ? "R64"
+          : drawSize >= 32
+            ? "R32"
+            : drawSize >= 16
+              ? "R16"
+              : drawSize >= 8
+                ? "QF"
+                : drawSize >= 4
+                  ? "SF"
+                  : "F";
 
     const startRound = firstWithMatches ?? expectedFirst;
     const startIdx = rounds.indexOf(startRound);
