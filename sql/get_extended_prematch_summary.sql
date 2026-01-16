@@ -19,6 +19,8 @@ DECLARE
   win_month_b FLOAT;
   win_vs_rankband_a FLOAT;
   win_vs_rankband_b FLOAT;
+  win_pct_fifth_set_a FLOAT;
+  win_pct_fifth_set_b FLOAT;
   court_speed_score_a FLOAT;
   court_speed_score_b FLOAT;
   win_score_a FLOAT := 0;
@@ -388,6 +390,63 @@ BEGIN
     WHERE (winner_id = player_b_id OR loser_id = player_b_id)
       AND rs.rank <= 10;
 
+  -- Win % when match reaches the 5th set (best-of-5 only)
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id AND sets_played = 5)::FLOAT
+         / NULLIF(COUNT(*) FILTER (WHERE sets_played = 5), 0)
+    INTO win_pct_fifth_set_a
+    FROM (
+      SELECT
+        mf.winner_id,
+        mf.loser_id,
+        (length(score_clean) - length(replace(score_clean, '-', ''))) AS sets_played
+      FROM estratego_v1.matches_full mf
+      CROSS JOIN LATERAL (SELECT to_jsonb(mf) AS js) j
+      CROSS JOIN LATERAL (
+        SELECT regexp_replace(
+          COALESCE(
+            j.js->>'score',
+            j.js->>'match_score',
+            j.js->>'result',
+            j.js->>'outcome',
+            ''
+          ),
+          '\\([^)]*\\)',
+          '',
+          'g'
+        ) AS score_clean
+      ) sc
+      WHERE (mf.winner_id = player_a_id OR mf.loser_id = player_a_id)
+        AND mf.best_of = 5
+    ) AS scored_a;
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id AND sets_played = 5)::FLOAT
+         / NULLIF(COUNT(*) FILTER (WHERE sets_played = 5), 0)
+    INTO win_pct_fifth_set_b
+    FROM (
+      SELECT
+        mf.winner_id,
+        mf.loser_id,
+        (length(score_clean) - length(replace(score_clean, '-', ''))) AS sets_played
+      FROM estratego_v1.matches_full mf
+      CROSS JOIN LATERAL (SELECT to_jsonb(mf) AS js) j
+      CROSS JOIN LATERAL (
+        SELECT regexp_replace(
+          COALESCE(
+            j.js->>'score',
+            j.js->>'match_score',
+            j.js->>'result',
+            j.js->>'outcome',
+            ''
+          ),
+          '\\([^)]*\\)',
+          '',
+          'g'
+        ) AS score_clean
+      ) sc
+      WHERE (mf.winner_id = player_b_id OR mf.loser_id = player_b_id)
+        AND mf.best_of = 5
+    ) AS scored_b;
+
   -- Court speed adaptation
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
     INTO court_speed_score_a
@@ -648,6 +707,7 @@ BEGIN
       'home_advantage', home_advantage_a,
       'win_pct_month', win_month_a,
       'win_pct_vs_top10', win_vs_rankband_a,
+      'win_pct_fifth_set', win_pct_fifth_set_a,
       'court_speed_score', court_speed_score_a,
       'win_score', win_score_a,
       'win_probability', prob_a,
@@ -671,6 +731,7 @@ BEGIN
       'home_advantage', home_advantage_b,
       'win_pct_month', win_month_b,
       'win_pct_vs_top10', win_vs_rankband_b,
+      'win_pct_fifth_set', win_pct_fifth_set_b,
       'court_speed_score', court_speed_score_b,
       'win_score', win_score_b,
       'win_probability', prob_b,
