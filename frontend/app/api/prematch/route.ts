@@ -10,6 +10,7 @@ type PlayerSummary = {
   days_since_last: number | null;
   win_pct_month: number | null;
   win_pct_vs_top10: number | null;
+  win_pct_fifth_set: number | null;
   court_speed_score: number | null;
   win_score: number | null;
   win_probability: number | null;
@@ -1012,6 +1013,43 @@ const buildPlayer = (
         `pct_vs_top_10_${prefix}`,
       ]),
     );
+  const winPctFifthSet =
+    pickNumber(playerRecord, [
+      "win_pct_fifth_set",
+      "win_pct_5th_set",
+      "fifth_set_win_pct",
+      "pct_win_5th_set",
+      "win_pct_deciding_set",
+      "deciding_set_win_pct",
+      "win_pct_best_of_5",
+      "best_of_5_win_pct",
+      "win_pct_bo5",
+      "bo5_win_pct",
+    ]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [
+        `${prefix}_win_pct_fifth_set`,
+        `win_pct_fifth_set_${prefix}`,
+        `${prefix}_win_pct_5th_set`,
+        `win_pct_5th_set_${prefix}`,
+        `${prefix}_fifth_set_win_pct`,
+        `fifth_set_win_pct_${prefix}`,
+        `${prefix}_pct_win_5th_set`,
+        `pct_win_5th_set_${prefix}`,
+        `${prefix}_win_pct_deciding_set`,
+        `win_pct_deciding_set_${prefix}`,
+        `${prefix}_deciding_set_win_pct`,
+        `deciding_set_win_pct_${prefix}`,
+        `${prefix}_win_pct_best_of_5`,
+        `win_pct_best_of_5_${prefix}`,
+        `${prefix}_best_of_5_win_pct`,
+        `best_of_5_win_pct_${prefix}`,
+        `${prefix}_win_pct_bo5`,
+        `win_pct_bo5_${prefix}`,
+        `${prefix}_bo5_win_pct`,
+        `bo5_win_pct_${prefix}`,
+      ]),
+    );
   const courtSpeedScore =
     pickNumber(playerRecord, [
       "court_speed_score",
@@ -1163,6 +1201,7 @@ const buildPlayer = (
     days_since_last: daysSinceLast,
     win_pct_month: winPctMonth,
     win_pct_vs_top10: winPctVsTop10,
+    win_pct_fifth_set: winPctFifthSet,
     court_speed_score: courtSpeedScore,
     win_score: winScore,
    win_probability: winProbability,

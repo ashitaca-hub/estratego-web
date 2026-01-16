@@ -29,6 +29,7 @@ type PlayerSummary = {
   home_advantage?: boolean | null;
   win_pct_month?: number | null;
   win_pct_vs_top10?: number | null;
+  win_pct_fifth_set?: number | null;
   court_speed_score?: number | null;
   win_score?: number | null;
   win_probability?: number | null;
@@ -123,6 +124,7 @@ const formatPlayerMetric = (summary: PlayerSummary | undefined, key: keyof Playe
     case "win_pct_year":
     case "win_pct_surface":
     case "win_pct_month":
+    case "win_pct_fifth_set":
       return formatPercentage(rawValue as number, { decimals: 1 });
     case "win_pct_vs_top10":
       return formatPercentage(rawValue as number, { decimals: 1 });
@@ -160,6 +162,36 @@ const playerMetricDescriptors: Array<{ key: keyof PlayerSummary; label: string }
   { key: "court_speed_score", label: "Court speed score" },
 ];
 
+const getPlayerMetricDescriptors = (
+  isBestOfFive: boolean,
+): Array<{ key: keyof PlayerSummary; label: string }> => {
+  if (!isBestOfFive) return playerMetricDescriptors;
+  const metrics = [...playerMetricDescriptors];
+  metrics.splice(6, 0, { key: "win_pct_fifth_set", label: "% victorias en 5to set" });
+  return metrics;
+};
+
+const isBestOfFiveTournament = (tournament?: TournamentSummary | null): boolean => {
+  const raw = [tournament?.bucket, tournament?.name].filter(Boolean).join(" ").toLowerCase();
+  if (!raw) return false;
+  if (raw.includes("grand slam") || raw.includes("grand_slam") || raw.includes("grand-slam")) {
+    return true;
+  }
+  const known = [
+    "australian open",
+    "open de australia",
+    "abierto de australia",
+    "roland garros",
+    "french open",
+    "open de francia",
+    "wimbledon",
+    "us open",
+    "open de estados unidos",
+    "abierto de estados unidos",
+  ];
+  return known.some((name) => raw.includes(name));
+};
+
 const highlightedComparisonsDescriptors: Array<{ key: keyof PlayerSummary; label: string }> = [
   { key: "win_pct_month", label: "% victorias en el mes" },
   { key: "win_pct_vs_top10", label: "% victorias vs Top 10" },
@@ -177,6 +209,10 @@ export default function PrematchInner() {
   const [data, setData] = useState<PrematchResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isBestOfFive = useMemo(
+    () => isBestOfFiveTournament(data?.tournament ?? null),
+    [data?.tournament],
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -392,7 +428,7 @@ export default function PrematchInner() {
                   ].map(({ label, summary }, index) => {
                     if (!summary) return null;
 
-                    const metrics = playerMetricDescriptors
+                    const metrics = getPlayerMetricDescriptors(isBestOfFive)
                       .map((descriptor) => {
                         const formatted = formatPlayerMetric(summary, descriptor.key);
                         if (formatted === null) return null;
