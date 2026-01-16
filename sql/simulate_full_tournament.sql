@@ -27,8 +27,8 @@ DECLARE
   next_match_num  INT;
   next_match_id   TEXT;
 BEGIN
-  -- keep server-side timeout reasonable but finite
-  PERFORM set_config('statement_timeout', '60000', true);
+  -- increase timeout for large draws (e.g., 128) to avoid cancellation
+  PERFORM set_config('statement_timeout', '300000', true);
 
   SELECT idx, rounds[idx]
   INTO first_round_idx, first_round
