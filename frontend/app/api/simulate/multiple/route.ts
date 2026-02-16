@@ -2,7 +2,17 @@
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabaseAdmin =
+  SUPABASE_URL &&
+  SERVICE_ROLE_KEY &&
+  createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 
 type MultipleSimPayload = {
   tourney_id?: string;
@@ -12,7 +22,11 @@ type MultipleSimPayload = {
 };
 
 async function ensureDraw(tourneyId: string) {
-  const { data: existing, error: checkError } = await supabase
+  if (!supabaseAdmin) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY no configurada");
+  }
+
+  const { data: existing, error: checkError } = await supabaseAdmin
     .from("draw_matches")
     .select("id")
     .eq("tourney_id", tourneyId)
@@ -23,7 +37,7 @@ async function ensureDraw(tourneyId: string) {
   }
 
   if (!existing || existing.length === 0) {
-    const { error: buildError } = await supabase.rpc("build_draw_matches", {
+    const { error: buildError } = await supabaseAdmin.rpc("build_draw_matches", {
       p_tournament_id: tourneyId,
     });
 
@@ -76,7 +90,13 @@ export async function POST(req: Request) {
     });
   }
 
-  const { error: simError } = await supabase.rpc("simulate_multiple_runs", {
+  if (!supabaseAdmin) {
+    return new Response(JSON.stringify({ error: "SUPABASE_SERVICE_ROLE_KEY no configurada" }), {
+      status: 500,
+    });
+  }
+
+  const { error: simError } = await supabaseAdmin.rpc("simulate_multiple_runs", {
     p_tourney_id: tourneyId,
     p_year: year,
     p_runs: runs,
