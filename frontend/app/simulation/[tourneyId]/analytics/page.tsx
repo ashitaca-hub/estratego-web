@@ -204,7 +204,7 @@ export default function SimulationAnalyticsPage() {
       setLoading(true);
       setError(null);
       try {
-        const pageSize = 2000;
+        const pageSize = 1000;
         let start = 0;
         let fetched: SimulationRow[] = [];
 
@@ -228,7 +228,7 @@ export default function SimulationAnalyticsPage() {
             break;
           }
 
-          start += pageSize;
+          start += safeChunk.length;
         }
 
         setRows(fetched);
