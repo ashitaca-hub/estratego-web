@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { requireAdminAuth } from "@/lib/adminAuth";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -174,6 +175,9 @@ async function promoteWinners(client: SupabaseClient, tourneyId: string) {
 }
 
 export async function POST(request: Request) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     return NextResponse.json(
       { error: "Supabase service role no configurado" },

@@ -18,6 +18,10 @@ import {
   normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
 
+const ADMIN_API_HEADERS: Record<string, string> = process.env.NEXT_PUBLIC_ADMIN_API_SECRET
+  ? { "x-admin-key": process.env.NEXT_PUBLIC_ADMIN_API_SECRET }
+  : {};
+
 export type Player = {
   id: string;
   name: string;
@@ -2827,7 +2831,7 @@ export function EstrategoBracketApp() {
     try {
       const response = await fetch("/api/draw/winner", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...ADMIN_API_HEADERS },
         body: JSON.stringify({
           tourney_id: bracket.tourney_id,
           match_id: match.id,
@@ -2952,7 +2956,7 @@ export function EstrategoBracketApp() {
       };
       const res = await fetch("/api/prematch/weights", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...ADMIN_API_HEADERS },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -3085,7 +3089,7 @@ export function EstrategoBracketApp() {
 
     await fetch("/api/reset", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...ADMIN_API_HEADERS },
       body: JSON.stringify({ tourney_id: bracket.tourney_id }),
     });
 
