@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, SlidersHorizontal, Maximize2, X } from "lucide-react";
+import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X } from "lucide-react";
 import {
   WinProbabilityOrb,
   getWinProbabilitySummary,
@@ -673,11 +673,10 @@ const renderDefendChip = (value?: string | null) => {
       <span
         key="defend"
         title="Defiende título"
-        className="text-lg"
-        role="img"
         aria-label="Defiende título"
+        className="inline-flex h-6 w-6 items-center justify-center text-amber-400"
       >
-        🏆
+        <Trophy className="h-4 w-4" />
       </span>
     );
   }
@@ -686,11 +685,10 @@ const renderDefendChip = (value?: string | null) => {
       <span
         key="defend"
         title="Defiende final"
-        className="text-lg text-slate-200"
-        role="img"
         aria-label="Defiende final"
+        className="inline-flex h-6 w-6 items-center justify-center text-slate-300"
       >
-        🥈
+        <Medal className="h-4 w-4" />
       </span>
     );
   }
