@@ -2996,7 +2996,7 @@ export function EstrategoBracketApp() {
     try {
       let processed = 0;
       let reset = true;
-      const baseChunkSize = 5;
+      const baseChunkSize = 1;
       let chunkSize = Math.min(baseChunkSize, runs);
 
       const runChunk = async (chunkRuns: number, resetChunk: boolean) => {
@@ -3045,7 +3045,14 @@ export function EstrategoBracketApp() {
           const errMsg = result.error ?? "Error desconocido";
           console.error("Error en simulate/multiple:", errMsg);
 
-          if (chunkSize > 1 && errMsg.toLowerCase().includes("statement timeout")) {
+          const lowerErr = errMsg.toLowerCase();
+          const isTimeoutError =
+            lowerErr.includes("statement timeout") ||
+            lowerErr.includes("timeout") ||
+            lowerErr.includes("timed out") ||
+            lowerErr.includes("504");
+
+          if (chunkSize > 1 && isTimeoutError) {
             // reduce chunk size and retry without advancing progress
             chunkSize = 1;
             continue;
