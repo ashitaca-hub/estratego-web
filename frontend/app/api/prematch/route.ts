@@ -381,13 +381,6 @@ const loadOddsFromCache = async (
     }
     if (!data) return null;
 
-    console.info("[odds] cache hit", {
-      playerKey,
-      eventScope,
-      updated_at: data.updated_at,
-      sport_key: data.sport_key,
-    });
-
     return data.data as MatchOddsSummary;
   } catch (err) {
     console.warn("[odds] cache load exception", { err, playerKey, eventScope });
@@ -634,7 +627,6 @@ type FetchOddsInput = {
 
 const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary | null> => {
   if (!ODDS_API_KEY) {
-    console.info("[odds] ODDS_API_KEY not configured; skipping odds retrieval");
     return null;
   }
   const { playerAName, playerBName, tournament, extras, eventNameHint } = input;
@@ -649,20 +641,9 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   const eventScope = buildEventScope(normalizedEventHintLower, tournament);
   const cachedOdds = await loadOddsFromCache(playerKey, eventScope);
   if (cachedOdds) {
-    console.info("[odds] returning cached odds", {
-      playerKey,
-      eventScope,
-      sport_key: cachedOdds.sport_key,
-    });
     return cachedOdds;
   }
   const sportKeyEntries = determineSportKeyCandidates(tournament, extras, eventNameHint);
-  console.info("[odds] attempting odds lookup", {
-    playerA: playerAData.original,
-    playerB: playerBData.original,
-    sportKeys: sportKeyEntries.map((entry) => entry.sportKey),
-    tournament: tournament?.name ?? null,
-  });
 
   for (const entry of sportKeyEntries) {
     const { sportKey, forceMatch } = entry;
@@ -673,8 +654,6 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       url.searchParams.set("markets", ODDS_DEFAULT_MARKETS);
       url.searchParams.set("oddsFormat", ODDS_DEFAULT_ODDS_FORMAT);
       url.searchParams.set("dateFormat", ODDS_DEFAULT_DATE_FORMAT);
-
-      console.info("[odds] fetch", { sportKey, url: url.toString() });
 
       const response = await fetch(url.toString(), { cache: "no-store" });
       if (!response.ok) {
@@ -696,24 +675,10 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
         );
         if (looseMatches.length) {
           event = looseMatches[0];
-          console.info("[odds] loose match selected", {
-            sportKey,
-            eventId: event?.id ?? null,
-            home_team: event?.home_team,
-            away_team: event?.away_team,
-          });
         }
       }
 
       if (!event) continue;
-      console.info("[odds] matched event", {
-        sportKey,
-        eventId: event.id ?? null,
-        home_team: event.home_team,
-        away_team: event.away_team,
-        commence_time: event.commence_time,
-        bookmakers: Array.isArray(event.bookmakers) ? event.bookmakers.map((b: any) => b.key ?? b.title).slice(0, 5) : [],
-      });
 
       const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
       if (!bookmaker) continue;
@@ -768,17 +733,6 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
           } (${(valueDiffB * 100).toFixed(1)} pp)`;
       }
 
-      console.info("[odds] returning odds", {
-        sportKey,
-        bookmaker: bookmaker.key ?? bookmaker.title,
-        priceA,
-        priceB,
-        impliedA,
-        impliedB,
-        valueDiffA,
-        valueDiffB,
-      });
-
       const oddsSummary: MatchOddsSummary = {
         sport_key: sportKey,
         bookmaker: typeof bookmaker.title === "string" && bookmaker.title.trim().length > 0 ? bookmaker.title : bookmaker.key ?? "bookmaker",
@@ -806,14 +760,6 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       console.warn("[odds] error fetching odds", { sportKey, err });
     }
   }
-
-  console.info("[odds] no odds found", {
-    playerA: playerAData.original,
-    playerB: playerBData.original,
-    sportKeys: sportKeyEntries.map((entry) => entry.sportKey),
-    playerKey,
-    eventScope,
-  });
 
   return null;
 };
@@ -1414,8 +1360,6 @@ const toIsoYear = (value: unknown, fallbackYear?: number): string | null => {
 };
 
 const callExtendedPrematchSummary = async (payload: PrematchRpcPayload) => {
-  console.log("🪵 Llamando get_extended_prematch_summary con:", payload);
-
   return supabase.rpc("get_extended_prematch_summary", payload);
 };
 

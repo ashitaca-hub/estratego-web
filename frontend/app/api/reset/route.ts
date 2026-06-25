@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdminAuth } from "@/lib/adminAuth";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabaseAdmin =
-  SERVICE_ROLE_KEY &&
-  createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  SUPABASE_URL && SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : null;
 
 export async function POST(request: Request) {
   const authError = requireAdminAuth(request);
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   const mode = (body.mode as string | undefined)?.toLowerCase() === "hard" ? "hard" : "soft";
 
   if (!supabaseAdmin) {
-    console.error("/api/reset requiere SUPABASE_SERVICE_ROLE_KEY configurada en el entorno");
+    console.error("/api/reset requiere NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY configuradas en el entorno");
     return NextResponse.json(
       { error: "Configuración inválida del servidor Supabase" },
       { status: 500 }
