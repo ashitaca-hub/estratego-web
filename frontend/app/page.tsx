@@ -111,13 +111,13 @@ function MatchCard({
 
     const buttonClasses = [
       "inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs transition",
-      isWinner ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-slate-500 hover:bg-slate-100",
+      isWinner ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-700 text-slate-400 hover:bg-slate-800",
       selectable && !selectionLocked ? "cursor-pointer" : "cursor-not-allowed opacity-40",
     ].join(" ");
 
     return (
       <div
-        className={`flex items-center justify-between gap-3 text-sm ${isWinner ? "font-semibold text-emerald-700" : "text-slate-900"}`}
+        className={`flex items-center justify-between gap-3 text-sm ${isWinner ? "font-semibold text-emerald-400" : "text-slate-100"}`}
       >
         <div className="flex items-center gap-2">
           <button
@@ -161,7 +161,7 @@ function MatchCard({
       onClick={() => onClick?.(m)}
     >
       <CardContent className="space-y-3 p-3">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-xs text-slate-400">
           <span>{m.round}</span>
           {isSaving && (
             <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
@@ -180,7 +180,7 @@ function MatchCard({
 function Column({ title, children }: React.PropsWithChildren<{ title: string }>) {
   return (
     <div className="w-64 min-w-64">
-      <div className="text-sm font-medium text-gray-600 mb-2 px-1">{title}</div>
+      <div className="text-sm font-medium text-slate-400 mb-2 px-1">{title}</div>
       <div className="space-y-3">{children}</div>
     </div>
   );
@@ -3093,6 +3093,7 @@ export function EstrategoBracketApp() {
 
   const onReset = async () => {
     if (!bracket?.tourney_id) return;
+    if (!window.confirm("¿Seguro que quieres resetear este torneo? Se perderá el progreso del draw.")) return;
 
     await fetch("/api/reset", {
       method: "POST",
@@ -3154,7 +3155,7 @@ export function EstrategoBracketApp() {
   }
 
   if (!bracket) {
-    return <div className="p-6 text-sm text-gray-600">Cargando torneo...</div>;
+    return <div className="p-6 text-sm text-slate-400">Cargando torneo...</div>;
   }
 
   return (
@@ -3248,7 +3249,7 @@ export function EstrategoBracketApp() {
                               />
                               {monthLabel}
                             </div>
-                            <span className="text-[11px] text-slate-500">{items.length} torneos</span>
+                            <span className="ml-2 shrink-0 text-[11px] text-slate-500">{items.length} torneos</span>
                           </button>
                           {expandedMonths[yearKey]?.[monthKey] && (
                             <div className="space-y-2 border-t border-slate-800 p-2">
@@ -3286,7 +3287,7 @@ export function EstrategoBracketApp() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-400">
             Draw {bracket.drawSize} - Superficie: {bracket.surface}
           </p>
         </div>
@@ -3336,7 +3337,7 @@ export function EstrategoBracketApp() {
             <Maximize2 className="w-4 h-4 mr-2" />
             Draw compacto
           </Button>
-          <Button variant="secondary" className="rounded-2xl" onClick={onReset}>
+          <Button variant="destructive" className="rounded-2xl" onClick={onReset}>
             Resetear
           </Button>
         </div>
@@ -3475,13 +3476,13 @@ export function EstrategoBracketApp() {
 }
 
 function EmptyRound() {
-  return <div className="text-xs text-gray-500 italic px-1">(esperando simulacion)</div>;
+  return <div className="text-xs text-slate-400 italic px-1">(esperando simulacion)</div>;
 }
 
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-600">Cargando...</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-slate-400">Cargando...</div>}>
       <EstrategoBracketApp />
     </Suspense>
   );
