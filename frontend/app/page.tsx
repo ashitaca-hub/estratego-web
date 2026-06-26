@@ -602,11 +602,6 @@ function formatBool(value: boolean | null) {
   return value ? "Si" : "No";
 }
 
-function formatDays(value: number | null) {
-  if (value == null) return "N/A";
-  return `${value} dias`;
-}
-
 function formatScorePercent(value: number | null) {
   if (value == null || Number.isNaN(value)) return "N/A";
   const clamped = Math.max(0, Math.min(1, value));
@@ -911,6 +906,18 @@ const renderOddsInfo = (odds: MatchOddsSummary | undefined, side: "playerA" | "p
   );
 };
 
+const RETIRED_ALERT_RE = /se retir[oó] en su [uú]ltimo partido\.?/i;
+const DEFENDS_TITLE_ALERT_RE = /^defiende .+ del a[nñ]o anterior\.?$/i;
+
+// El chip de retiro y el icono de "defiende título/final" ya comunican esto
+// visualmente; evitamos repetirlo como alerta de texto.
+const splitPlayerAlerts = (alerts?: string[] | null) => {
+  const list = alerts ?? [];
+  const retired = list.some((a) => RETIRED_ALERT_RE.test(a));
+  const rest = list.filter((a) => !RETIRED_ALERT_RE.test(a) && !DEFENDS_TITLE_ALERT_RE.test(a));
+  return { retired, rest };
+};
+
 const renderAlertBadges = (alerts?: string[]) => {
   if (!alerts || alerts.length === 0) return null;
   return (
@@ -1028,12 +1035,12 @@ function DiffBar({ valueA, valueB }: { valueA: number | null; valueB: number | n
   const rB = normalizeRatio01(valueB);
   const diffPp = (rB - rA) * 100;
   const towardB = diffPp > 0;
-  const magnitude = Math.min(50, Math.abs(diffPp));
+  const magnitude = Math.min(46, Math.abs(diffPp));
   const band = diffBand(diffPp);
   const sw = styleForBand(band, magnitude / 50);
 
   return (
-    <div className="relative h-10 rounded-md border border-slate-800 bg-slate-950/40">
+    <div className="relative h-10 overflow-hidden rounded-md border border-slate-800 bg-slate-950/40">
       <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
       {magnitude > 0.5 && (
         <div
@@ -1232,6 +1239,8 @@ function PrematchDialog({
 
   const oddsA = useMemo(() => decimalOdds(probability), [probability]);
   const oddsB = useMemo(() => decimalOdds(probability != null ? 1 - probability : null), [probability]);
+  const playerAAlerts = useMemo(() => splitPlayerAlerts(summary?.playerA?.alerts), [summary?.playerA?.alerts]);
+  const playerBAlerts = useMemo(() => splitPlayerAlerts(summary?.playerB?.alerts), [summary?.playerB?.alerts]);
   const showFifthSetStat = useMemo(
     () => isBestOfFiveTournament(summary?.tournament ?? null, bracket?.event ?? null),
     [summary?.tournament, bracket?.event],
@@ -1353,6 +1362,25 @@ const highlight = useMemo(() => {
 
                     <WinProbabilityBar playerAName={top.name} playerBName={bottom.name} probabilityA={probability} />
 
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-gradient-to-r from-slate-900/80 via-slate-800/50 to-slate-900/80 px-4 py-2.5">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Head to head</div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold text-slate-100">
+                          {summary.h2h.wins} - {summary.h2h.losses}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          ({summary.h2h.total} partido{summary.h2h.total === 1 ? '' : 's'})
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-300">
+                        {summary.h2h.last_meeting ? (
+                          <>Último duelo: <span className="font-medium text-slate-100">{summary.h2h.last_meeting}</span></>
+                        ) : (
+                          <span className="text-slate-500">Sin registro reciente</span>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-center">
                         {renderPointsDelta({
@@ -1392,10 +1420,22 @@ const highlight = useMemo(() => {
                           if (defendChip) {
                             chips.push(defendChip);
                           }
+                          if (playerAAlerts.retired) {
+                            chips.push(
+                              <span
+                                key="injury"
+                                title="Se retiró en su último partido"
+                                aria-label="Se retiró en su último partido"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/10 text-sm text-rose-300"
+                              >
+                                ✚
+                              </span>,
+                            );
+                          }
                           if (chips.length === 0) return null;
                           return <div className="flex items-center gap-2">{chips}</div>;
                         })()}
-                        {renderAlertBadges(summary.playerA.alerts)}
+                        {renderAlertBadges(playerAAlerts.rest)}
                       </div>
                       <div className="flex flex-col items-center gap-2">
                         {renderOddsInfo(summary?.odds, "playerB")}
@@ -1418,10 +1458,22 @@ const highlight = useMemo(() => {
                           if (defendChip) {
                             chips.push(defendChip);
                           }
+                          if (playerBAlerts.retired) {
+                            chips.push(
+                              <span
+                                key="injury"
+                                title="Se retiró en su último partido"
+                                aria-label="Se retiró en su último partido"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/10 text-sm text-rose-300"
+                              >
+                                ✚
+                              </span>,
+                            );
+                          }
                           if (chips.length === 0) return null;
                           return <div className="flex items-center gap-2">{chips}</div>;
                         })()}
-                        {renderAlertBadges(summary.playerB.alerts)}
+                        {renderAlertBadges(playerBAlerts.rest)}
                       </div>
                     </div>
                   </div>
@@ -1509,11 +1561,6 @@ const highlight = useMemo(() => {
                         alignPlayerB="left"
                       />
                       <StatRow
-                        label="Dias sin competir"
-                        playerA={formatDays(summary.playerA.days_since_last)}
-                        playerB={formatDays(summary.playerB.days_since_last)}
-                      />
-                      <StatRow
                         label="Ventaja local"
                         playerA={summary.playerA.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
                         playerB={summary.playerB.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
@@ -1534,31 +1581,7 @@ const highlight = useMemo(() => {
                     </div>
                   </section>
 
-                  <section className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-3 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950/80 via-slate-900/60 to-slate-950/80 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Head to head</div>
-                      <div className="flex items-baseline justify-between">
-                        <div>
-                          <div className="text-2xl font-semibold text-slate-100">
-                            {summary.h2h.wins} - {summary.h2h.losses}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            Total {summary.h2h.total} partido{summary.h2h.total === 1 ? '' : 's'}
-                          </div>
-                        </div>
-                        <div className="rounded-full border border-slate-800/80 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300">
-                          {top.name.split(' ')[0]} / {bottom.name.split(' ')[0]}
-                        </div>
-                      </div>
-                      {summary.h2h.last_meeting ? (
-                        <div className="text-sm text-slate-300">
-                          Ultimo duelo: <span className="font-medium text-slate-100">{summary.h2h.last_meeting}</span>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-slate-500">Sin registro reciente</div>
-                      )}
-                    </div>
-
+                  <section className="grid gap-3">
                     <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Contexto</div>
                       <div className="space-y-2 text-sm text-slate-300">
