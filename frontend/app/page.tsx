@@ -17,34 +17,14 @@ import {
   getWinProbabilitySummary,
   normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
+import { QuarterTabs } from "@/components/bracket/QuarterTabs";
 
 const ADMIN_API_HEADERS: Record<string, string> = process.env.NEXT_PUBLIC_ADMIN_API_SECRET
   ? { "x-admin-key": process.env.NEXT_PUBLIC_ADMIN_API_SECRET }
   : {};
 
-export type Player = {
-  id: string;
-  name: string;
-  seed?: number | null;
-  entryType?: string | null;
-  country?: string;
-};
-
-export type Match = {
-  id: string;
-  round: "R128" | "R64" | "R32" | "R16" | "QF" | "SF" | "F";
-  top: Player;
-  bottom: Player;
-  winnerId?: string;
-};
-
-export type Bracket = {
-  tourney_id: string;
-  event: string;
-  surface: string;
-  drawSize: number;
-  matches: Match[];
-};
+export type { Player, Match, Bracket } from "@/lib/bracket-types";
+import type { Player, Match, Bracket } from "@/lib/bracket-types";
 
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
@@ -3403,7 +3383,8 @@ export function EstrategoBracketApp() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      {/* Móvil: vista plana con scroll horizontal, sin líneas conectoras ni pestañas */}
+      <div className="overflow-x-auto md:hidden">
         <div className="flex gap-6">
           {visibleRounds.map((r: Match["round"], idx) => (
             <React.Fragment key={r}>
@@ -3432,6 +3413,18 @@ export function EstrategoBracketApp() {
             </React.Fragment>
           ))}
         </div>
+      </div>
+
+      {/* Escritorio: árbol con líneas conectoras, paginado por cuartos si no entra en una pantalla */}
+      <div className="hidden md:block">
+        <QuarterTabs
+          rounds={visibleRounds}
+          matchesByRound={matchesByRound}
+          onSelectWinner={onSelectWinner}
+          onOpenPrematch={onOpenPrematch}
+          onOpenPlayerStats={onOpenPlayerStats}
+          savingMatchId={savingMatchId}
+        />
       </div>
 
       <PrematchDialog open={pmOpen} onOpenChange={setPmOpen} match={pmMatch} bracket={bracket} />
