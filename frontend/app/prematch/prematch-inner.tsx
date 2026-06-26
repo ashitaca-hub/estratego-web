@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
-  WinProbabilityOrb,
+  WinProbabilityBar,
   getWinProbabilitySummary,
   normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
@@ -385,18 +385,12 @@ export default function PrematchInner() {
 
       {data && (
         <div className="space-y-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg xl:grid xl:grid-cols-[minmax(0,360px),1fr] xl:gap-10 xl:space-y-0">
-          <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-center lg:justify-center xl:flex-col">
-            <WinProbabilityOrb
-              label={playerA}
-              value={probability}
-              description="Si la barra se enciende en rojos intensos, el modelo ve a este jugador casi imparable."
-            />
-            <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent lg:block xl:hidden" />
-            <WinProbabilityOrb
-              label={playerB}
-              value={probability !== null ? 1 - probability : null}
-              description="Cuando domina el hielo, la lectura es que este jugador llega con el partido cuesta arriba."
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-100">
+              <span className="truncate">{playerA}</span>
+              <span className="truncate text-right">{playerB}</span>
+            </div>
+            <WinProbabilityBar playerAName={playerA} playerBName={playerB} probabilityA={probability} />
           </div>
 
           <div className="space-y-5">

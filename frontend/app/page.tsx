@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X } from "lucide-react";
 import {
-  WinProbabilityOrb,
+  WinProbabilityBar,
   getWinProbabilitySummary,
   normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
@@ -835,7 +835,7 @@ const renderPointsDelta = (stats?: {
 
   if (delta == null && current == null && previous == null) {
     return (
-      <div className="mt-1 text-xs font-semibold text-slate-500" aria-hidden="true">
+      <div className="text-sm font-semibold text-slate-500" aria-hidden="true">
         —
       </div>
     );
@@ -868,7 +868,6 @@ const renderPointsDelta = (stats?: {
 
   return (
     <div
-      className="mt-1 text-xs font-semibold text-slate-400"
       title={titleParts.length ? titleParts.join(" · ") : undefined}
       aria-label={
         titleParts.length
@@ -876,9 +875,10 @@ const renderPointsDelta = (stats?: {
           : undefined
       }
     >
-      {mainValue ? <span className="text-slate-300">{mainValue}</span> : null}
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Puntos ATP</div>
+      {mainValue ? <span className="text-base font-bold text-slate-100">{mainValue}</span> : null}
       {accentValue ? (
-        <span className={`ml-2 inline-flex items-center gap-1 ${accentClass}`}>
+        <span className={`ml-2 inline-flex items-center gap-1 text-sm font-semibold ${accentClass}`}>
           {accentValue}
         </span>
       ) : null}
@@ -1282,123 +1282,130 @@ const highlight = useMemo(() => {
 
               {summary && (
                 <div className="space-y-6">
-                  <div className="flex flex-col items-center gap-10 md:flex-row md:items-start md:justify-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <WinProbabilityOrb label={top.name} value={probability} />
-                      {(() => {
-                        const badge = rankBadge(summary?.playerA?.ranking ?? null);
-                        const seed = match?.top?.seed;
-                        return (
-                          <div className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
-                            <span>{badge.label}</span>
-                          </div>
-                        );
-                      })()}
-                      {renderPointsDelta({
-                        points_delta: summary?.playerA?.points_delta ?? null,
-                        points_current: summary?.playerA?.points_current ?? null,
-                        points_previous: summary?.playerA?.points_previous ?? null,
-                      })}
-                      {renderOddsInfo(summary?.odds, "playerA")}
-                      {renderRecentForm(summary?.playerA?.last_results)}
-                      {(() => {
-                        const chips: any[] = [];
-                        const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
-                        if (flag) {
-                          const baseFlag =
-                            "inline-flex items-center justify-center rounded-full px-3 py-1 text-lg transition";
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {(() => {
+                          const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
+                          if (!flag) return null;
+                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-lg";
                           const flagClasses = summary.playerA.home_advantage
                             ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
                             : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
-                          chips.push(
-                            <span
-                              key="flag"
-                              className={flagClasses}
-                              title={summary.playerA.home_advantage ? "Jugador local" : undefined}
-                            >
+                          return (
+                            <span className={flagClasses} title={summary.playerA.home_advantage ? "Jugador local" : undefined}>
                               {flag}
-                            </span>,
+                            </span>
                           );
-                        }
-                        const seed = match?.top?.seed;
-                        if (typeof seed === "number" && Number.isFinite(seed)) {
-                          chips.push(
-                            <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
+                        })()}
+                        <span className="truncate text-lg font-semibold text-slate-100">{top.name}</span>
+                        {(() => {
+                          const badge = rankBadge(summary?.playerA?.ranking ?? null);
+                          return (
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}>
+                              {badge.label}
+                            </span>
                           );
-                        }
-                        const et = match?.top?.entryType?.toUpperCase();
-                        if (et === 'Q' || et === 'WC') {
-                          chips.push(
-                            <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
+                        })()}
+                      </div>
+                      <div className="flex min-w-0 items-center justify-end gap-2">
+                        {(() => {
+                          const badge = rankBadge(summary?.playerB?.ranking ?? null);
+                          return (
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}>
+                              {badge.label}
+                            </span>
                           );
-                        }
-                        const defendChip = renderDefendChip(summary.playerA.defends_round);
-                        if (defendChip) {
-                          chips.push(defendChip);
-                        }
-                        if (chips.length === 0) return null;
-                        return <div className="flex items-center gap-2">{chips}</div>;
-                      })()}
-                      {renderAlertBadges(summary.playerA.alerts)}
-                    </div>
-                    <div className="hidden h-24 w-px bg-gradient-to-b from-transparent via-slate-700/60 to-transparent md:block" />
-                    <div className="flex flex-col items-center gap-2">
-                      <WinProbabilityOrb label={bottom.name} value={probability != null ? 1 - probability : null} />
-                      {(() => {
-                        const badge = rankBadge(summary?.playerB?.ranking ?? null);
-                        const seed = match?.bottom?.seed;
-                        return (
-                          <div className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${badge.className}`}>
-                            <span>{badge.label}</span>
-                          </div>
-                        );
-                      })()}
-                      {renderPointsDelta({
-                        points_delta: summary?.playerB?.points_delta ?? null,
-                        points_current: summary?.playerB?.points_current ?? null,
-                        points_previous: summary?.playerB?.points_previous ?? null,
-                      })}
-                      {renderOddsInfo(summary?.odds, "playerB")}
-                      {renderRecentForm(summary?.playerB?.last_results)}
-                      {(() => {
-                        const chips: any[] = [];
-                        const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
-                        if (flag) {
-                          const baseFlag =
-                            "inline-flex items-center justify-center rounded-full px-3 py-1 text-lg transition";
+                        })()}
+                        <span className="truncate text-lg font-semibold text-slate-100">{bottom.name}</span>
+                        {(() => {
+                          const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
+                          if (!flag) return null;
+                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-lg";
                           const flagClasses = summary.playerB.home_advantage
                             ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
                             : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
-                          chips.push(
-                            <span
-                              key="flag"
-                              className={flagClasses}
-                              title={summary.playerB.home_advantage ? "Jugador local" : undefined}
-                            >
+                          return (
+                            <span className={flagClasses} title={summary.playerB.home_advantage ? "Jugador local" : undefined}>
                               {flag}
-                            </span>,
+                            </span>
                           );
-                        }
-                        const seed = match?.bottom?.seed;
-                        if (typeof seed === "number" && Number.isFinite(seed)) {
-                          chips.push(
-                            <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
-                          );
-                        }
-                        const et = match?.bottom?.entryType?.toUpperCase();
-                        if (et === 'Q' || et === 'WC') {
-                          chips.push(
-                            <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
-                          );
-                        }
-                        const defendChip = renderDefendChip(summary.playerB.defends_round);
-                        if (defendChip) {
-                          chips.push(defendChip);
-                        }
-                        if (chips.length === 0) return null;
-                        return <div className="flex items-center gap-2">{chips}</div>;
-                      })()}
-                      {renderAlertBadges(summary.playerB.alerts)}
+                        })()}
+                      </div>
+                    </div>
+
+                    <WinProbabilityBar playerAName={top.name} playerBName={bottom.name} probabilityA={probability} />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-center">
+                        {renderPointsDelta({
+                          points_delta: summary?.playerA?.points_delta ?? null,
+                          points_current: summary?.playerA?.points_current ?? null,
+                          points_previous: summary?.playerA?.points_previous ?? null,
+                        })}
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-center">
+                        {renderPointsDelta({
+                          points_delta: summary?.playerB?.points_delta ?? null,
+                          points_current: summary?.playerB?.points_current ?? null,
+                          points_previous: summary?.playerB?.points_previous ?? null,
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col items-center gap-2">
+                        {renderOddsInfo(summary?.odds, "playerA")}
+                        {renderRecentForm(summary?.playerA?.last_results)}
+                        {(() => {
+                          const chips: any[] = [];
+                          const seed = match?.top?.seed;
+                          if (typeof seed === "number" && Number.isFinite(seed)) {
+                            chips.push(
+                              <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
+                            );
+                          }
+                          const et = match?.top?.entryType?.toUpperCase();
+                          if (et === 'Q' || et === 'WC') {
+                            chips.push(
+                              <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
+                            );
+                          }
+                          const defendChip = renderDefendChip(summary.playerA.defends_round);
+                          if (defendChip) {
+                            chips.push(defendChip);
+                          }
+                          if (chips.length === 0) return null;
+                          return <div className="flex items-center gap-2">{chips}</div>;
+                        })()}
+                        {renderAlertBadges(summary.playerA.alerts)}
+                      </div>
+                      <div className="flex flex-col items-center gap-2">
+                        {renderOddsInfo(summary?.odds, "playerB")}
+                        {renderRecentForm(summary?.playerB?.last_results)}
+                        {(() => {
+                          const chips: any[] = [];
+                          const seed = match?.bottom?.seed;
+                          if (typeof seed === "number" && Number.isFinite(seed)) {
+                            chips.push(
+                              <span key="seed" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">#{seed}</span>,
+                            );
+                          }
+                          const et = match?.bottom?.entryType?.toUpperCase();
+                          if (et === 'Q' || et === 'WC') {
+                            chips.push(
+                              <span key="et" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] text-slate-200">{et}</span>,
+                            );
+                          }
+                          const defendChip = renderDefendChip(summary.playerB.defends_round);
+                          if (defendChip) {
+                            chips.push(defendChip);
+                          }
+                          if (chips.length === 0) return null;
+                          return <div className="flex items-center gap-2">{chips}</div>;
+                        })()}
+                        {renderAlertBadges(summary.playerB.alerts)}
+                      </div>
                     </div>
                   </div>
 
