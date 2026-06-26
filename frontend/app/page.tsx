@@ -14,7 +14,6 @@ import {
 import { AlertTriangle, ChevronRight, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X } from "lucide-react";
 import {
   WinProbabilityBar,
-  getWinProbabilitySummary,
   normalizeProbabilityValue,
 } from "@/components/prematch/win-probability-orb";
 import { QuarterTabs } from "@/components/bracket/QuarterTabs";
@@ -1081,32 +1080,54 @@ function rankBadge(rank: number | null) {
   return { label: `#${r}`, className: "bg-slate-700/20 text-slate-300 border border-slate-600/40" };
 }
 
-function isoToFlag(iso?: string | null) {
-  if (!iso) return "";
-  let code = iso.trim();
-  // Already looks like a flag emoji (two regional indicator symbols)
+const IOC_TO_ISO2: Record<string, string> = {
+  ESP: "ES", ARG: "AR", USA: "US", GBR: "GB", UKR: "UA", GER: "DE", FRA: "FR", ITA: "IT",
+  SUI: "CH", NED: "NL", BEL: "BE", SWE: "SE", NOR: "NO", DEN: "DK", CRO: "HR", SRB: "RS",
+  BIH: "BA", POR: "PT", POL: "PL", CZE: "CZ", SVK: "SK", SLO: "SI", HUN: "HU", AUT: "AT",
+  AUS: "AU", NZL: "NZ", CAN: "CA", MEX: "MX", COL: "CO", CHI: "CL", PER: "PE", ECU: "EC",
+  URU: "UY", BOL: "BO", VEN: "VE", BRA: "BR", JPN: "JP", KOR: "KR", CHN: "CN", HKG: "HK",
+  TPE: "TW", THA: "TH", VIE: "VN", IND: "IN", PAK: "PK", QAT: "QA", UAE: "AE", KAZ: "KZ",
+  UZB: "UZ", GEO: "GE", ARM: "AM", TUR: "TR", GRE: "GR", CYP: "CY", ROU: "RO", BUL: "BG",
+  LTU: "LT", LAT: "LV", EST: "EE", FIN: "FI", IRL: "IE", SCO: "GB", WAL: "GB",
+};
+
+// ISO-3166 alpha-2 (minuscula) para construir la URL de la imagen de bandera.
+// Evitamos emoji de bandera: Windows no renderiza los "regional indicator"
+// como banderas y se ven como dos letras sueltas.
+function isoToIso2(iso?: string | null): string | null {
+  if (!iso) return null;
+  let code = iso.trim().toUpperCase();
+  // Si llega como emoji de bandera (regional indicators), lo convertimos de vuelta a letras.
   if (/^[\u{1F1E6}-\u{1F1FF}]{2}$/u.test(code)) {
-    return code;
+    const A = 0x1f1e6;
+    const a = "A".charCodeAt(0);
+    code = Array.from(code)
+      .map((c) => String.fromCodePoint(a + (c.codePointAt(0)! - A)))
+      .join("");
   }
-  code = code.toUpperCase();
   if (code.length === 3) {
-    const iocToIso2: Record<string, string> = {
-      ESP: "ES", ARG: "AR", USA: "US", GBR: "GB", UKR: "UA", GER: "DE", FRA: "FR", ITA: "IT",
-      SUI: "CH", NED: "NL", BEL: "BE", SWE: "SE", NOR: "NO", DEN: "DK", CRO: "HR", SRB: "RS",
-      BIH: "BA", POR: "PT", POL: "PL", CZE: "CZ", SVK: "SK", SLO: "SI", HUN: "HU", AUT: "AT",
-      AUS: "AU", NZL: "NZ", CAN: "CA", MEX: "MX", COL: "CO", CHI: "CL", PER: "PE", ECU: "EC",
-      URU: "UY", BOL: "BO", VEN: "VE", BRA: "BR", JPN: "JP", KOR: "KR", CHN: "CN", HKG: "HK",
-      TPE: "TW", THA: "TH", VIE: "VN", IND: "IN", PAK: "PK", QAT: "QA", UAE: "AE", KAZ: "KZ",
-      UZB: "UZ", GEO: "GE", ARM: "AM", TUR: "TR", GRE: "GR", CYP: "CY", ROU: "RO", BUL: "BG",
-      LTU: "LT", LAT: "LV", EST: "EE", FIN: "FI", IRL: "IE", SCO: "GB", WAL: "GB",
-    };
-    code = iocToIso2[code] || code;
+    code = IOC_TO_ISO2[code] || code;
   }
-  if (code.length !== 2) return code;
-  const A = 0x1f1e6;
-  const a = "A".charCodeAt(0);
-  const chars = Array.from(code).map((c) => String.fromCodePoint(A + (c.charCodeAt(0) - a)));
-  return chars.join("");
+  if (code.length !== 2) return null;
+  return code.toLowerCase();
+}
+
+function CountryFlag({ iso, className }: { iso?: string | null; className?: string }) {
+  const code = isoToIso2(iso);
+  if (!code) return null;
+  return (
+    <img
+      src={`https://flagcdn.com/24x18/${code}.png`}
+      srcSet={`https://flagcdn.com/48x36/${code}.png 2x`}
+      width={24}
+      height={18}
+      alt={code.toUpperCase()}
+      className={className ?? "inline-block rounded-sm"}
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+      }}
+    />
+  );
 }
 
 function decimalOdds(prob: number | null): string {
@@ -1131,7 +1152,7 @@ function StatRow({
   alignPlayerB?: "left" | "right";
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-sm text-slate-200">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-1.5 text-sm text-slate-200">
       <div className={alignPlayerA === "right" ? "text-right" : "text-left"}>{playerA}</div>
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 text-center">
         {label}
@@ -1208,10 +1229,6 @@ function PrematchDialog({
   }, [match, bracket]);
 
   const probability = summary?.prob_player ?? null;
-  const { percent, percentOpponent } = useMemo(
-    () => getWinProbabilitySummary(probability),
-    [probability],
-  );
 
   const oddsA = useMemo(() => decimalOdds(probability), [probability]);
   const oddsB = useMemo(() => decimalOdds(probability != null ? 1 - probability : null), [probability]);
@@ -1270,31 +1287,31 @@ const highlight = useMemo(() => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] min-h-0 overflow-hidden border border-slate-800 bg-slate-950/95 p-0 text-slate-100 flex flex-col">
         <div className="flex max-h-full min-h-0 flex-col">
-          <DialogHeader className="px-6 pb-4 pt-6 text-left">
-            <DialogTitle className="text-xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>
               Prematch: {top.name} vs {bottom.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 pb-6 min-h-0">
-            <div className="space-y-5 text-sm">
+          <div className="flex-1 overflow-y-auto px-6 pb-6 pt-8 min-h-0">
+            <div className="space-y-4 text-sm">
               {loading && <div className="text-slate-400">Cargando analisis...</div>}
               {error && <div className="text-red-400">{error}</div>}
 
               {summary && (
-                <div className="space-y-6">
-                  <div className="space-y-4">
+                <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
                         {(() => {
-                          const flag = isoToFlag((match?.top?.country as any) ?? (summary?.extras?.country_p ?? null));
-                          if (!flag) return null;
-                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-lg";
+                          const country = (match?.top?.country as any) ?? (summary?.extras?.country_p ?? null);
+                          if (!isoToIso2(country)) return null;
+                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-sm p-0.5";
                           const flagClasses = summary.playerA.home_advantage
-                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
-                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
+                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10`
+                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50`;
                           return (
                             <span className={flagClasses} title={summary.playerA.home_advantage ? "Jugador local" : undefined}>
-                              {flag}
+                              <CountryFlag iso={country} />
                             </span>
                           );
                         })()}
@@ -1319,15 +1336,15 @@ const highlight = useMemo(() => {
                         })()}
                         <span className="truncate text-lg font-semibold text-slate-100">{bottom.name}</span>
                         {(() => {
-                          const flag = isoToFlag((match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null));
-                          if (!flag) return null;
-                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-lg";
+                          const country = (match?.bottom?.country as any) ?? (summary?.extras?.country_o ?? null);
+                          if (!isoToIso2(country)) return null;
+                          const baseFlag = "inline-flex shrink-0 items-center justify-center rounded-sm p-0.5";
                           const flagClasses = summary.playerB.home_advantage
-                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10 text-yellow-100`
-                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50 text-slate-100`;
+                            ? `${baseFlag} border border-yellow-400/80 bg-yellow-500/10`
+                            : `${baseFlag} border border-slate-700/60 bg-slate-900/50`;
                           return (
                             <span className={flagClasses} title={summary.playerB.home_advantage ? "Jugador local" : undefined}>
-                              {flag}
+                              <CountryFlag iso={country} />
                             </span>
                           );
                         })()}
@@ -1416,12 +1433,6 @@ const highlight = useMemo(() => {
                   ) : null}
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                    <h3 className="text-base font-semibold text-slate-100">Resumen rapido</h3>
-                    <p className="text-sm text-slate-300">
-                      Nuestro modelo otorga a <strong>{top.name}</strong> una probabilidad de victoria del{' '}
-                      <strong>{percent !== null ? `${percent}%` : '-'}</strong>, dejando para <strong>{bottom.name}</strong>{' '}
-                      el restante <strong>{percentOpponent !== null ? `${percentOpponent}%` : '-'}</strong>.
-                    </p>
                     <div className="grid grid-cols-2 gap-3 text-sm text-slate-200">
                       <div className="rounded-md border border-slate-800/60 bg-slate-950/60 p-3">
                         <div className="text-xs uppercase tracking-wide text-slate-400">Cuota (decimal)</div>
@@ -1447,7 +1458,7 @@ const highlight = useMemo(() => {
                         playerA={formatPct(summary.playerA.win_pct_year)}
                         playerB={formatPct(summary.playerB.win_pct_year)}
                       />
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_pct_year} valueB={summary.playerB.win_pct_year} />
                       </div>
                       <StatRow
@@ -1455,7 +1466,7 @@ const highlight = useMemo(() => {
                         playerA={formatPct(summary.playerA.win_pct_month)}
                         playerB={formatPct(summary.playerB.win_pct_month)}
                       />
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_pct_month} valueB={summary.playerB.win_pct_month} />
                       </div>
                       <StatRow
@@ -1463,7 +1474,7 @@ const highlight = useMemo(() => {
                         playerA={formatPct(summary.playerA.win_pct_surface)}
                         playerB={formatPct(summary.playerB.win_pct_surface)}
                       />
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_pct_surface} valueB={summary.playerB.win_pct_surface} />
                       </div>
                       <StatRow
@@ -1471,7 +1482,7 @@ const highlight = useMemo(() => {
                         playerA={formatPct(summary.playerA.win_pct_vs_top10)}
                         playerB={formatPct(summary.playerB.win_pct_vs_top10)}
                       />
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_pct_vs_top10} valueB={summary.playerB.win_pct_vs_top10} />
                       </div>
                       {showFifthSetStat && (
@@ -1481,14 +1492,14 @@ const highlight = useMemo(() => {
                             playerA={formatPct(summary.playerA.win_pct_fifth_set)}
                             playerB={formatPct(summary.playerB.win_pct_fifth_set)}
                           />
-                          <div className="px-4 pb-2">
+                          <div className="px-4 pb-1.5">
                             <DiffBar valueA={summary.playerA.win_pct_fifth_set} valueB={summary.playerB.win_pct_fifth_set} />
                           </div>
                         </>
                       )}
                       
                       <StatRow label="Prob. victoria" playerA={formatPct(summary.playerA.win_probability)} playerB={formatPct(summary.playerB.win_probability)} />
-                      <div className="px-4 pb-2">
+                      <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_probability} valueB={summary.playerB.win_probability} />
                       </div>
                       <StatRow
