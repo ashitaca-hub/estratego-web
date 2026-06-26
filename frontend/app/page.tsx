@@ -1465,10 +1465,6 @@ const highlight = useMemo(() => {
                                   )}
                                 </div>
                               </div>
-                              <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                                <div className="text-left">{formatPct(summary.playerA.win_pct_year)}</div>
-                                <div className="text-right">{formatPct(summary.playerB.win_pct_year)}</div>
-                              </div>
                             </>
                           );
                         })()}
@@ -1498,10 +1494,6 @@ const highlight = useMemo(() => {
                                 {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
                               </div>
                             </div>
-                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                              <div className="text-left">{formatPct(summary.playerA.win_pct_month)}</div>
-                              <div className="text-right">{formatPct(summary.playerB.win_pct_month)}</div>
-                            </div>
                           </div>
                         );
                       })()}
@@ -1530,10 +1522,6 @@ const highlight = useMemo(() => {
                                 {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
                               </div>
                             </div>
-                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                              <div className="text-left">{formatPct(summary.playerA.win_pct_surface)}</div>
-                              <div className="text-right">{formatPct(summary.playerB.win_pct_surface)}</div>
-                            </div>
                           </div>
                         );
                       })()}
@@ -1561,10 +1549,6 @@ const highlight = useMemo(() => {
                                 <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sB.border}`, background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
                                 {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
                               </div>
-                            </div>
-                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                              <div className="text-left">{formatPct(summary.playerA.win_pct_vs_top10)}</div>
-                              <div className="text-right">{formatPct(summary.playerB.win_pct_vs_top10)}</div>
                             </div>
                           </div>
                         );
@@ -1596,10 +1580,6 @@ const highlight = useMemo(() => {
                                     {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
                                   </div>
                                 </div>
-                                <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                                  <div className="text-left">{formatPct(summary.playerA.win_pct_fifth_set)}</div>
-                                  <div className="text-right">{formatPct(summary.playerB.win_pct_fifth_set)}</div>
-                                </div>
                               </div>
                             );
                           })()}
@@ -1626,10 +1606,6 @@ const highlight = useMemo(() => {
                                 <div className="h-4 w-4 rounded-full" style={{ border: `1px solid ${sB.border}`, background: `radial-gradient(circle, ${sB.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)` }} />
                                 {sB.showFire && <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-red-500"><Flame size={14} /></div>}
                               </div>
-                            </div>
-                            <div className="mt-1 grid grid-cols-2 text-[11px] text-slate-400">
-                              <div className="text-left">{formatPct(summary.playerA.win_probability)}</div>
-                              <div className="text-right">{formatPct(summary.playerB.win_probability)}</div>
                             </div>
                           </div>
                         );
