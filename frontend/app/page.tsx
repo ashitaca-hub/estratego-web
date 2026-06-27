@@ -2897,9 +2897,10 @@ export function EstrategoBracketApp() {
             return { ok: false as const, error: message };
           }
 
-          // consume response to avoid keeping body streams open
-          await res.json().catch(() => undefined);
-          return { ok: true as const };
+          const data = await res.json().catch(() => undefined);
+          const runsCompleted =
+            data && typeof data.runsCompleted === "number" ? data.runsCompleted : chunkRuns;
+          return { ok: true as const, runsCompleted };
         } catch (err) {
           return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
         }
@@ -2931,7 +2932,11 @@ export function EstrategoBracketApp() {
           break;
         }
 
-        processed += chunkSize;
+        // El servidor puede completar menos runs que los pedidos si se acerca
+        // al limite de duracion de la funcion (draws grandes, p.ej. 128); en
+        // ese caso seguimos pidiendo el resto en la siguiente vuelta.
+        const completed = Math.max(1, Math.min(result.runsCompleted, chunkSize));
+        processed += completed;
         reset = false;
         setMultiSimProgress({ done: processed, total: runs });
         chunkSize = Math.min(baseChunkSize, runs - processed);

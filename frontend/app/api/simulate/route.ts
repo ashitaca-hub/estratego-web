@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 60; // un solo run en 7 llamadas de ronda cabe sobrado
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -64,14 +64,27 @@ export async function POST(req: Request) {
     }
   }
 
-  const { error: simError } = await supabaseAdmin.rpc("simulate_full_tournament", {
+  const { data: rounds, error: prepareError } = await supabaseAdmin.rpc("simulate_prepare_bracket", {
     p_tourney_id: tourneyId,
   });
 
-  if (simError) {
-    return new Response(JSON.stringify({ error: simError.message }), {
+  if (prepareError) {
+    return new Response(JSON.stringify({ error: prepareError.message }), {
       status: 500,
     });
+  }
+
+  for (const round of (rounds as string[]) ?? []) {
+    const { error: roundError } = await supabaseAdmin.rpc("simulate_one_round", {
+      p_tourney_id: tourneyId,
+      p_round: round,
+    });
+
+    if (roundError) {
+      return new Response(JSON.stringify({ error: roundError.message }), {
+        status: 500,
+      });
+    }
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 });

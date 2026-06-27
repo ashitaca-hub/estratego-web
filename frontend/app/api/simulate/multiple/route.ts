@@ -1,6 +1,6 @@
 // app/api/simulate/multiple/route.ts
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -96,18 +96,83 @@ export async function POST(req: Request) {
     });
   }
 
-  const { error: simError } = await supabaseAdmin.rpc("simulate_multiple_runs", {
+  if (reset) {
+    const { error: resetError } = await supabaseAdmin.rpc("simulate_reset_results", {
+      p_tourney_id: tourneyId,
+    });
+    if (resetError) {
+      return new Response(JSON.stringify({ error: resetError.message }), {
+        status: 500,
+      });
+    }
+  }
+
+  const { data: nextRunNumber, error: nextRunError } = await supabaseAdmin.rpc("simulate_next_run_number", {
     p_tourney_id: tourneyId,
-    p_year: year,
-    p_runs: runs,
-    p_reset: reset,
   });
 
-  if (simError) {
-    console.error("Error in simulate_multiple_runs:", simError.message);
-    return new Response(JSON.stringify({ error: simError.message }), {
+  if (nextRunError) {
+    return new Response(JSON.stringify({ error: nextRunError.message }), {
       status: 500,
     });
+  }
+
+  const baseRun = (nextRunNumber as number) ?? 1;
+
+  // Cada run completo recorre todas las rondas del cuadro. Para draws grandes
+  // (128) un solo run ya puede tardar ~16s, asi que aqui limitamos por tiempo
+  // de pared en vez de asumir que el chunk entero cabe siempre en la duracion
+  // de la funcion serverless; el numero real de runs completados se devuelve
+  // para que el frontend ajuste su progreso y siga pidiendo el resto.
+  const TIME_BUDGET_MS = 35_000;
+  const startedAt = Date.now();
+  let runsCompleted = 0;
+
+  for (let i = 0; i < runs; i++) {
+    if (i > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
+      break;
+    }
+
+    const runNumber = baseRun + i;
+
+    const { data: rounds, error: prepareError } = await supabaseAdmin.rpc("simulate_prepare_bracket", {
+      p_tourney_id: tourneyId,
+    });
+
+    if (prepareError) {
+      console.error("Error in simulate_prepare_bracket:", prepareError.message);
+      return new Response(JSON.stringify({ error: prepareError.message, runsCompleted }), {
+        status: 500,
+      });
+    }
+
+    for (const round of (rounds as string[]) ?? []) {
+      const { error: roundError } = await supabaseAdmin.rpc("simulate_one_round", {
+        p_tourney_id: tourneyId,
+        p_round: round,
+      });
+
+      if (roundError) {
+        console.error("Error in simulate_one_round:", roundError.message);
+        return new Response(JSON.stringify({ error: roundError.message, runsCompleted }), {
+          status: 500,
+        });
+      }
+    }
+
+    const { error: recordError } = await supabaseAdmin.rpc("simulate_record_run_result", {
+      p_tourney_id: tourneyId,
+      p_run_number: runNumber,
+    });
+
+    if (recordError) {
+      console.error("Error in simulate_record_run_result:", recordError.message);
+      return new Response(JSON.stringify({ error: recordError.message, runsCompleted }), {
+        status: 500,
+      });
+    }
+
+    runsCompleted++;
   }
 
   return new Response(
@@ -115,6 +180,7 @@ export async function POST(req: Request) {
       ok: true,
       tourney_id: tourneyId,
       runs,
+      runsCompleted,
       year,
     }),
     { status: 200 },
