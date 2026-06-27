@@ -2865,7 +2865,7 @@ export function EstrategoBracketApp() {
     try {
       let processed = 0;
       let reset = true;
-      const baseChunkSize = 1;
+      const baseChunkSize = 4;
       let chunkSize = Math.min(baseChunkSize, runs);
 
       const runChunk = async (chunkRuns: number, resetChunk: boolean) => {
