@@ -25,6 +25,8 @@ type AggregatedPlayer = {
   name: string;
   country: string | null;
   totals: Record<string, number>;
+  // Veces que llego AL MENOS a esa ronda (no veces que se quedo justo ahi).
+  cumulative: Record<string, number>;
 };
 
 const roundPriority = ["W", "F", "SF", "QF", "R16", "R32", "R64", "R128"] as const;
@@ -46,164 +48,6 @@ const colorForPercent = (percent: number): string => {
   const alpha = 0.08 + (clamped / 100) * 0.55;
   return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
 };
-type OutcomeLineEntry = {
-  key: string;
-  surname: string;
-  playerName: string;
-  displayId: string;
-  country: string | null;
-  percentage: number;
-  count: number;
-  kind: "final" | "semi";
-};
-
-const extractSurname = (name: string, fallback: string): string => {
-  if (!name) return fallback;
-  const trimmed = name.trim();
-  if (!trimmed) return fallback;
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  const last = parts[parts.length - 1];
-  const lower = last.toLowerCase();
-  if (["de", "del", "da", "dos", "van", "von", "la"].includes(lower) && parts.length >= 2) {
-    return parts[parts.length - 2];
-  }
-  return last;
-};
-
-function TopOutcomeLinesChart({
-  finals,
-  semis,
-}: {
-  finals: OutcomeLineEntry[];
-  semis: OutcomeLineEntry[];
-}) {
-  const entries = [...finals, ...semis];
-
-  if (!entries.length) {
-    return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 text-sm text-slate-400">
-        Aun no hay datos suficientes para mostrar finales o semifinales.
-      </div>
-    );
-  }
-
-  const chartHeight = 220;
-  const legend = [
-    { label: "Final", color: "hsl(2 88% 58%)" },
-    { label: "Semifinal", color: "hsl(210 86% 55%)" },
-  ];
-  const maxPercent = 20;
-  const tickValues = [5, 10, 15, 20];
-  const formatPercentage = (value: number) => {
-    if (value >= 100) return "100%";
-    return value % 1 === 0 ? `${value.toFixed(0)}%` : `${value.toFixed(1)}%`;
-  };
-
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-100">
-            Top 5 finales y semifinales
-          </h2>
-          <p className="text-xs text-slate-400">
-            Lineas verticales: rojo para finales, azul para semifinales. Escala ajustada al 20% de runs alcanzados.
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          {legend.map((item) => (
-            <div key={item.label} className="flex items-center gap-2">
-              <span
-                className="h-1.5 w-6 rounded-full"
-                style={{ background: item.color }}
-              />
-              <span>{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="relative mt-6 overflow-x-auto">
-        <div className="relative h-[260px] min-w-[420px]">
-          <div className="absolute inset-0 border-l border-b border-slate-800/80" />
-          {tickValues.map((value) => {
-            const normalized = Math.min(100, Math.max(0, (value / maxPercent) * 100));
-            return (
-              <div
-                key={value}
-                className="absolute inset-x-0 border-t border-slate-800/40 text-[11px] text-slate-500"
-                style={{ bottom: `${normalized}%` }}
-              >
-                <span className="absolute -left-14 -translate-y-1/2">
-                  {value}%
-                </span>
-              </div>
-            );
-          })}
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-6 px-6">
-            {entries.map((entry) => {
-              const color =
-                entry.kind === "final"
-                  ? "hsl(2 88% 58%)"
-                  : "hsl(210 86% 55%)";
-              const muted = entry.kind === "final" ? "hsl(2 80% 80%)" : "hsl(210 65% 76%)";
-              const cappedValue = Math.min(entry.percentage, maxPercent);
-              const height = Math.max(4, Math.min(chartHeight, (cappedValue / maxPercent) * chartHeight));
-              const displayValue = formatPercentage(entry.percentage);
-
-              return (
-                <div
-                  key={`${entry.kind}-${entry.key}`}
-                  className="flex min-w-[85px] flex-col items-center gap-2 text-center"
-                >
-                  <div className="flex h-[220px] w-10 items-end justify-center">
-                    <div className="relative flex w-px flex-col items-center justify-end">
-                      <div
-                        className="w-full rounded-t"
-                        style={{
-                          height: `${height}px`,
-                          background: `linear-gradient(180deg, ${color} 0%, ${muted} 100%)`,
-                        }}
-                      >
-                        &nbsp;
-                      </div>
-                      <div
-                        className="pointer-events-none absolute flex items-center gap-1"
-                        style={{
-                          bottom: `${height}px`,
-                          transform: "translateY(50%)",
-                          color,
-                        }}
-                      >
-                        <span
-                          className="block h-2.5 w-2.5 rounded-full border border-slate-950"
-                          style={{ background: color }}
-                        />
-                        <span className="text-[11px] font-semibold text-current whitespace-nowrap">
-                          {displayValue}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-xs font-medium text-slate-100">
-                      {entry.surname}
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      #{entry.displayId}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function SimulationAnalyticsPage() {
   const params = useParams<{ tourneyId: string }>();
   const router = useRouter();
@@ -370,6 +214,7 @@ export default function SimulationAnalyticsPage() {
           name: displayName,
           country: playerInfo?.country ?? null,
           totals: {},
+          cumulative: {},
         });
       }
 
@@ -379,9 +224,21 @@ export default function SimulationAnalyticsPage() {
 
     const orderedRounds = ROUND_DISPLAY_ORDER.filter((r) => roundsPresent.has(r));
 
+    // Acumulado: cuantas runs llegaron AL MENOS a esta ronda, sumando esta
+    // ronda y todas las posteriores (un jugador eliminado en QF tambien
+    // "llego" a R32/R16, asi que esas columnas deben incluirlo).
+    for (const player of byPlayer.values()) {
+      let running = 0;
+      for (let i = orderedRounds.length - 1; i >= 0; i--) {
+        const round = orderedRounds[i];
+        running += player.totals[round] ?? 0;
+        player.cumulative[round] = running;
+      }
+    }
+
     const rowsArray = Array.from(byPlayer.values()).sort((a, b) => {
       for (const round of roundPriority) {
-        const diff = (b.totals[round] ?? 0) - (a.totals[round] ?? 0);
+        const diff = (b.cumulative[round] ?? 0) - (a.cumulative[round] ?? 0);
         if (diff !== 0) return diff;
       }
       return a.name.localeCompare(b.name);
@@ -403,7 +260,7 @@ export default function SimulationAnalyticsPage() {
       if (sortRound === "__name__") {
         return dirMul * a.name.localeCompare(b.name);
       }
-      const diff = (a.totals[sortRound] ?? 0) - (b.totals[sortRound] ?? 0);
+      const diff = (a.cumulative[sortRound] ?? 0) - (b.cumulative[sortRound] ?? 0);
       if (diff !== 0) return dirMul * diff;
       return a.name.localeCompare(b.name);
     });
@@ -417,56 +274,6 @@ export default function SimulationAnalyticsPage() {
       setSortDir("desc");
     }
   };
-
-  const topFinals = useMemo(() => {
-    if (!aggregated.rows.length || effectiveRunCount <= 0) return [] as OutcomeLineEntry[];
-    return aggregated.rows
-      .map((player) => {
-        const finals = player.totals["F"] ?? 0;
-        const percentage = effectiveRunCount > 0 ? (finals / effectiveRunCount) * 100 : 0;
-        return {
-          key: player.key,
-          surname: extractSurname(player.name, player.displayId),
-          playerName: player.name,
-          displayId: player.displayId,
-          country: player.country ?? null,
-          percentage,
-          count: finals,
-          kind: "final" as const,
-        };
-      })
-      .filter((entry) => entry.count > 0)
-      .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return b.percentage - a.percentage;
-      })
-      .slice(0, 5);
-  }, [aggregated.rows, effectiveRunCount]);
-
-  const topSemis = useMemo(() => {
-    if (!aggregated.rows.length || effectiveRunCount <= 0) return [] as OutcomeLineEntry[];
-    return aggregated.rows
-      .map((player) => {
-        const semis = player.totals["SF"] ?? 0;
-        const percentage = effectiveRunCount > 0 ? (semis / effectiveRunCount) * 100 : 0;
-        return {
-          key: player.key,
-          surname: extractSurname(player.name, player.displayId),
-          playerName: player.name,
-          displayId: player.displayId,
-          country: player.country ?? null,
-          percentage,
-          count: semis,
-          kind: "semi" as const,
-        };
-      })
-      .filter((entry) => entry.count > 0)
-      .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return b.percentage - a.percentage;
-      })
-      .slice(0, 5);
-  }, [aggregated.rows, effectiveRunCount]);
 
   if (!tourneyId) {
     return (
@@ -512,8 +319,6 @@ export default function SimulationAnalyticsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <TopOutcomeLinesChart finals={topFinals} semis={topSemis} />
-
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
             <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
               <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
@@ -543,11 +348,10 @@ export default function SimulationAnalyticsPage() {
                       <div className="flex items-center gap-2">
                         {player.country ? <span>{player.country}</span> : null}
                         <span className="font-medium text-slate-100">{player.name}</span>
-                        <span className="text-xs text-slate-500">#{player.displayId}</span>
                       </div>
                     </td>
                     {aggregated.rounds.map((round) => {
-                      const reached = player.totals[round] ?? 0;
+                      const reached = player.cumulative[round] ?? 0;
                       const percent = effectiveRunCount > 0 ? (reached / effectiveRunCount) * 100 : 0;
                       const percentLabel = percent.toLocaleString("es-ES", {
                         maximumFractionDigits: percent > 0 && percent < 100 ? 1 : 0,
