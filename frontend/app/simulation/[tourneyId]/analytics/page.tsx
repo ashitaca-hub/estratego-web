@@ -27,7 +27,25 @@ type AggregatedPlayer = {
   totals: Record<string, number>;
 };
 
-const roundPriority = ["F", "SF", "QF", "R16", "R32", "R64", "R128"] as const;
+const roundPriority = ["W", "F", "SF", "QF", "R16", "R32", "R64", "R128"] as const;
+const ROUND_DISPLAY_ORDER = ["R128", "R64", "R32", "R16", "QF", "SF", "F", "W"] as const;
+const ROUND_LABELS: Record<string, string> = {
+  R128: "R128",
+  R64: "R64",
+  R32: "R32",
+  R16: "R16",
+  QF: "QF",
+  SF: "SF",
+  F: "FINAL",
+  W: "CAMPEÓN",
+};
+
+const colorForPercent = (percent: number): string => {
+  const clamped = Math.max(0, Math.min(100, percent));
+  if (clamped <= 0) return "transparent";
+  const alpha = 0.08 + (clamped / 100) * 0.55;
+  return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
+};
 type OutcomeLineEntry = {
   key: string;
   surname: string;
@@ -256,19 +274,18 @@ export default function SimulationAnalyticsPage() {
         if (numericIds.length > 0) {
           const { data: players, error: playersErr } = await supabase
             .from("players_min")
-            .select("id, name, country")
-            .in("id", numericIds);
+            .select("player_id, name")
+            .in("player_id", numericIds);
 
           if (playersErr) {
             console.warn("No se pudo cargar players_min:", playersErr.message);
           } else if (players) {
             for (const p of players) {
-              const rawId = p.id;
-              const key = String(rawId);
+              const key = String(p.player_id);
               mergedMap.set(key, {
                 id: key,
                 name: p.name ?? null,
-                country: p.country,
+                country: null,
               });
             }
           }
@@ -360,7 +377,7 @@ export default function SimulationAnalyticsPage() {
       entry.totals[round] = (entry.totals[round] ?? 0) + 1;
     }
 
-    const orderedRounds = roundPriority.filter((r) => roundsPresent.has(r));
+    const orderedRounds = ROUND_DISPLAY_ORDER.filter((r) => roundsPresent.has(r));
 
     const rowsArray = Array.from(byPlayer.values()).sort((a, b) => {
       for (const round of roundPriority) {
@@ -375,6 +392,31 @@ export default function SimulationAnalyticsPage() {
       rows: rowsArray,
     };
   }, [rows, playersMap]);
+
+  const [sortRound, setSortRound] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const sortedPlayers = useMemo(() => {
+    if (!sortRound) return aggregated.rows;
+    const dirMul = sortDir === "asc" ? 1 : -1;
+    return [...aggregated.rows].sort((a, b) => {
+      if (sortRound === "__name__") {
+        return dirMul * a.name.localeCompare(b.name);
+      }
+      const diff = (a.totals[sortRound] ?? 0) - (b.totals[sortRound] ?? 0);
+      if (diff !== 0) return dirMul * diff;
+      return a.name.localeCompare(b.name);
+    });
+  }, [aggregated.rows, sortRound, sortDir]);
+
+  const handleSort = (key: string) => {
+    if (sortRound === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortRound(key);
+      setSortDir("desc");
+    }
+  };
 
   const topFinals = useMemo(() => {
     if (!aggregated.rows.length || effectiveRunCount <= 0) return [] as OutcomeLineEntry[];
@@ -426,28 +468,6 @@ export default function SimulationAnalyticsPage() {
       .slice(0, 5);
   }, [aggregated.rows, effectiveRunCount]);
 
-  const topPerformers = useMemo(() => {
-    if (aggregated.rows.length === 0) return [];
-
-    return aggregated.rows
-      .map((player) => ({
-        key: player.key,
-        playerId: player.playerId,
-        displayId: player.displayId,
-        name: player.name,
-        country: player.country,
-        finals: player.totals["F"] ?? 0,
-        semis: player.totals["SF"] ?? 0,
-      }))
-      .filter((entry) => entry.finals > 0 || entry.semis > 0)
-      .sort((a, b) => {
-        const byFinals = b.finals - a.finals;
-        if (byFinals !== 0) return byFinals;
-        return b.semis - a.semis;
-      })
-      .slice(0, 4);
-  }, [aggregated.rows, aggregated.rounds]);
-
   if (!tourneyId) {
     return (
       <div className="min-h-screen p-6 text-sm text-slate-200">
@@ -493,44 +513,52 @@ export default function SimulationAnalyticsPage() {
       ) : (
         <div className="space-y-6">
           <TopOutcomeLinesChart finals={topFinals} semis={topSemis} />
+
           <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
             <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
               <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Jugador</th>
+                  <th
+                    className="cursor-pointer select-none px-4 py-3 font-semibold hover:text-slate-200"
+                    onClick={() => handleSort("__name__")}
+                  >
+                    Jugador {sortRound === "__name__" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                  </th>
                   {aggregated.rounds.map((round) => (
-                    <th key={round} className="px-4 py-3 font-semibold text-right">
-                      {round}
+                    <th
+                      key={round}
+                      className="cursor-pointer select-none px-4 py-3 font-semibold text-right hover:text-slate-200"
+                      onClick={() => handleSort(round)}
+                    >
+                      {ROUND_LABELS[round] ?? round}{" "}
+                      {sortRound === round ? (sortDir === "asc" ? "▲" : "▼") : ""}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {aggregated.rows.map((player) => (
+                {sortedPlayers.map((player) => (
                   <tr key={player.key} className="hover:bg-slate-900/70">
                     <td className="px-4 py-2">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-100">{player.name}</span>
-                          {player.country ? (
-                            <span className="text-xs text-slate-400">{player.country}</span>
-                          ) : null}
-                        </div>
-                      <div className="text-xs text-slate-500">#{player.displayId}</div>
-                    </div>
-                  </td>
+                      <div className="flex items-center gap-2">
+                        {player.country ? <span>{player.country}</span> : null}
+                        <span className="font-medium text-slate-100">{player.name}</span>
+                        <span className="text-xs text-slate-500">#{player.displayId}</span>
+                      </div>
+                    </td>
                     {aggregated.rounds.map((round) => {
                       const reached = player.totals[round] ?? 0;
-                    const percent =
-                      effectiveRunCount > 0
-                        ? ((reached / effectiveRunCount) * 100).toLocaleString("es-ES", {
-                              maximumFractionDigits: reached > 0 && reached < totalRuns ? 1 : 0,
-                            })
-                          : "0";
+                      const percent = effectiveRunCount > 0 ? (reached / effectiveRunCount) * 100 : 0;
+                      const percentLabel = percent.toLocaleString("es-ES", {
+                        maximumFractionDigits: percent > 0 && percent < 100 ? 1 : 0,
+                      });
                       return (
-                        <td key={round} className="px-4 py-2 text-right tabular-nums">
-                          <div>{reached}</div>
-                          <div className="text-xs text-slate-500">{percent}%</div>
+                        <td
+                          key={round}
+                          className="px-4 py-2 text-right tabular-nums font-medium text-slate-100"
+                          style={{ backgroundColor: colorForPercent(percent) }}
+                        >
+                          {percent > 0 ? `${percentLabel}%` : "—"}
                         </td>
                       );
                     })}
@@ -539,74 +567,6 @@ export default function SimulationAnalyticsPage() {
               </tbody>
             </table>
           </div>
-
-          {topPerformers.length > 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-100">Top finalistas y semifinalistas</h2>
-                <span className="text-xs text-slate-400">
-                  Referencia sobre {effectiveRunCount > 0 ? `${effectiveRunCount} runs` : "0 runs"}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-semibold">Jugador</th>
-                      <th className="px-4 py-2 text-right font-semibold">Finales</th>
-                      <th className="px-4 py-2 text-right font-semibold">Semifinales</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {topPerformers.map((player) => {
-                      const finalsPct =
-                        effectiveRunCount > 0 && player.finals > 0
-                          ? ((player.finals / effectiveRunCount) * 100).toFixed(
-                              player.finals === effectiveRunCount ? 0 : 1,
-                            )
-                          : null;
-                      const semisPct =
-                        effectiveRunCount > 0 && player.semis > 0
-                          ? ((player.semis / effectiveRunCount) * 100).toFixed(
-                              player.semis === effectiveRunCount ? 0 : 1,
-                            )
-                          : null;
-
-                      return (
-                        <tr key={player.key} className="hover:bg-slate-900/70">
-                          <td className="px-4 py-2">
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-100">{player.name}</span>
-                                {player.country ? (
-                                  <span className="text-xs text-slate-400">{player.country}</span>
-                                ) : null}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                #{player.displayId}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-right tabular-nums">
-                            {player.finals}
-                            {finalsPct ? (
-                              <span className="ml-1 text-xs text-slate-500">({finalsPct}%)</span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-2 text-right tabular-nums">
-                            {player.semis}
-                            {semisPct ? (
-                              <span className="ml-1 text-xs text-slate-500">({semisPct}%)</span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
         </div>
       )}
     </div>
