@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = url.searchParams.get("q");
   const limitParam = url.searchParams.get("limit");
-  const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 100);
+  const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 500);
   const today = new Date();
 
   const parseDate = (value: unknown): Date | null => {
@@ -28,16 +28,36 @@ export async function GET(req: Request) {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  // 1) Obtener todos los tourney_id presentes en draw_matches
-  const { data: dmRows, error: dmErr } = await supabase
-    .from("draw_matches")
-    .select("tourney_id");
+  // 1) Obtener todos los tourney_id presentes en draw_matches.
+  // draw_matches tiene miles de filas (todos los partidos de todos los
+  // torneos), muy por encima del limite de pagina por defecto de
+  // PostgREST (1000), asi que hay que paginar o se pierden torneos
+  // (p.ej. los que caigan despues del corte quedan invisibles en la app).
+  const dmIds = new Set<string>();
+  {
+    const pageSize = 1000;
+    let start = 0;
+    while (true) {
+      const { data: page, error: dmErr } = await supabase
+        .from("draw_matches")
+        .select("tourney_id")
+        .range(start, start + pageSize - 1);
 
-  if (dmErr) {
-    return new Response(JSON.stringify({ error: dmErr.message, stage: "draw_matches" }), { status: 500 });
+      if (dmErr) {
+        return new Response(JSON.stringify({ error: dmErr.message, stage: "draw_matches" }), { status: 500 });
+      }
+
+      const rows = page ?? [];
+      for (const r of rows as any[]) {
+        if (r.tourney_id) dmIds.add(r.tourney_id);
+      }
+
+      if (rows.length < pageSize) break;
+      start += rows.length;
+    }
   }
 
-  const ids = Array.from(new Set((dmRows ?? []).map((r: any) => r.tourney_id).filter(Boolean)));
+  const ids = Array.from(dmIds);
 
   if (ids.length === 0) {
     return new Response(JSON.stringify({ items: [] }), {
@@ -117,7 +137,16 @@ export async function GET(req: Request) {
         return now >= start && now <= end;
       })();
 
+      const isUpcoming = (() => {
+        if (!parsedStart || isLive) return false; // solo consideramos proximo si tenemos fecha real y no esta ya en juego
+        const start = parsedStart.getTime();
+        const now = today.getTime();
+        const window = 7 * 24 * 60 * 60 * 1000; // ventana de 7 dias antes del inicio
+        return start > now && start <= now + window;
+      })();
+
       const dateStr = startDate ? startDate.toISOString().slice(0, 10) : null;
+      const endDateStr = endDate ? endDate.toISOString().slice(0, 10) : null;
 
       return {
         tourney_id: id,
@@ -125,9 +154,11 @@ export async function GET(req: Request) {
         surface: m?.surface ?? null,
         draw_size: m?.draw_size ?? null,
         date: dateStr,
+        end_date: endDateStr,
         year,
         month,
         is_live: isLive,
+        is_upcoming: isUpcoming,
       };
     })
     // Orden por fecha desc y luego id desc

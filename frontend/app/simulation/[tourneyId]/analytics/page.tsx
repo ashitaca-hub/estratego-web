@@ -295,7 +295,7 @@ export default function SimulationAnalyticsPage() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => router.push(`/?t=${encodeURIComponent(tourneyId)}`)}
+            onClick={() => router.push(`/tournament/${encodeURIComponent(tourneyId)}`)}
           >
             Volver al cuadro
           </Button>
