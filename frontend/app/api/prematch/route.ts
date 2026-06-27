@@ -467,13 +467,59 @@ const determineSportKeyCandidates = (
     }
   }
 
-  candidates.push(`tennis_${prefix}`);
-
   const unique = Array.from(new Set(candidates));
   return unique.map((sportKey, idx) => ({
     sportKey,
-    forceMatch: idx === 0 && sportKey !== `tennis_${prefix}`,
+    forceMatch: idx === 0,
   }));
+};
+
+// The Odds API no expone una key generica "tennis_atp"/"tennis_wta": solo
+// activa keys especificas por torneo (y normalmente solo para majors/masters
+// en temporada). En vez de adivinar un slug fijo, consultamos /v4/sports y
+// buscamos la key activa cuyo titulo/descripcion coincida con el torneo.
+let sportsListCache: { fetchedAt: number; sports: any[] } | null = null;
+const SPORTS_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const fetchActiveSportsList = async (): Promise<any[]> => {
+  if (sportsListCache && Date.now() - sportsListCache.fetchedAt < SPORTS_LIST_CACHE_TTL_MS) {
+    return sportsListCache.sports;
+  }
+  try {
+    const url = new URL(`${ODDS_API_BASE}/sports`);
+    url.searchParams.set("apiKey", ODDS_API_KEY!);
+    const response = await fetch(url.toString(), { cache: "no-store" });
+    if (!response.ok) return [];
+    const sports = await response.json();
+    if (!Array.isArray(sports)) return [];
+    sportsListCache = { fetchedAt: Date.now(), sports };
+    return sports;
+  } catch (err) {
+    console.warn("[odds] error fetching sports list", err);
+    return [];
+  }
+};
+
+const discoverActiveSportKey = async (
+  prefix: "atp" | "wta",
+  triedKeys: Set<string>,
+  ...needles: (string | null | undefined)[]
+): Promise<string | null> => {
+  const sports = await fetchActiveSportsList();
+  const cleanNeedles = needles
+    .filter((v): v is string => Boolean(v && v.trim()))
+    .map((v) => v.toLowerCase());
+  if (!cleanNeedles.length) return null;
+
+  for (const sport of sports) {
+    const key = typeof sport?.key === "string" ? sport.key : null;
+    if (!key || !key.startsWith(`tennis_${prefix}`) || !sport.active || triedKeys.has(key)) continue;
+    const haystack = `${sport.title ?? ""} ${sport.description ?? ""} ${key}`.toLowerCase();
+    if (cleanNeedles.some((needle) => haystack.includes(needle))) {
+      return key;
+    }
+  }
+  return null;
 };
 
 const pickPreferredBookmaker = (bookmakers: any[]): any | null => {
@@ -644,9 +690,13 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
     return cachedOdds;
   }
   const sportKeyEntries = determineSportKeyCandidates(tournament, extras, eventNameHint);
+  const triedKeys = new Set<string>();
 
-  for (const entry of sportKeyEntries) {
-    const { sportKey, forceMatch } = entry;
+  const tryFetchOddsForSportKey = async (
+    sportKey: string,
+    forceMatch: boolean | undefined,
+  ): Promise<MatchOddsSummary | null> => {
+    triedKeys.add(sportKey);
     try {
       const url = new URL(`${ODDS_API_BASE}/sports/${sportKey}/odds`);
       url.searchParams.set("apiKey", ODDS_API_KEY);
@@ -657,14 +707,14 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
 
       const response = await fetch(url.toString(), { cache: "no-store" });
       if (!response.ok) {
-        if (response.status === 404) continue;
+        if (response.status === 404) return null;
         const body = await response.text();
         console.warn("[odds] API response not OK", { sportKey, status: response.status, body });
-        continue;
+        return null;
       }
 
       const events: any[] = await response.json();
-      if (!Array.isArray(events)) continue;
+      if (!Array.isArray(events)) return null;
 
       const strictMatches = events.filter((item) => matchesPlayersStrict(item, playerAData, playerBData));
       let event = strictMatches[0] ?? null;
@@ -678,12 +728,20 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
         }
       }
 
-      if (!event) continue;
+      if (!event) {
+        console.warn("[odds] sport key responded but no matching event found", {
+          sportKey,
+          eventCount: events.length,
+          playerA: playerAData.original,
+          playerB: playerBData.original,
+        });
+        return null;
+      }
 
       const bookmaker = pickPreferredBookmaker(event.bookmakers ?? []);
-      if (!bookmaker) continue;
+      if (!bookmaker) return null;
       const market = pickMarket(bookmaker.markets ?? []);
-      if (!market || !Array.isArray(market.outcomes)) continue;
+      if (!market || !Array.isArray(market.outcomes)) return null;
 
       const findOutcome = (target: NameMatchData): any | null => {
         const byAlias = market.outcomes.find((outcome: any) => aliasMatches(outcome?.name, target));
@@ -705,7 +763,7 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
 
       const outcomeA = findOutcome(playerAData);
       const outcomeB = findOutcome(playerBData);
-      if (!outcomeA || !outcomeB) continue;
+      if (!outcomeA || !outcomeB) return null;
 
       const priceA = formatOddsNumber(outcomeA.price ?? outcomeA.odds);
       const priceB = formatOddsNumber(outcomeB.price ?? outcomeB.odds);
@@ -758,7 +816,28 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
       return oddsSummary;
     } catch (err) {
       console.warn("[odds] error fetching odds", { sportKey, err });
+      return null;
     }
+  };
+
+  for (const entry of sportKeyEntries) {
+    const result = await tryFetchOddsForSportKey(entry.sportKey, entry.forceMatch);
+    if (result) return result;
+  }
+
+  // Ninguna key estatica/adivinada funciono: preguntamos a la API que keys
+  // de tenis estan realmente activas ahora mismo y probamos la que mejor
+  // coincida con el torneo (normalmente solo hay majors/masters en temporada).
+  const prefix = inferTourPrefix(tournament, extras);
+  const discoveredKey = await discoverActiveSportKey(
+    prefix,
+    triedKeys,
+    tournament?.name,
+    eventNameHint,
+  );
+  if (discoveredKey) {
+    const result = await tryFetchOddsForSportKey(discoveredKey, true);
+    if (result) return result;
   }
 
   return null;
