@@ -878,17 +878,32 @@ const formatValueDiff = (value: number | null) => {
   return `${(value * 100).toFixed(1)} pp`;
 };
 
-const renderOddsInfo = (odds: MatchOddsSummary | undefined, side: "playerA" | "playerB") => {
-  if (!odds) return null;
-  const target = side === "playerA" ? odds.playerA : odds.playerB;
-  if (!target || target.price == null) return null;
-  const valueLabel = target.is_value ? formatValueDiff(target.value_diff ?? null) : null;
+const renderOddsBox = (
+  odds: MatchOddsSummary | undefined,
+  side: "playerA" | "playerB",
+  modelOdds: string,
+) => {
+  const target = odds ? (side === "playerA" ? odds.playerA : odds.playerB) : undefined;
+  const hasMarket = target && target.price != null;
+  const valueLabel = target?.is_value ? formatValueDiff(target.value_diff ?? null) : null;
   return (
-    <div className="mt-0.5 text-[11px] text-slate-400">
-      Cuota {odds.bookmaker}:{" "}
-      <span className="font-semibold text-slate-100">{formatOddsPrice(target.price)}</span>
+    <div className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Modelo</span>
+        <span className="font-semibold text-slate-100">{modelOdds}</span>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-sm">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          {odds?.bookmaker ?? "Mercado"}
+        </span>
+        <span className={`font-semibold ${target?.is_value ? "text-emerald-400" : "text-slate-100"}`}>
+          {hasMarket ? formatOddsPrice(target!.price) : "N/A"}
+        </span>
+      </div>
       {valueLabel ? (
-        <span className="ml-2 font-semibold text-emerald-400">Valor (+{valueLabel})</span>
+        <div className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1 text-center text-[11px] font-semibold text-emerald-300">
+          Valor +{valueLabel}
+        </div>
       ) : null}
     </div>
   );
@@ -1374,7 +1389,7 @@ const highlight = useMemo(() => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col items-center gap-2">
-                        {renderOddsInfo(summary?.odds, "playerA")}
+                        {renderOddsBox(summary?.odds, "playerA", oddsA)}
                         {renderRecentForm(summary?.playerA?.last_results)}
                         {(() => {
                           const chips: any[] = [];
@@ -1412,7 +1427,7 @@ const highlight = useMemo(() => {
                         {renderAlertBadges(playerAAlerts.rest)}
                       </div>
                       <div className="flex flex-col items-center gap-2">
-                        {renderOddsInfo(summary?.odds, "playerB")}
+                        {renderOddsBox(summary?.odds, "playerB", oddsB)}
                         {renderRecentForm(summary?.playerB?.last_results)}
                         {(() => {
                           const chips: any[] = [];
@@ -1452,27 +1467,11 @@ const highlight = useMemo(() => {
                     </div>
                   </div>
 
-                  {summary.odds?.value_message ? (
-                    <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-100">
-                      {summary.odds.value_message}
-                    </div>
-                  ) : null}
-
-                  <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                    <div className="grid grid-cols-2 gap-3 text-sm text-slate-200">
-                      <div className="rounded-md border border-slate-800/60 bg-slate-950/60 p-3">
-                        <div className="text-xs uppercase tracking-wide text-slate-400">Cuota (decimal)</div>
-                        <div className="font-semibold">{top.name}: {oddsA}</div>
-                      </div>
-                      <div className="rounded-md border border-slate-800/60 bg-slate-950/60 p-3">
-                        <div className="text-xs uppercase tracking-wide text-slate-400">Cuota (decimal)</div>
-                        <div className="font-semibold">{bottom.name}: {oddsB}</div>
-                      </div>
-                    </div>
-                    {highlight?.text && (
+                  {highlight?.text && (
+                    <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                       <div className="text-xs text-slate-300">Destacado: {highlight.text}</div>
-                    )}
-                  </section>
+                    </section>
+                  )}
 
                   <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70">
                     <div className="border-b border-slate-800/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
