@@ -43,6 +43,10 @@ DECLARE
   last_match_b_text TEXT;
   home_advantage_a BOOLEAN := FALSE;
   home_advantage_b BOOLEAN := FALSE;
+  last_surface_a TEXT;
+  last_surface_b TEXT;
+  surface_change_a BOOLEAN := FALSE;
+  surface_change_b BOOLEAN := FALSE;
 
   h2h_rec RECORD;
   country_a TEXT;
@@ -263,6 +267,22 @@ BEGIN
          )
     INTO last_results_b;
 
+  -- Surface of each player's most recent match, to detect a surface switch
+  -- going into this tournament (e.g. clay -> grass).
+  SELECT mf.surface
+    INTO last_surface_a
+    FROM estratego_v1.matches_full mf
+    WHERE winner_id = player_a_id OR loser_id = player_a_id
+    ORDER BY mf.tourney_date DESC, mf.match_id DESC NULLS LAST
+    LIMIT 1;
+
+  SELECT mf.surface
+    INTO last_surface_b
+    FROM estratego_v1.matches_full mf
+    WHERE winner_id = player_b_id OR loser_id = player_b_id
+    ORDER BY mf.tourney_date DESC, mf.match_id DESC NULLS LAST
+    LIMIT 1;
+
   SELECT CASE
            WHEN winner_id = player_a_id THEN winner_rank_points
            ELSE loser_rank_points
@@ -346,6 +366,11 @@ BEGIN
   IF tourney_country IS NOT NULL THEN
     home_advantage_a := country_a IS NOT NULL AND UPPER(country_a) = UPPER(tourney_country);
     home_advantage_b := country_b IS NOT NULL AND UPPER(country_b) = UPPER(tourney_country);
+  END IF;
+
+  IF tourney_surf IS NOT NULL THEN
+    surface_change_a := last_surface_a IS NOT NULL AND UPPER(last_surface_a) <> UPPER(tourney_surf);
+    surface_change_b := last_surface_b IS NOT NULL AND UPPER(last_surface_b) <> UPPER(tourney_surf);
   END IF;
 
   IF last_match_b_text IS NOT NULL AND POSITION('RET' IN UPPER(last_match_b_text)) > 0 THEN
@@ -705,6 +730,7 @@ BEGIN
       'points_delta', points_delta_a,
       'days_since_last', days_since_a,
       'home_advantage', home_advantage_a,
+      'surface_change', surface_change_a,
       'win_pct_month', win_month_a,
       'win_pct_vs_top10', win_vs_rankband_a,
       'win_pct_fifth_set', win_pct_fifth_set_a,
@@ -729,6 +755,7 @@ BEGIN
       'points_delta', points_delta_b,
       'days_since_last', days_since_b,
       'home_advantage', home_advantage_b,
+      'surface_change', surface_change_b,
       'win_pct_month', win_month_b,
       'win_pct_vs_top10', win_vs_rankband_b,
       'win_pct_fifth_set', win_pct_fifth_set_b,
