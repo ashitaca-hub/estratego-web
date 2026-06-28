@@ -1,4 +1,4 @@
-﻿-- get_extended_prematch_summary aggregates performance metrics for two players,
+-- get_extended_prematch_summary aggregates performance metrics for two players,
 -- returning a JSON payload with weighted win probabilities and context.
 CREATE OR REPLACE FUNCTION public.get_extended_prematch_summary(
   p_tourney_id  TEXT,
