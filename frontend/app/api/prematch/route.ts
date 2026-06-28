@@ -1442,8 +1442,23 @@ const callExtendedPrematchSummary = async (payload: PrematchRpcPayload) => {
   return supabase.rpc("get_extended_prematch_summary", payload);
 };
 
-export async function POST(req: Request) {
-  const body = await req.json();
+export type PrematchComputeInput = {
+  playerA_id: number;
+  playerB_id: number;
+  tourney_id: number | string;
+  year: number | string;
+  playerA_name?: string | null;
+  playerB_name?: string | null;
+  event_name?: string | null;
+};
+
+// Extraido del handler POST para que se pueda llamar en proceso (sin HTTP)
+// desde otras rutas, p.ej. el escaneo de value bets de toda una ronda, que
+// necesita invocarlo decenas de veces sin pagar el overhead de un fetch a
+// si mismo por cada partido.
+export async function computePrematchSummary(
+  body: PrematchComputeInput,
+): Promise<{ status: number; body: unknown }> {
   const {
     playerA_id,
     playerB_id,
@@ -1469,9 +1484,7 @@ export async function POST(req: Request) {
     : normalizedYear ?? fallbackIsoYear;
 
   if (!playerA_id || !playerB_id || !tourney_id || primaryYear === null) {
-    return new Response(JSON.stringify({ error: "Missing parameters" }), {
-      status: 400,
-    });
+    return { status: 400, body: { error: "Missing parameters" } };
   }
 
   const alternateYear: number | string | null = preferIso
@@ -1537,9 +1550,7 @@ export async function POST(req: Request) {
   }
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-    });
+    return { status: 500, body: { error: error.message } };
   }
 
   const formatted = formatPrematchSummary(data);
@@ -1633,8 +1644,14 @@ export async function POST(req: Request) {
     }
   }
 
-  return new Response(JSON.stringify(formatted), {
-    status: 200,
+  return { status: 200, body: formatted };
+}
+
+export async function POST(req: Request) {
+  const requestBody = (await req.json()) as PrematchComputeInput;
+  const result = await computePrematchSummary(requestBody);
+  return new Response(JSON.stringify(result.body), {
+    status: result.status,
     headers: { "content-type": "application/json" },
   });
 }
