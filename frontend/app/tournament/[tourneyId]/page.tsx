@@ -528,27 +528,6 @@ type TournamentHighs = {
   received_double_faults_value: number | null;
 };
 
-type ValueBetItem = {
-  matchId: string;
-  round: string;
-  favoredPlayer: { id: string; name: string; country: string | null };
-  otherPlayer: { id: string; name: string; country: string | null };
-  modelProbability: number;
-  oddsPrice: number;
-  impliedProbability: number;
-  valueDiff: number;
-  tier: "high" | "good";
-  bookmaker: string;
-};
-
-type ValueBetResponse = {
-  tourney_id: string;
-  event: string;
-  surface: string;
-  scanned: number;
-  items: ValueBetItem[];
-};
-
 type MetricConfig = {
   key: string;
   label: string;
@@ -1959,107 +1938,6 @@ function HighsDialog({
   );
 }
 
-function ValueBetDialog({
-  open,
-  onOpenChange,
-  data,
-  loading,
-  error,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  data: ValueBetResponse | null;
-  loading: boolean;
-  error: string | null;
-}) {
-  const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
-  const formatDiff = (value: number) => `+${(value * 100).toFixed(1)} pp`;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader className="space-y-1 px-5 pb-3 pt-5">
-          <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-slate-100">
-            <TrendingUp className="h-5 w-5 text-emerald-400" />
-            Value bets
-          </DialogTitle>
-          <div className="text-xs text-slate-400">
-            Partidos pendientes donde el modelo difiere de la cuota del mercado por encima del 3%.
-            {data ? ` Analizados: ${data.scanned}.` : null}
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-3 px-5 pb-5 max-h-[68vh] overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-6 text-sm text-slate-400">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Buscando value bets...
-            </div>
-          ) : error ? (
-            <div className="flex items-start gap-2 rounded-xl border border-red-600/50 bg-red-950/40 p-3 text-sm text-red-200">
-              <AlertTriangle className="mt-0.5 h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          ) : !data || data.items.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
-              No hay value bets ahora mismo entre los partidos pendientes con cuota disponible.
-            </div>
-          ) : (
-            data.items.map((item) => (
-              <div
-                key={`${item.matchId}-${item.favoredPlayer.id}`}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-wide text-slate-500">
-                    {item.round} · {item.bookmaker}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      item.tier === "high"
-                        ? "bg-emerald-500/20 text-emerald-300"
-                        : "bg-sky-500/20 text-sky-300"
-                    }`}
-                  >
-                    {item.tier === "high" ? "High" : "Good"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium text-slate-100">
-                      {item.favoredPlayer.country ? `${item.favoredPlayer.country} ` : ""}
-                      {item.favoredPlayer.name}
-                    </div>
-                    <div className="truncate text-xs text-slate-500">
-                      vs {item.otherPlayer.country ? `${item.otherPlayer.country} ` : ""}
-                      {item.otherPlayer.name}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-xs text-slate-400">
-                      Modelo {formatPercent(item.modelProbability)} · Mercado {formatPercent(item.impliedProbability)}
-                    </div>
-                    <div className="text-base font-semibold text-slate-100">
-                      {item.oddsPrice.toFixed(2)}{" "}
-                      <span className="text-sm font-semibold text-emerald-400">({formatDiff(item.valueDiff)})</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <DialogFooter className="border-t border-slate-800/60 bg-slate-950/90 px-5 py-4 mt-auto">
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cerrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function WeightsDialog({
   open,
   onOpenChange,
@@ -2268,10 +2146,6 @@ function TournamentBracketPage() {
   const [highsData, setHighsData] = useState<TournamentHighs | null>(null);
   const [highsLoading, setHighsLoading] = useState(false);
   const [highsError, setHighsError] = useState<string | null>(null);
-  const [valueBetOpen, setValueBetOpen] = useState(false);
-  const [valueBetData, setValueBetData] = useState<ValueBetResponse | null>(null);
-  const [valueBetLoading, setValueBetLoading] = useState(false);
-  const [valueBetError, setValueBetError] = useState<string | null>(null);
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [weightsData, setWeightsData] = useState<Record<string, number> | null>(null);
   const [weightsDraft, setWeightsDraft] = useState<Record<string, number> | null>(null);
@@ -2588,45 +2462,6 @@ function TournamentBracketPage() {
   }, [highsOpen, bracket?.tourney_id]);
 
   useEffect(() => {
-    if (!valueBetOpen || !bracket?.tourney_id) {
-      return;
-    }
-
-    const controller = new AbortController();
-    setValueBetLoading(true);
-    setValueBetError(null);
-    setValueBetData(null);
-
-    (async () => {
-      try {
-        const response = await fetch(
-          `/api/tournament/${encodeURIComponent(bracket.tourney_id)}/valuebets`,
-          { signal: controller.signal },
-        );
-
-        if (!response.ok) {
-          const text = await response.text().catch(() => "");
-          throw new Error(text || `Error ${response.status}`);
-        }
-
-        const payload = (await response.json()) as ValueBetResponse;
-        if (!controller.signal.aborted) {
-          setValueBetData(payload);
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setValueBetError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!controller.signal.aborted) {
-          setValueBetLoading(false);
-        }
-      }
-    })();
-
-    return () => controller.abort();
-  }, [valueBetOpen, bracket?.tourney_id]);
-
-  useEffect(() => {
     if (!weightsOpen) {
       return;
     }
@@ -2778,17 +2613,6 @@ function TournamentBracketPage() {
       setHighsLoading(false);
     } else {
       setHighsOpen(true);
-    }
-  };
-
-  const handleValueBetOpenChange = (open: boolean) => {
-    if (!open) {
-      setValueBetOpen(false);
-      setValueBetData(null);
-      setValueBetError(null);
-      setValueBetLoading(false);
-    } else {
-      setValueBetOpen(true);
     }
   };
 
@@ -3100,8 +2924,8 @@ function TournamentBracketPage() {
           <Button
             variant="outline"
             className="rounded-2xl"
-            onClick={() => setValueBetOpen(true)}
-            disabled={valueBetLoading || !bracket}
+            onClick={() => router.push(`/tournament/${encodeURIComponent(bracket.tourney_id)}/valuebets`)}
+            disabled={!bracket}
           >
             <TrendingUp className="w-4 h-4 mr-2" />
             ValueBet
@@ -3232,13 +3056,6 @@ function TournamentBracketPage() {
         data={highsData}
         loading={highsLoading}
         error={highsError}
-      />
-      <ValueBetDialog
-        open={valueBetOpen}
-        onOpenChange={handleValueBetOpenChange}
-        data={valueBetData}
-        loading={valueBetLoading}
-        error={valueBetError}
       />
       <WeightsDialog
         open={weightsOpen}
