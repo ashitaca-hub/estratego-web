@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, ArrowLeft, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChevronRight, ArrowLeft, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X, TrendingUp, House, Repeat } from "lucide-react";
 import {
   WinProbabilityBar,
   normalizeProbabilityValue,
@@ -175,6 +175,7 @@ type PlayerPrematchStats = {
   win_probability: number | null;
   ranking: number | null;
   home_advantage: boolean | null;
+  surface_change: boolean | null;
   days_since_last: number | null;
   defends_round?: string | null;
   ranking_score?: number | null;
@@ -327,6 +328,12 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         ? p.home_advantage
         : typeof p?.home_advantage === "string"
         ? p.home_advantage.toLowerCase() === "true"
+        : null,
+    surface_change:
+      typeof p?.surface_change === "boolean"
+        ? p.surface_change
+        : typeof p?.surface_change === "string"
+        ? p.surface_change.toLowerCase() === "true"
         : null,
     days_since_last: asNumber(p?.days_since_last),
     defends_round:
@@ -636,9 +643,9 @@ const renderDefendChip = (value?: string | null) => {
         key="defend"
         title="Defiende título"
         aria-label="Defiende título"
-        className="inline-flex h-6 w-6 items-center justify-center text-amber-400"
+        className="inline-flex h-7 w-7 items-center justify-center text-amber-400"
       >
-        <Trophy className="h-4 w-4" />
+        <Trophy className="h-5 w-5" />
       </span>
     );
   }
@@ -770,7 +777,11 @@ const renderRecentForm = (
       {normalized.map((outcome, idx) => {
         const isWin = outcome === "W";
         const isLoss = outcome === "L";
-        const colorClass = isWin ? "bg-emerald-400" : isLoss ? "bg-rose-500" : "bg-slate-700";
+        const colorClass = isWin
+          ? "bg-emerald-500/20 text-emerald-400"
+          : isLoss
+          ? "bg-rose-500/20 text-rose-400"
+          : "bg-slate-800 text-slate-600";
         const opacityClass = outcome ? "" : "opacity-40";
         const highlightClass = idx === 0 ? "ring-2 ring-offset-1 ring-white/40 ring-offset-slate-950" : "";
         const titleText =
@@ -788,13 +799,11 @@ const renderRecentForm = (
         return (
           <span
             key={`recent-form-${idx}`}
-            className="relative flex h-3.5 w-3.5 items-center justify-center"
+            className={`flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-bold ${colorClass} ${opacityClass} ${highlightClass}`}
+            title={titleText}
             aria-hidden="true"
           >
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${colorClass} ${opacityClass} ${highlightClass}`}
-              title={titleText}
-            />
+            {isWin ? "W" : isLoss ? "L" : "-"}
           </span>
         );
       })}
@@ -882,15 +891,23 @@ const renderOddsBox = (
   odds: MatchOddsSummary | undefined,
   side: "playerA" | "playerB",
   modelOdds: string,
+  modelProbability: number | null,
 ) => {
   const target = odds ? (side === "playerA" ? odds.playerA : odds.playerB) : undefined;
   const hasMarket = target && target.price != null;
   const valueLabel = target?.is_value ? formatValueDiff(target.value_diff ?? null) : null;
+  const modelPct =
+    modelProbability != null ? `${Math.round(modelProbability * 100)}%` : null;
+  const marketPct =
+    target?.implied_probability != null ? `${Math.round(target.implied_probability * 100)}%` : null;
   return (
-    <div className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="flex w-full flex-col rounded-xl border border-slate-800 bg-slate-950/60 p-3">
       <div className="flex items-center justify-between text-sm">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Modelo</span>
-        <span className="font-semibold text-slate-100">{modelOdds}</span>
+        <span className="font-semibold text-slate-100">
+          {modelOdds}
+          {modelPct ? <span className="ml-1.5 text-xs font-normal text-slate-400">({modelPct})</span> : null}
+        </span>
       </div>
       <div className="mt-1.5 flex items-center justify-between text-sm">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -898,13 +915,18 @@ const renderOddsBox = (
         </span>
         <span className={`font-semibold ${target?.is_value ? "text-emerald-400" : "text-slate-100"}`}>
           {hasMarket ? formatOddsPrice(target!.price) : "N/A"}
+          {marketPct ? <span className="ml-1.5 text-xs font-normal text-slate-400">({marketPct})</span> : null}
         </span>
       </div>
-      {valueLabel ? (
-        <div className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1 text-center text-[11px] font-semibold text-emerald-300">
-          Valor +{valueLabel}
-        </div>
-      ) : null}
+      <div
+        className={
+          valueLabel
+            ? "mt-2 rounded-md bg-emerald-500/10 px-2 py-1 text-center text-[11px] font-semibold text-emerald-300"
+            : "invisible mt-2 px-2 py-1 text-center text-[11px] font-semibold"
+        }
+      >
+        {valueLabel ? `Valor +${valueLabel}` : "—"}
+      </div>
     </div>
   );
 };
@@ -1389,7 +1411,7 @@ const highlight = useMemo(() => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col items-center gap-2">
-                        {renderOddsBox(summary?.odds, "playerA", oddsA)}
+                        {renderOddsBox(summary?.odds, "playerA", oddsA, probability)}
                         {renderRecentForm(summary?.playerA?.last_results)}
                         {(() => {
                           const chips: any[] = [];
@@ -1409,6 +1431,30 @@ const highlight = useMemo(() => {
                           if (defendChip) {
                             chips.push(defendChip);
                           }
+                          if (summary.playerA.home_advantage) {
+                            chips.push(
+                              <span
+                                key="home"
+                                title="Juega en su país"
+                                aria-label="Juega en su país"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-yellow-500/60 bg-yellow-500/10 text-yellow-300"
+                              >
+                                <House className="h-3.5 w-3.5" />
+                              </span>,
+                            );
+                          }
+                          if (summary.playerA.surface_change) {
+                            chips.push(
+                              <span
+                                key="surface-change"
+                                title="Cambio de superficie respecto a su último torneo"
+                                aria-label="Cambio de superficie respecto a su último torneo"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-500/60 bg-sky-500/10 text-sky-300"
+                              >
+                                <Repeat className="h-3.5 w-3.5" />
+                              </span>,
+                            );
+                          }
                           if (playerAAlerts.retired) {
                             chips.push(
                               <span
@@ -1427,7 +1473,7 @@ const highlight = useMemo(() => {
                         {renderAlertBadges(playerAAlerts.rest)}
                       </div>
                       <div className="flex flex-col items-center gap-2">
-                        {renderOddsBox(summary?.odds, "playerB", oddsB)}
+                        {renderOddsBox(summary?.odds, "playerB", oddsB, probability != null ? 1 - probability : null)}
                         {renderRecentForm(summary?.playerB?.last_results)}
                         {(() => {
                           const chips: any[] = [];
@@ -1446,6 +1492,30 @@ const highlight = useMemo(() => {
                           const defendChip = renderDefendChip(summary.playerB.defends_round);
                           if (defendChip) {
                             chips.push(defendChip);
+                          }
+                          if (summary.playerB.home_advantage) {
+                            chips.push(
+                              <span
+                                key="home"
+                                title="Juega en su país"
+                                aria-label="Juega en su país"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-yellow-500/60 bg-yellow-500/10 text-yellow-300"
+                              >
+                                <House className="h-3.5 w-3.5" />
+                              </span>,
+                            );
+                          }
+                          if (summary.playerB.surface_change) {
+                            chips.push(
+                              <span
+                                key="surface-change"
+                                title="Cambio de superficie respecto a su último torneo"
+                                aria-label="Cambio de superficie respecto a su último torneo"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-500/60 bg-sky-500/10 text-sky-300"
+                              >
+                                <Repeat className="h-3.5 w-3.5" />
+                              </span>,
+                            );
                           }
                           if (playerBAlerts.retired) {
                             chips.push(

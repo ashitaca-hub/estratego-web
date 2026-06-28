@@ -7,6 +7,7 @@ type PlayerSummary = {
   win_pct_surface: number | null;
   ranking: number | null;
   home_advantage: boolean | null;
+  surface_change: boolean | null;
   days_since_last: number | null;
   win_pct_month: number | null;
   win_pct_vs_top10: number | null;
@@ -116,10 +117,11 @@ const normalizeProbability = (value: number | null): number | null => {
 
 const asBoolean = (value: unknown): boolean | null => {
   if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
   if (typeof value === "string") {
     const lowered = value.trim().toLowerCase();
-    if (lowered === "true") return true;
-    if (lowered === "false") return false;
+    if (lowered === "true" || lowered === "1") return true;
+    if (lowered === "false" || lowered === "0") return false;
   }
   return null;
 };
@@ -900,6 +902,12 @@ const buildPlayer = (
     if (playerRecord) break;
   }
 
+  // El backend (estratego-flask) calcula is_local_p/o y surf_change_p/o como
+  // flags numericos (0/1) dentro de features.flags, no como campos sueltos en
+  // playerA/playerB - sin leer aqui, home_advantage/surface_change nunca
+  // llegaban al frontend.
+  const flags = asRecord(asRecord(base["features"])?.["flags"]);
+
   const getFromPrefixes = <T>(
     extractor: (source: Record<string, unknown>, prefix: string) => T | null,
   ): T | null => {
@@ -962,6 +970,7 @@ const buildPlayer = (
   const homeAdvantage =
     pickBoolean(playerRecord, ["home_advantage", "is_home", "is_local"]) ??
     getFromPrefixes((source, prefix) =>
+      pickBoolean(flags, [`${prefix}_is_local`, `is_local_${prefix}`]) ??
       pickBoolean(source, [
         `${prefix}_home_advantage`,
         `home_advantage_${prefix}`,
@@ -970,6 +979,12 @@ const buildPlayer = (
         `${prefix}_is_local`,
         `is_local_${prefix}`,
       ]),
+    );
+  const surfaceChange =
+    pickBoolean(playerRecord, ["surf_change", "surface_change"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickBoolean(flags, [`${prefix}_surf_change`, `surf_change_${prefix}`]) ??
+      pickBoolean(source, [`${prefix}_surf_change`, `surf_change_${prefix}`]),
     );
   const daysSinceLast =
     pickNumber(playerRecord, [
@@ -1223,6 +1238,7 @@ const buildPlayer = (
     win_pct_surface: winPctSurface,
     ranking,
     home_advantage: homeAdvantage,
+    surface_change: surfaceChange,
     days_since_last: daysSinceLast,
     win_pct_month: winPctMonth,
     win_pct_vs_top10: winPctVsTop10,
