@@ -135,38 +135,41 @@ export async function POST(req: Request) {
 
     const runNumber = baseRun + i;
 
-    const { data: rounds, error: prepareError } = await supabaseAdmin.rpc("simulate_prepare_bracket", {
+    // simulate_stage_* opera sobre una tabla de scratch (simulation_draw_state),
+    // nunca sobre draw_matches: el cuadro visible no debe cambiar solo porque se
+    // hayan corrido simulaciones para alimentar las estadisticas de analytics.
+    const { data: rounds, error: prepareError } = await supabaseAdmin.rpc("simulate_stage_prepare", {
       p_tourney_id: tourneyId,
     });
 
     if (prepareError) {
-      console.error("Error in simulate_prepare_bracket:", prepareError.message);
+      console.error("Error in simulate_stage_prepare:", prepareError.message);
       return new Response(JSON.stringify({ error: prepareError.message, runsCompleted }), {
         status: 500,
       });
     }
 
     for (const round of (rounds as string[]) ?? []) {
-      const { error: roundError } = await supabaseAdmin.rpc("simulate_one_round", {
+      const { error: roundError } = await supabaseAdmin.rpc("simulate_stage_round", {
         p_tourney_id: tourneyId,
         p_round: round,
       });
 
       if (roundError) {
-        console.error("Error in simulate_one_round:", roundError.message);
+        console.error("Error in simulate_stage_round:", roundError.message);
         return new Response(JSON.stringify({ error: roundError.message, runsCompleted }), {
           status: 500,
         });
       }
     }
 
-    const { error: recordError } = await supabaseAdmin.rpc("simulate_record_run_result", {
+    const { error: recordError } = await supabaseAdmin.rpc("simulate_stage_record_run_result", {
       p_tourney_id: tourneyId,
       p_run_number: runNumber,
     });
 
     if (recordError) {
-      console.error("Error in simulate_record_run_result:", recordError.message);
+      console.error("Error in simulate_stage_record_run_result:", recordError.message);
       return new Response(JSON.stringify({ error: recordError.message, runsCompleted }), {
         status: 500,
       });
