@@ -504,67 +504,12 @@ BEGIN
     WHERE (winner_id = player_b_id OR loser_id = player_b_id)
       AND cs.speed_rank BETWEEN tourney_speed_rank - 10 AND tourney_speed_rank + 10;
 
-  -- Weighted score across metrics already stored in prematch_metric_weights.
-  -- Cuando a un jugador le falta el dato (sin partidos ese periodo, sin
-  -- ranking, etc.) se usa el valor del rival en su lugar (neutral) en vez de
-  -- 0, que equivalia a asumirle el peor caso posible solo por falta de datos.
-  FOR w IN SELECT * FROM estratego_v1.prematch_metric_weights LOOP
-    IF w.metric = 'win_pct_year' THEN
-      win_score_a := win_score_a + COALESCE(win_pct_year_a, win_pct_year_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(win_pct_year_b, win_pct_year_a, 0) * w.weight;
-    ELSIF w.metric = 'win_pct_surface' THEN
-      win_score_a := win_score_a + COALESCE(win_pct_surface_a, win_pct_surface_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(win_pct_surface_b, win_pct_surface_a, 0) * w.weight;
-    ELSIF w.metric = 'win_pct_month' THEN
-      win_score_a := win_score_a + COALESCE(win_month_a, win_month_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(win_month_b, win_month_a, 0) * w.weight;
-    ELSIF w.metric = 'win_pct_vs_top10' THEN
-      win_score_a := win_score_a + COALESCE(win_vs_rankband_a, win_vs_rankband_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(win_vs_rankband_b, win_vs_rankband_a, 0) * w.weight;
-    ELSIF w.metric = 'court_speed_score' THEN
-      win_score_a := win_score_a + COALESCE(court_speed_score_a, court_speed_score_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(court_speed_score_b, court_speed_score_a, 0) * w.weight;
-    ELSIF w.metric = 'rest_score' THEN
-      -- rest_score se usa solo como alerta, no impacta en la ponderaciÃ³n
-      NULL;
-    END IF;
-  END LOOP;
-
-  -- Additional metrics with default weights if absent from the configuration table
-  FOR w IN
-    SELECT metric, weight
-    FROM estratego_v1.prematch_metric_weights
-    WHERE metric IN ('ranking_score','h2h_score','motivation_score')
-    UNION ALL
-    SELECT metric, weight
-    FROM (VALUES
-      ('ranking_score', 0.12),
-      ('h2h_score', 0.08),
-      ('motivation_score', 0.05)
-    ) AS defaults(metric, weight)
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM estratego_v1.prematch_metric_weights mw
-      WHERE mw.metric = defaults.metric
-    )
-  LOOP
-    IF w.metric = 'ranking_score' THEN
-      win_score_a := win_score_a + COALESCE(ranking_score_a, ranking_score_b, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(ranking_score_b, ranking_score_a, 0) * w.weight;
-    ELSIF w.metric = 'h2h_score' THEN
-      win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
-    ELSIF w.metric = 'motivation_score' THEN
-      win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
-      win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
-    END IF;
-  END LOOP;
-
-  IF win_score_a + win_score_b > 0 THEN
-    prob_a := win_score_a / (win_score_a + win_score_b);
-    prob_b := win_score_b / (win_score_a + win_score_b);
-  END IF;
-
+  -- Defends-round / motivation_score se calculan ANTES del bucle de
+  -- ponderacion (mas abajo). Antes se calculaban despues, con lo cual el
+  -- bucle siempre usaba motivation_score_a/b = 0 (su valor inicial
+  -- declarado), sin importar el peso configurado ni si el jugador defendia
+  -- titulo: el bug pasaba desapercibido porque el JSON de salida si mostraba
+  -- el valor final (correcto), calculado tarde solo para mostrarlo.
   tourney_base := split_part(p_tourney_id, '-', 2);
   IF tourney_base ~ '^\d+$' THEN
     tourney_base_int := tourney_base::INT;
@@ -733,6 +678,67 @@ BEGIN
 
   motivation_score_a := LEAST(1.0, defend_component_a);
   motivation_score_b := LEAST(1.0, defend_component_b);
+
+  -- Weighted score across metrics already stored in prematch_metric_weights.
+  -- Cuando a un jugador le falta el dato (sin partidos ese periodo, sin
+  -- ranking, etc.) se usa el valor del rival en su lugar (neutral) en vez de
+  -- 0, que equivalia a asumirle el peor caso posible solo por falta de datos.
+  FOR w IN SELECT * FROM estratego_v1.prematch_metric_weights LOOP
+    IF w.metric = 'win_pct_year' THEN
+      win_score_a := win_score_a + COALESCE(win_pct_year_a, win_pct_year_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_pct_year_b, win_pct_year_a, 0) * w.weight;
+    ELSIF w.metric = 'win_pct_surface' THEN
+      win_score_a := win_score_a + COALESCE(win_pct_surface_a, win_pct_surface_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_pct_surface_b, win_pct_surface_a, 0) * w.weight;
+    ELSIF w.metric = 'win_pct_month' THEN
+      win_score_a := win_score_a + COALESCE(win_month_a, win_month_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_month_b, win_month_a, 0) * w.weight;
+    ELSIF w.metric = 'win_pct_vs_top10' THEN
+      win_score_a := win_score_a + COALESCE(win_vs_rankband_a, win_vs_rankband_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(win_vs_rankband_b, win_vs_rankband_a, 0) * w.weight;
+    ELSIF w.metric = 'court_speed_score' THEN
+      win_score_a := win_score_a + COALESCE(court_speed_score_a, court_speed_score_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(court_speed_score_b, court_speed_score_a, 0) * w.weight;
+    ELSIF w.metric = 'rest_score' THEN
+      -- rest_score se usa solo como alerta, no impacta en la ponderaciÃ³n
+      NULL;
+    END IF;
+  END LOOP;
+
+  -- Additional metrics with default weights if absent from the configuration table
+  FOR w IN
+    SELECT metric, weight
+    FROM estratego_v1.prematch_metric_weights
+    WHERE metric IN ('ranking_score','h2h_score','motivation_score')
+    UNION ALL
+    SELECT metric, weight
+    FROM (VALUES
+      ('ranking_score', 0.12),
+      ('h2h_score', 0.08),
+      ('motivation_score', 0.05)
+    ) AS defaults(metric, weight)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM estratego_v1.prematch_metric_weights mw
+      WHERE mw.metric = defaults.metric
+    )
+  LOOP
+    IF w.metric = 'ranking_score' THEN
+      win_score_a := win_score_a + COALESCE(ranking_score_a, ranking_score_b, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(ranking_score_b, ranking_score_a, 0) * w.weight;
+    ELSIF w.metric = 'h2h_score' THEN
+      win_score_a := win_score_a + COALESCE(h2h_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(h2h_score_b, 0) * w.weight;
+    ELSIF w.metric = 'motivation_score' THEN
+      win_score_a := win_score_a + COALESCE(motivation_score_a, 0) * w.weight;
+      win_score_b := win_score_b + COALESCE(motivation_score_b, 0) * w.weight;
+    END IF;
+  END LOOP;
+
+  IF win_score_a + win_score_b > 0 THEN
+    prob_a := win_score_a / (win_score_a + win_score_b);
+    prob_b := win_score_b / (win_score_a + win_score_b);
+  END IF;
 
   RETURN jsonb_build_object(
     'playerA', jsonb_build_object(
