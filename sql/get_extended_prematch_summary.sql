@@ -176,11 +176,16 @@ BEGIN
     ranking_score_b := EXP(-GREATEST(ranking_b - 1, 0) / 20.0);
   END IF;
 
-  -- Head-to-head record
-  SELECT wins, losses, last_meeting
+  -- Head-to-head record, calculado en vivo desde matches_full (la tabla
+  -- estratego_v1.h2h es una cache que dejo de refrescarse y queda desactualizada).
+  SELECT
+    COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins,
+    COUNT(*) FILTER (WHERE winner_id = player_b_id) AS losses,
+    MAX(tourney_date) AS last_meeting
     INTO h2h_rec
-    FROM estratego_v1.h2h
-    WHERE player_id = player_a_id AND opponent_id = player_b_id;
+    FROM estratego_v1.matches_full
+    WHERE (winner_id = player_a_id AND loser_id = player_b_id)
+       OR (winner_id = player_b_id AND loser_id = player_a_id);
 
   denom := COALESCE(h2h_rec.wins, 0)::FLOAT + COALESCE(h2h_rec.losses, 0)::FLOAT + 2;
   IF denom > 0 THEN
