@@ -845,6 +845,47 @@ const fetchMatchOdds = async (input: FetchOddsInput): Promise<MatchOddsSummary |
   return null;
 };
 
+const logPrediction = async (input: {
+  tourneyId: string;
+  eventName: string | null;
+  playerAId: number;
+  playerBId: number;
+  playerAName: string | null;
+  playerBName: string | null;
+  modelProbA: number | null;
+  odds: MatchOddsSummary;
+}) => {
+  const { odds } = input;
+  const priceA = odds.playerA?.price ?? null;
+  const priceB = odds.playerB?.price ?? null;
+  if (priceA == null || priceB == null) return;
+
+  const impliedA = 1 / priceA;
+  const impliedB = 1 / priceB;
+  const marketImpliedProbA = impliedA / (impliedA + impliedB);
+
+  try {
+    const { error } = await supabase.from("prediction_log").insert({
+      tourney_id: input.tourneyId,
+      event_name: input.eventName,
+      player_a_id: input.playerAId,
+      player_b_id: input.playerBId,
+      player_a_name: input.playerAName,
+      player_b_name: input.playerBName,
+      model_prob_a: input.modelProbA,
+      bookmaker: odds.bookmaker,
+      price_a: priceA,
+      price_b: priceB,
+      market_implied_prob_a: marketImpliedProbA,
+    });
+    if (error) {
+      console.warn("[prediction_log] insert error", error);
+    }
+  } catch (err) {
+    console.warn("[prediction_log] insert exception", err);
+  }
+};
+
 const fetchPlayerDisplayName = async (playerId: number): Promise<string | null> => {
   try {
     const { data, error } = await supabase
@@ -1658,6 +1699,22 @@ export async function computePrematchSummary(
     } catch (err) {
       console.warn("[betfair] fallback odds failed", err);
     }
+  }
+
+  if (formatted.odds) {
+    const modelProbA = normalizeProbability(
+      formatted.playerA.win_probability ?? formatted.prob_player ?? null,
+    );
+    await logPrediction({
+      tourneyId: String(tourney_id),
+      eventName: eventNameHint,
+      playerAId: playerA_id,
+      playerBId: playerB_id,
+      playerAName: playerANameFromBody ?? formatted.extras?.display_p ?? null,
+      playerBName: playerBNameFromBody ?? formatted.extras?.display_o ?? null,
+      modelProbA,
+      odds: formatted.odds,
+    });
   }
 
   return { status: 200, body: formatted };
