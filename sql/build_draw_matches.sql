@@ -1,5 +1,14 @@
 -- Rebuilds the first-round matchups in draw_matches based on draw_entries.
--- Expects the tournament metadata (draw_size) to live in public.tournaments_info.
+--
+-- El tamano del cuadro se deriva de la posicion (pos) mas alta cargada en
+-- draw_entries para el torneo, redondeada a la potencia de 2 superior, en
+-- vez de leerse de una columna draw_size separada (tournaments/tournaments_info)
+-- que se ha desincronizado varias veces. Ademas, draws reales de ATP/Challenger
+-- como 28, 48 o 56 SIEMPRE se juegan como el siguiente cuadro potencia de 2
+-- (32, 64, 64...) con byes explicitos para los sembrados que se saltan la
+-- primera ronda -- redondear hacia arriba en vez de exigir una potencia de 2
+-- exacta evita que esos torneos caigan silenciosamente en un "R16" por
+-- defecto con el numero de partidos equivocado.
 CREATE OR REPLACE FUNCTION public.build_draw_matches(
   p_tournament_id TEXT
 )
@@ -8,6 +17,7 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
   round_labels CONSTANT TEXT[] := ARRAY['R128','R64','R32','R16','QF','SF','F'];
+  v_max_pos    INT;
   v_size       INT;
   v_round      TEXT;
   start_idx    INT;
@@ -20,50 +30,48 @@ DECLARE
   matches_prev INT;
   r_idx        INT;
 BEGIN
-  -- Determine draw size for the requested tournament.
-  SELECT draw_size
-    INTO v_size
-    FROM public.tournaments_info
+  SELECT MAX(pos)
+    INTO v_max_pos
+    FROM public.draw_entries
    WHERE tourney_id = p_tournament_id;
 
-  IF v_size IS NULL THEN
-    RAISE EXCEPTION 'tournament % not found in tournaments_info', p_tournament_id;
+  IF v_max_pos IS NULL OR v_max_pos < 2 THEN
+    RAISE EXCEPTION 'No hay draw_entries para tourney_id=%', p_tournament_id;
   END IF;
+
+  -- Redondea al siguiente tamano de cuadro potencia de 2 (2,4,8,...,128).
+  v_size := 2;
+  WHILE v_size < v_max_pos LOOP
+    v_size := v_size * 2;
+  END LOOP;
 
   -- Drop existing matches for this tournament to ensure a clean rebuild.
   DELETE
     FROM public.draw_matches
    WHERE tourney_id = p_tournament_id;
 
-  -- Pick the opening round label based on draw size (defaults to R16).
-  IF v_size = 128 THEN
-    v_round := 'R128';
-  ELSIF v_size = 64 THEN
-    v_round := 'R64';
-  ELSIF v_size = 32 THEN
-    v_round := 'R32';
-  ELSIF v_size = 16 THEN
-    v_round := 'R16';
-  ELSIF v_size = 8 THEN
-    v_round := 'QF';
-  ELSIF v_size = 4 THEN
-    v_round := 'SF';
-  ELSIF v_size = 2 THEN
-    v_round := 'F';
-  ELSE
-    v_round := 'R16';
-  END IF;
+  v_round := CASE v_size
+    WHEN 128 THEN 'R128'
+    WHEN 64  THEN 'R64'
+    WHEN 32  THEN 'R32'
+    WHEN 16  THEN 'R16'
+    WHEN 8   THEN 'QF'
+    WHEN 4   THEN 'SF'
+    WHEN 2   THEN 'F'
+    ELSE 'R16'
+  END;
 
   SELECT idx
     INTO start_idx
     FROM unnest(round_labels) WITH ORDINALITY AS t(lbl, idx)
-    WHERE lbl = v_round
-    LIMIT 1;
+   WHERE lbl = v_round
+   LIMIT 1;
 
   v_idx := 1;
   i := 1;
 
   -- Generate pairings sequentially using the positions in draw_entries.
+  -- Una posicion sin fila en draw_entries se trata como bye (NULL).
   WHILE i < v_size LOOP
     top_pos := i;
     bot_pos := i + 1;
@@ -95,7 +103,7 @@ BEGIN
 
   -- Pre-create empty matches for later rounds so simulations can advance.
   IF start_idx IS NOT NULL THEN
-    matches_prev := (v_size + 1) / 2; -- round up number of matches in the opening round
+    matches_prev := v_size / 2; -- number of matches in the opening round
 
     FOR r_idx IN start_idx + 1 .. array_length(round_labels, 1) LOOP
       matches_prev := (matches_prev + 1) / 2; -- round up half the previous round
