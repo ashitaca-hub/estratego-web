@@ -2,6 +2,15 @@
 export const dynamic = "force-dynamic";
 import { supabase } from "@/lib/supabase";
 
+type NextTournamentSummary = {
+  name: string | null;
+  level: string | null;
+  country: string | null;
+  last_year_round: string | null;
+  is_category_upgrade: boolean;
+  is_home: boolean;
+};
+
 type PlayerSummary = {
   win_pct_year: number | null;
   win_pct_surface: number | null;
@@ -25,6 +34,7 @@ type PlayerSummary = {
   points_previous?: number | null;
   points_delta?: number | null;
   last_results?: string[] | null;
+  next_tournament?: NextTournamentSummary | null;
 };
 
 type TournamentSummary = {
@@ -1274,6 +1284,18 @@ const buildPlayer = (
       })
       .slice(0, 5) ?? null;
 
+  const nextTournamentRecord = asRecord(playerRecord?.["next_tournament"]);
+  const nextTournament: NextTournamentSummary | null = nextTournamentRecord
+    ? {
+        name: asString(nextTournamentRecord["name"]),
+        level: asString(nextTournamentRecord["level"]),
+        country: asString(nextTournamentRecord["country"]),
+        last_year_round: asString(nextTournamentRecord["last_year_round"]),
+        is_category_upgrade: asBoolean(nextTournamentRecord["is_category_upgrade"]) ?? false,
+        is_home: asBoolean(nextTournamentRecord["is_home"]) ?? false,
+      }
+    : null;
+
   return {
     win_pct_year: winPctYear,
     win_pct_surface: winPctSurface,
@@ -1297,6 +1319,7 @@ const buildPlayer = (
     points_delta: pointsDelta,
     alerts,
     last_results: normalizedLastResults && normalizedLastResults.length > 0 ? normalizedLastResults : undefined,
+    next_tournament: nextTournament,
   };
 };
 

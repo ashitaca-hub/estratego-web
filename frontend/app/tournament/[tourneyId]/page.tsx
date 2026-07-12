@@ -187,6 +187,14 @@ type PlayerPrematchStats = {
   points_current?: number | null;
   points_previous?: number | null;
   points_delta?: number | null;
+  next_tournament?: {
+    name: string | null;
+    level: string | null;
+    country: string | null;
+    last_year_round: string | null;
+    is_category_upgrade: boolean;
+    is_home: boolean;
+  } | null;
 };
 
 type OddsPlayerSummary = {
@@ -365,6 +373,23 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         })
         .slice(0, 5);
       return normalized.length ? normalized : undefined;
+    })(),
+    next_tournament: (() => {
+      const nt = asRecord(p?.next_tournament);
+      if (!nt) return undefined;
+      const isCategoryUpgrade =
+        typeof nt.is_category_upgrade === "boolean" ? nt.is_category_upgrade : false;
+      const isHome = typeof nt.is_home === "boolean" ? nt.is_home : false;
+      const lastYearRound = asStringLocal(nt.last_year_round);
+      if (!isCategoryUpgrade && !isHome && !lastYearRound) return undefined;
+      return {
+        name: asStringLocal(nt.name),
+        level: asStringLocal(nt.level),
+        country: asStringLocal(nt.country),
+        last_year_round: lastYearRound,
+        is_category_upgrade: isCategoryUpgrade,
+        is_home: isHome,
+      };
     })(),
   });
 
@@ -960,6 +985,46 @@ const renderAlertBadges = (alerts?: string[]) => {
   );
 };
 
+const NEXT_TOURNAMENT_LEVEL_LABELS: Record<string, string> = {
+  G: "Grand Slam",
+  M: "Masters 1000",
+  F: "ATP Finals",
+  A: "ATP Tour",
+  C: "Challenger",
+  D: "Copa Davis",
+};
+
+const NEXT_TOURNAMENT_ROUND_LABELS: Record<string, string> = {
+  W: "campeón",
+  F: "finalista",
+  SF: "semifinalista",
+};
+
+const renderNextTournamentBadge = (nt?: PlayerPrematchStats["next_tournament"]) => {
+  if (!nt) return null;
+  const reasons: string[] = [];
+  if (nt.last_year_round && NEXT_TOURNAMENT_ROUND_LABELS[nt.last_year_round]) {
+    reasons.push(`defiende resultado de ${NEXT_TOURNAMENT_ROUND_LABELS[nt.last_year_round]}`);
+  }
+  if (nt.is_category_upgrade) {
+    const levelLabel = nt.level ? NEXT_TOURNAMENT_LEVEL_LABELS[nt.level] ?? nt.level : "categoría superior";
+    reasons.push(`sube a ${levelLabel}`);
+  }
+  if (nt.is_home) {
+    reasons.push("juega en casa");
+  }
+  if (reasons.length === 0) return null;
+  const tourneyLabel = nt.name ? ` en ${nt.name}` : "";
+  return (
+    <div className="mt-2 flex items-start gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs text-sky-100">
+      <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span className="leading-tight">
+        Semana que viene{tourneyLabel}: {reasons.join(", ")}.
+      </span>
+    </div>
+  );
+};
+
 const renderSurfaceChip = (surface?: string | null) => {
   if (!surface) return null;
   const label = surface.trim();
@@ -1471,6 +1536,7 @@ const highlight = useMemo(() => {
                           return <div className="flex items-center gap-2">{chips}</div>;
                         })()}
                         {renderAlertBadges(playerAAlerts.rest)}
+                        {renderNextTournamentBadge(summary?.playerA?.next_tournament)}
                       </div>
                       <div className="flex flex-col items-center gap-2">
                         {renderOddsBox(summary?.odds, "playerB", oddsB, probability != null ? 1 - probability : null)}
@@ -1533,6 +1599,7 @@ const highlight = useMemo(() => {
                           return <div className="flex items-center gap-2">{chips}</div>;
                         })()}
                         {renderAlertBadges(playerBAlerts.rest)}
+                        {renderNextTournamentBadge(summary?.playerB?.next_tournament)}
                       </div>
                     </div>
                   </div>
