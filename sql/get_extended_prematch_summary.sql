@@ -87,6 +87,33 @@ DECLARE
   prev_year INT;
   tourney_prev_id TEXT;
   meta_defend_round TEXT := NULL;
+  tourney_level TEXT;
+
+  -- Proximo torneo (el que el jugador disputo el año pasado justo despues
+  -- de esta misma edicion) y si conviene avisar de ello.
+  prev_event_last_date_a DATE;
+  prev_event_last_date_b DATE;
+  next_tourney_id_a TEXT;
+  next_tourney_id_b TEXT;
+  next_tourney_result_a TEXT;
+  next_tourney_result_b TEXT;
+  next_tourney_code_a TEXT;
+  next_tourney_code_b TEXT;
+  this_year_next_id_a TEXT;
+  this_year_next_id_b TEXT;
+  next_tourney_name_a TEXT;
+  next_tourney_name_b TEXT;
+  next_tourney_level_a TEXT;
+  next_tourney_level_b TEXT;
+  next_tourney_country_a TEXT;
+  next_tourney_country_b TEXT;
+  tourney_level_rank INT;
+  next_level_rank_a INT;
+  next_level_rank_b INT;
+  next_is_upgrade_a BOOLEAN := FALSE;
+  next_is_upgrade_b BOOLEAN := FALSE;
+  next_is_home_a BOOLEAN := FALSE;
+  next_is_home_b BOOLEAN := FALSE;
 BEGIN
   -- Win % in current year
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins,
@@ -109,8 +136,9 @@ BEGIN
   -- Tournament surface and month
   SELECT surface,
          EXTRACT(MONTH FROM TO_DATE(tourney_date::TEXT, 'YYYYMMDD'))::INT,
-         country
-    INTO tourney_surf, tourney_month, tourney_country
+         country,
+         level
+    INTO tourney_surf, tourney_month, tourney_country, tourney_level
     FROM estratego_v1.tournaments
     WHERE tourney_id = p_tourney_id;
 
@@ -679,6 +707,118 @@ BEGIN
   motivation_score_a := LEAST(1.0, defend_component_a);
   motivation_score_b := LEAST(1.0, defend_component_b);
 
+  -- Proximo torneo: el que cada jugador disputo el año pasado justo despues
+  -- de la edicion anterior de ESTE torneo (dato real de matches_full, no una
+  -- suposicion de calendario). Si no jugo nada despues (fin de temporada,
+  -- lesion...) estas variables quedan en NULL y no se muestra nada.
+  IF tourney_prev_id IS NOT NULL THEN
+    SELECT MAX(tourney_date)
+      INTO prev_event_last_date_a
+      FROM estratego_v1.matches_full
+      WHERE tourney_id = tourney_prev_id
+        AND (winner_id = player_a_id OR loser_id = player_a_id);
+
+    SELECT MAX(tourney_date)
+      INTO prev_event_last_date_b
+      FROM estratego_v1.matches_full
+      WHERE tourney_id = tourney_prev_id
+        AND (winner_id = player_b_id OR loser_id = player_b_id);
+  END IF;
+
+  IF prev_event_last_date_a IS NOT NULL THEN
+    SELECT mf.tourney_id
+      INTO next_tourney_id_a
+      FROM estratego_v1.matches_full mf
+      WHERE (winner_id = player_a_id OR loser_id = player_a_id)
+        AND tourney_date > prev_event_last_date_a
+      ORDER BY tourney_date ASC
+      LIMIT 1;
+  END IF;
+
+  IF prev_event_last_date_b IS NOT NULL THEN
+    SELECT mf.tourney_id
+      INTO next_tourney_id_b
+      FROM estratego_v1.matches_full mf
+      WHERE (winner_id = player_b_id OR loser_id = player_b_id)
+        AND tourney_date > prev_event_last_date_b
+      ORDER BY tourney_date ASC
+      LIMIT 1;
+  END IF;
+
+  -- Resultado mas profundo alcanzado en ese proximo torneo (mismo truco que
+  -- round_last_a/b: haber ganado la ronda X implica haber avanzado a X+1).
+  IF next_tourney_id_a IS NOT NULL THEN
+    SELECT CASE
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_a AND winner_id = player_a_id AND round = 'F') THEN 'W'
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_a AND winner_id = player_a_id AND round = 'SF') THEN 'F'
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_a AND winner_id = player_a_id AND round = 'QF') THEN 'SF'
+             ELSE NULL
+           END
+      INTO next_tourney_result_a;
+
+    next_tourney_code_a := split_part(next_tourney_id_a, '-', 2);
+    this_year_next_id_a := p_year::TEXT || '-' || next_tourney_code_a;
+
+    SELECT name, level, country
+      INTO next_tourney_name_a, next_tourney_level_a, next_tourney_country_a
+      FROM estratego_v1.tournaments
+      WHERE tourney_id = this_year_next_id_a;
+
+    -- Si la edicion de este año todavia no esta en el calendario, usamos la
+    -- del año pasado solo para poder mostrar nombre/nivel/pais (el chequeo
+    -- de "sube de categoria" exige el nivel de la edicion de este año).
+    IF next_tourney_name_a IS NULL THEN
+      SELECT name, level, country
+        INTO next_tourney_name_a, next_tourney_level_a, next_tourney_country_a
+        FROM estratego_v1.tournaments
+       WHERE tourney_id = next_tourney_id_a;
+    END IF;
+  END IF;
+
+  IF next_tourney_id_b IS NOT NULL THEN
+    SELECT CASE
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_b AND winner_id = player_b_id AND round = 'F') THEN 'W'
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_b AND winner_id = player_b_id AND round = 'SF') THEN 'F'
+             WHEN EXISTS (SELECT 1 FROM estratego_v1.matches_full WHERE tourney_id = next_tourney_id_b AND winner_id = player_b_id AND round = 'QF') THEN 'SF'
+             ELSE NULL
+           END
+      INTO next_tourney_result_b;
+
+    next_tourney_code_b := split_part(next_tourney_id_b, '-', 2);
+    this_year_next_id_b := p_year::TEXT || '-' || next_tourney_code_b;
+
+    SELECT name, level, country
+      INTO next_tourney_name_b, next_tourney_level_b, next_tourney_country_b
+      FROM estratego_v1.tournaments
+      WHERE tourney_id = this_year_next_id_b;
+
+    IF next_tourney_name_b IS NULL THEN
+      SELECT name, level, country
+        INTO next_tourney_name_b, next_tourney_level_b, next_tourney_country_b
+        FROM estratego_v1.tournaments
+       WHERE tourney_id = next_tourney_id_b;
+    END IF;
+  END IF;
+
+  -- Categoria: Slam/Finals > Masters 1000 > ATP/WTA tour > Challenger.
+  tourney_level_rank := CASE tourney_level
+    WHEN 'G' THEN 4 WHEN 'F' THEN 4 WHEN 'M' THEN 3 WHEN 'A' THEN 2 WHEN 'C' THEN 1 ELSE 0
+  END;
+  next_level_rank_a := CASE next_tourney_level_a
+    WHEN 'G' THEN 4 WHEN 'F' THEN 4 WHEN 'M' THEN 3 WHEN 'A' THEN 2 WHEN 'C' THEN 1 ELSE NULL
+  END;
+  next_level_rank_b := CASE next_tourney_level_b
+    WHEN 'G' THEN 4 WHEN 'F' THEN 4 WHEN 'M' THEN 3 WHEN 'A' THEN 2 WHEN 'C' THEN 1 ELSE NULL
+  END;
+
+  next_is_upgrade_a := next_level_rank_a IS NOT NULL AND next_level_rank_a > tourney_level_rank;
+  next_is_upgrade_b := next_level_rank_b IS NOT NULL AND next_level_rank_b > tourney_level_rank;
+
+  next_is_home_a := next_tourney_country_a IS NOT NULL AND country_a IS NOT NULL
+                    AND UPPER(country_a) = UPPER(next_tourney_country_a);
+  next_is_home_b := next_tourney_country_b IS NOT NULL AND country_b IS NOT NULL
+                    AND UPPER(country_b) = UPPER(next_tourney_country_b);
+
   -- Weighted score across metrics already stored in prematch_metric_weights.
   -- Cuando a un jugador le falta el dato (sin partidos ese periodo, sin
   -- ranking, etc.) se usa el valor del rival en su lugar (neutral) en vez de
@@ -764,7 +904,15 @@ BEGIN
       'rest_score', rest_score_a,
       'motivation_score', motivation_score_a,
       'alerts', to_jsonb(alerts_a),
-      'last_results', to_jsonb(COALESCE(last_results_a, ARRAY[]::TEXT[]))
+      'last_results', to_jsonb(COALESCE(last_results_a, ARRAY[]::TEXT[])),
+      'next_tournament', CASE WHEN next_tourney_id_a IS NULL THEN NULL ELSE jsonb_build_object(
+        'name', next_tourney_name_a,
+        'level', next_tourney_level_a,
+        'country', next_tourney_country_a,
+        'last_year_round', next_tourney_result_a,
+        'is_category_upgrade', next_is_upgrade_a,
+        'is_home', next_is_home_a
+      ) END
     ),
     'playerB', jsonb_build_object(
       'win_pct_year', CASE WHEN rec_b_year.total > 0 THEN rec_b_year.wins * 100.0 / rec_b_year.total ELSE NULL END,
@@ -789,7 +937,15 @@ BEGIN
       'rest_score', rest_score_b,
       'motivation_score', motivation_score_b,
       'alerts', to_jsonb(alerts_b),
-      'last_results', to_jsonb(COALESCE(last_results_b, ARRAY[]::TEXT[]))
+      'last_results', to_jsonb(COALESCE(last_results_b, ARRAY[]::TEXT[])),
+      'next_tournament', CASE WHEN next_tourney_id_b IS NULL THEN NULL ELSE jsonb_build_object(
+        'name', next_tourney_name_b,
+        'level', next_tourney_level_b,
+        'country', next_tourney_country_b,
+        'last_year_round', next_tourney_result_b,
+        'is_category_upgrade', next_is_upgrade_b,
+        'is_home', next_is_home_b
+      ) END
     ),
     'h2h', jsonb_build_object(
       'wins', h2h_rec.wins,
