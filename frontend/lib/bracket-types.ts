@@ -20,4 +20,7 @@ export type Bracket = {
   surface: string;
   drawSize: number;
   matches: Match[];
+  speedRank?: number | null;
+  speedMin?: number | null;
+  speedMax?: number | null;
 };

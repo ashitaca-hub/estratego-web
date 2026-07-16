@@ -25,6 +25,9 @@ type Bracket = {
   surface: string;
   drawSize: number;
   matches: Match[];
+  speedRank?: number | null;
+  speedMin?: number | null;
+  speedMax?: number | null;
 };
 
 export async function GET(
@@ -271,12 +274,33 @@ export async function GET(
     };
   });
 
+  let speedRank: number | null = null;
+  let speedMin: number | null = null;
+  let speedMax: number | null = null;
+  try {
+    const { data: speedInfo, error: speedError } = await supabase.rpc(
+      "get_tournament_speed_info",
+      { p_tourney_id: id },
+    );
+    if (!speedError && speedInfo) {
+      const parsed = typeof speedInfo === "string" ? JSON.parse(speedInfo) : speedInfo;
+      speedRank = Number.isFinite(Number(parsed?.speed_rank)) ? Number(parsed.speed_rank) : null;
+      speedMin = Number.isFinite(Number(parsed?.speed_min)) ? Number(parsed.speed_min) : null;
+      speedMax = Number.isFinite(Number(parsed?.speed_max)) ? Number(parsed.speed_max) : null;
+    }
+  } catch (err) {
+    console.warn("[tournament] error fetching speed info", err);
+  }
+
   const bracket: Bracket = {
     tourney_id: hdr.tourney_id,
     event: hdr.name,
     surface: hdr.surface,
     drawSize: hdr.draw_size,
     matches,
+    speedRank,
+    speedMin,
+    speedMax,
   };
 
   return new Response(JSON.stringify(bracket), {

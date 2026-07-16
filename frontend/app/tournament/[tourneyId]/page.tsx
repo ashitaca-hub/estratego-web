@@ -244,6 +244,9 @@ type PrematchSummary = {
   defends_round_opponent: string | null;
   court_speed: number | null;
   court_speed_rank?: number | null;
+  court_speed_min?: number | null;
+  court_speed_max?: number | null;
+  surface?: string | null;
   surface_reported?: string | null;
   extras?: {
     country_p?: string | null;
@@ -515,6 +518,9 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
       asNumber(data?.court_speed_rank) ??
       asNumber((meta as any)?.court_speed_rank) ??
       asNumber(data?.court_speed),
+    court_speed_min: asNumber(data?.court_speed_min),
+    court_speed_max: asNumber(data?.court_speed_max),
+    surface: asStringLocal(data?.surface),
     surface_reported:
       asStringLocal(data?.surface_reported) ??
       asStringLocal((meta as any)?.surface_reported) ??
@@ -763,36 +769,112 @@ const getCourtSpeedTier = (score?: number | null): CourtSpeedTier | null => {
   return { stars: 1, label: "Baja", colorClass: "text-slate-500", percent };
 };
 
-const renderCourtSpeedBadge = (score?: number | null, edge?: number | null) => {
+// Frase interpretativa de la afinidad del jugador con este tipo de pista,
+// para acompanar el court speed score ampliado (no solo el numero/estrellas).
+const courtSpeedAffinityText = (tier: CourtSpeedTier): string => {
+  const base = `Este jugador tiene un ${tier.percent}% de afinidad con este tipo de pista`;
+  if (tier.percent >= 70) return `${base}: es uno de los terrenos donde mejor se desenvuelve.`;
+  if (tier.percent >= 50) return `${base}: rinde de forma correcta en este terreno.`;
+  return `${base}, no es donde mejor se desarrolla.`;
+};
+
+const renderCourtSpeedDetail = (
+  score?: number | null,
+  edge?: number | null,
+  align: "left" | "right" = "left",
+) => {
   const tier = getCourtSpeedTier(score);
-  if (!tier) return <span className="text-slate-500">-</span>;
+  if (!tier) return <span className="text-slate-500">Sin datos</span>;
   const edgeTitle =
     typeof edge === "number" && Number.isFinite(edge)
       ? edge >= 0
         ? `${Math.round(edge * 100)}% mejor que su media de carrera en pistas de esta velocidad`
         : `${Math.round(Math.abs(edge) * 100)}% peor que su media de carrera en pistas de esta velocidad`
       : undefined;
+  const isRight = align === "right";
   return (
-    <div className="flex items-center gap-2" title={edgeTitle}>
-      <div className="flex gap-1">
+    <div className={`flex flex-col gap-1.5 ${isRight ? "items-end text-right" : "items-start text-left"}`}>
+      <div className={`flex items-center gap-1 ${isRight ? "flex-row-reverse" : ""}`} title={edgeTitle}>
         {Array.from({ length: 5 }).map((_, idx) => {
           const active = idx < tier.stars;
           return (
             <Star
               key={`court-speed-star-${idx}`}
-              className={`h-4 w-4 ${active ? `${tier.colorClass}` : "text-slate-700"}`}
+              className={`h-6 w-6 ${active ? `${tier.colorClass}` : "text-slate-700"}`}
               fill={active ? "currentColor" : "none"}
               stroke="currentColor"
             />
           );
         })}
       </div>
-      <span className="text-xs text-slate-400">
-        {tier.percent}% {tier.label}
-      </span>
+      <div className="text-base font-semibold text-slate-100">
+        {tier.percent}% <span className="text-sm font-normal text-slate-400">{tier.label}</span>
+      </div>
+      <p className="max-w-[220px] text-xs leading-snug text-slate-400">{courtSpeedAffinityText(tier)}</p>
     </div>
   );
 };
+
+// Colores extremo-a-extremo (flojo -> fuerte) segun la superficie, para la
+// barra de % de victorias por superficie: arcilla/terracota para clay, verde
+// para grass, azul para hard. Mismo criterio de matching que renderSurfaceChip.
+const surfaceGradientColors = (surface?: string | null): [string, string] => {
+  const lower = (surface ?? "").toLowerCase();
+  if (lower.includes("grass")) return ["#e3f4df", "#166534"];
+  if (lower.includes("clay") || lower.includes("terra") || lower.includes("arcilla")) {
+    return ["#f1dcb8", "#a2571f"];
+  }
+  if (lower.includes("hard")) return ["#dbeafe", "#1d4ed8"];
+  return ["#e2e8f0", "#475569"];
+};
+
+// La barra representa 0-100%: el color visible va del extremo "flojo" al
+// extremo "fuerte" del degradado segun cuanto avance el relleno, no un color
+// fijo. Por eso el degradado ocupa siempre el 100% del track y solo se tapa
+// (con un panel del color de fondo) la parte que supera el % del jugador.
+function SurfaceWinBar({ value, surface }: { value: number | null; surface?: string | null }) {
+  const pct = normalizeRatio01(value) * 100;
+  const [from, to] = surfaceGradientColors(surface);
+  return (
+    <div className="relative h-2.5 w-full overflow-hidden rounded-full border border-slate-800 bg-slate-900">
+      <div
+        className="absolute inset-y-0 left-0 w-full"
+        style={{ background: `linear-gradient(90deg, ${from} 0%, ${to} 100%)` }}
+      />
+      <div className="absolute inset-y-0 right-0 bg-slate-900" style={{ width: `${100 - pct}%` }} />
+    </div>
+  );
+}
+
+// Posicion del torneo en el espectro de velocidad de pista de todos los
+// torneos (rank bajo = pista rapida, ver describeCourtSpeed). Izquierda =
+// mas lento, derecha = mas rapido.
+function CourtSpeedPositionBar({
+  rank,
+  min,
+  max,
+}: {
+  rank?: number | null;
+  min?: number | null;
+  max?: number | null;
+}) {
+  if (rank == null || min == null || max == null || !Number.isFinite(rank) || max <= min) {
+    return null;
+  }
+  const clampedRank = Math.min(Math.max(rank, min), max);
+  const position = ((max - clampedRank) / (max - min)) * 100;
+  return (
+    <div
+      className="relative h-2.5 w-full overflow-hidden rounded-full border border-slate-800"
+      style={{ background: "linear-gradient(90deg, #60a5fa 0%, #334155 50%, #f87171 100%)" }}
+    >
+      <div
+        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-slate-100 shadow"
+        style={{ left: `${position}%` }}
+      />
+    </div>
+  );
+}
 
 const RECENT_FORM_LIMIT = 5;
 
@@ -1060,36 +1142,6 @@ const renderTournamentHistoryBadge = (th?: PlayerPrematchStats["tournament_histo
       <History className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span className="leading-tight">{th.label}</span>
     </div>
-  );
-};
-
-const renderSurfaceChip = (surface?: string | null) => {
-  if (!surface) return null;
-  const label = surface.trim();
-  if (!label) return null;
-  const lower = label.toLowerCase();
-  let className = "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ";
-  let icon = "🎾";
-  if (lower.includes("indoor") && lower.includes("hard")) {
-    className += "border-violet-500/40 bg-violet-500/20 text-violet-200";
-    icon = "🏟️";
-  } else if (lower.includes("hard")) {
-    className += "border-sky-500/40 bg-sky-500/20 text-sky-100";
-    icon = "🔵";
-  } else if (lower.includes("grass")) {
-    className += "border-lime-500/40 bg-lime-500/20 text-lime-200";
-    icon = "🌱";
-  } else if (lower.includes("clay") || lower.includes("terra") || lower.includes("arcilla")) {
-    className += "border-orange-500/40 bg-orange-500/20 text-orange-200";
-    icon = "🧱";
-  } else {
-    className += "border-slate-600/40 bg-slate-700/20 text-slate-200";
-  }
-  return (
-    <span className={className}>
-      <span>{icon}</span>
-      <span>{label}</span>
-    </span>
   );
 };
 
@@ -1679,6 +1731,16 @@ const highlight = useMemo(() => {
                       <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_pct_surface} valueB={summary.playerB.win_pct_surface} />
                       </div>
+                      <div className="grid grid-cols-2 gap-3 px-4 pb-1.5">
+                        <SurfaceWinBar
+                          value={summary.playerA.win_pct_surface}
+                          surface={summary.surface ?? summary.surface_reported ?? summary.tournament?.surface}
+                        />
+                        <SurfaceWinBar
+                          value={summary.playerB.win_pct_surface}
+                          surface={summary.surface ?? summary.surface_reported ?? summary.tournament?.surface}
+                        />
+                      </div>
                       <StatRow
                         label="% vs Top 10"
                         playerA={formatPct(summary.playerA.win_pct_vs_top10)}
@@ -1704,82 +1766,28 @@ const highlight = useMemo(() => {
                       <div className="px-4 pb-1.5">
                         <DiffBar valueA={summary.playerA.win_probability} valueB={summary.playerB.win_probability} />
                       </div>
-                      <StatRow
-                        label="Court speed score"
-                        playerA={renderCourtSpeedBadge(summary.playerA.court_speed_score, summary.playerA.court_speed_edge)}
-                        playerB={renderCourtSpeedBadge(summary.playerB.court_speed_score, summary.playerB.court_speed_edge)}
-                        alignPlayerB="left"
-                      />
-                      <StatRow
-                        label="Ventaja local"
-                        playerA={summary.playerA.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
-                        playerB={summary.playerB.home_advantage ? <span className="text-sky-400 font-semibold">Sí</span> : <span>No</span>}
-                      />
-                      <StatRow
-                        label="Defiende puntos"
-                        playerA={
-                          summary.playerA.motivation_score && summary.playerA.motivation_score > 0
-                            ? <span className="text-red-400 font-semibold">Sí</span>
-                            : <span>No</span>
-                        }
-                        playerB={
-                          summary.playerB.motivation_score && summary.playerB.motivation_score > 0
-                            ? <span className="text-red-400 font-semibold">Sí</span>
-                            : <span>No</span>
-                        }
-                      />
                     </div>
-                  </section>
-
-                  <section className="grid gap-3">
-                    <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Contexto</div>
-                      <div className="space-y-2 text-sm text-slate-300">
-                        <div>
-                          Ultimo torneo similar: <span className="font-medium text-slate-100">{summary.last_surface ?? 'Desconocido'}</span>
-                        </div>
-                        <div>
-                          Defiende puntos:
-                          <div className="mt-1 space-y-1 text-xs text-slate-300">
-                            <div>
-                              <span className="font-medium text-slate-100">{top.name}</span>:{" "}
-                              {formatDefendsRoundLabel(summary.playerA.defends_round) ?? "Ninguno"}
-                            </div>
-                            <div>
-                              <span className="font-medium text-slate-100">{bottom.name}</span>:{" "}
-                              {formatDefendsRoundLabel(summary.playerB.defends_round) ?? "Ninguno"}
-                            </div>
-                            {summary.defends_round && (
-                              <div className="pt-1 text-slate-400">
-                                <span className="font-medium text-slate-100">Meta</span>: {summary.defends_round}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {renderSurfaceChip(summary.surface_reported ?? summary.tournament?.surface ?? null)}
-                            {(() => {
-                              const rank = summary.court_speed_rank ?? summary.court_speed ?? null;
-                              if (rank == null) {
-                                return <span>Velocidad: N/A</span>;
-                              }
-                              const descriptor = describeCourtSpeed(rank);
-                              return (
-                                <span>
-                                  Velocidad: #{rank}
-                                  {descriptor ? ` (${descriptor})` : ""}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          {(summary.surface_reported ?? summary.tournament?.surface) && (
-                            <div className="text-xs text-slate-400">
-                              Superficie: {summary.surface_reported ?? summary.tournament?.surface}
-                            </div>
-                          )}
-                        </div>
+                    <div className="border-t border-slate-800/60 px-4 py-4">
+                      <div className="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Court speed score
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {renderCourtSpeedDetail(summary.playerA.court_speed_score, summary.playerA.court_speed_edge, "left")}
+                        {renderCourtSpeedDetail(summary.playerB.court_speed_score, summary.playerB.court_speed_edge, "right")}
+                      </div>
+                      {summary.court_speed_rank != null && (
+                        <div className="mt-4">
+                          <div className="mb-1 text-center text-xs text-slate-400">
+                            {bracket?.event ? `${bracket.event} — ` : ""}Velocidad de esta pista: #{summary.court_speed_rank}
+                            {describeCourtSpeed(summary.court_speed_rank) ? ` (${describeCourtSpeed(summary.court_speed_rank)})` : ""}
+                          </div>
+                          <CourtSpeedPositionBar
+                            rank={summary.court_speed_rank}
+                            min={summary.court_speed_min}
+                            max={summary.court_speed_max}
+                          />
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -3055,7 +3063,20 @@ function TournamentBracketPage() {
       </div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-semibold">{bracket.event}</h1>
+            {bracket.speedRank != null && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">
+                  Velocidad #{bracket.speedRank}
+                  {describeCourtSpeed(bracket.speedRank) ? ` (${describeCourtSpeed(bracket.speedRank)})` : ""}
+                </span>
+                <div className="w-28">
+                  <CourtSpeedPositionBar rank={bracket.speedRank} min={bracket.speedMin} max={bracket.speedMax} />
+                </div>
+              </div>
+            )}
+          </div>
           <p className="text-sm text-slate-400">
             Draw {bracket.drawSize} - Superficie: {bracket.surface}
           </p>

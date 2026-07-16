@@ -97,6 +97,9 @@ type PrematchSummaryResponse = {
   defends_round: string | null;
   court_speed: number | null;
   court_speed_rank?: number | null;
+  court_speed_min?: number | null;
+  court_speed_max?: number | null;
+  surface?: string | null;
   surface_reported?: string | null;
   tournament?: TournamentSummary;
   extras?: ExtrasSummary;
@@ -1457,6 +1460,10 @@ const formatPrematchSummary = (raw: unknown): PrematchSummaryResponse => {
     asNumber(metaRecord?.["court_speed"]) ??
     asNumber(baseRecord["court_speed"]) ??
     asNumber(baseRecord["speed"]);
+  const surface = asString(baseRecord["surface"]);
+  const courtSpeedRank = asNumber(baseRecord["tourney_speed_rank"]);
+  const courtSpeedMin = asNumber(baseRecord["tourney_speed_min"]);
+  const courtSpeedMax = asNumber(baseRecord["tourney_speed_max"]);
 
   const extras = parseExtras(baseRecord);
   const tournament = parseTournament(baseRecord);
@@ -1493,6 +1500,10 @@ const formatPrematchSummary = (raw: unknown): PrematchSummaryResponse => {
     last_surface: lastSurface,
     defends_round: defendsRound,
     court_speed: courtSpeed,
+    court_speed_rank: courtSpeedRank,
+    court_speed_min: courtSpeedMin,
+    court_speed_max: courtSpeedMax,
+    surface,
     tournament,
     extras,
   };

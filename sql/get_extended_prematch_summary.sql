@@ -58,6 +58,8 @@ DECLARE
   tourney_surf TEXT;
   tourney_speed_id TEXT;
   tourney_speed_rank INT;
+  tourney_speed_min INT;
+  tourney_speed_max INT;
   tourney_country TEXT;
   ranking_a INT;
   ranking_b INT;
@@ -160,6 +162,14 @@ BEGIN
     INTO tourney_speed_rank
     FROM estratego_v1.court_speed_ranking_norm
     WHERE tourney_id = tourney_speed_id;
+
+  -- Rango completo de speed_rank (para poder ubicar este torneo en una barra
+  -- lento->rapido en el frontend). estratego_v1 no esta expuesto via
+  -- PostgREST (solo public/graphql_public), asi que el frontend no puede
+  -- consultar esta tabla directamente: se expone aqui, dentro del RPC.
+  SELECT MIN(speed_rank), MAX(speed_rank)
+    INTO tourney_speed_min, tourney_speed_max
+    FROM estratego_v1.court_speed_ranking_norm;
 
   -- Win % on surface over the last 5 seasons (incl. current year)
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins_surf,
@@ -1129,7 +1139,11 @@ BEGIN
     'meta', jsonb_build_object(
       'defends_round', meta_defend_round,
       'defends_round_opponent', defend_label_b
-    )
+    ),
+    'surface', tourney_surf,
+    'tourney_speed_rank', tourney_speed_rank,
+    'tourney_speed_min', tourney_speed_min,
+    'tourney_speed_max', tourney_speed_max
   );
 END;
 $function$;
