@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, ChevronRight, ArrowLeft, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X, TrendingUp, House, Repeat } from "lucide-react";
+import { AlertTriangle, ChevronRight, ArrowLeft, Flame, Star, Check, Loader2, BarChart3, Trophy, Medal, SlidersHorizontal, Maximize2, X, TrendingUp, House, Repeat, History } from "lucide-react";
 import {
   WinProbabilityBar,
   normalizeProbabilityValue,
@@ -171,6 +171,7 @@ type PlayerPrematchStats = {
   win_pct_vs_top10: number | null;
   win_pct_fifth_set: number | null;
   court_speed_score: number | null;
+  court_speed_edge?: number | null;
   win_score: number | null;
   win_probability: number | null;
   ranking: number | null;
@@ -194,6 +195,13 @@ type PlayerPrematchStats = {
     last_year_round: string | null;
     is_category_upgrade: boolean;
     is_home: boolean;
+  } | null;
+  tournament_history?: {
+    times_played: number | null;
+    titles: number | null;
+    finals_reached: number | null;
+    semis_reached: number | null;
+    label: string | null;
   } | null;
 };
 
@@ -328,6 +336,7 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         (p as any)?.win_pct_bo5,
     ),
     court_speed_score: asNumber(p?.court_speed_score),
+    court_speed_edge: asNumber(p?.court_speed_edge),
     win_score: asNumber(p?.win_score),
     win_probability: asNumber(p?.win_probability),
     ranking: asNumber(p?.ranking),
@@ -389,6 +398,19 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         last_year_round: lastYearRound,
         is_category_upgrade: isCategoryUpgrade,
         is_home: isHome,
+      };
+    })(),
+    tournament_history: (() => {
+      const th = asRecord(p?.tournament_history);
+      if (!th) return undefined;
+      const label = asStringLocal(th.label);
+      if (!label) return undefined;
+      return {
+        times_played: asNumber(th.times_played),
+        titles: asNumber(th.titles),
+        finals_reached: asNumber(th.finals_reached),
+        semis_reached: asNumber(th.semis_reached),
+        label,
       };
     })(),
   });
@@ -741,11 +763,17 @@ const getCourtSpeedTier = (score?: number | null): CourtSpeedTier | null => {
   return { stars: 1, label: "Baja", colorClass: "text-slate-500", percent };
 };
 
-const renderCourtSpeedBadge = (score?: number | null) => {
+const renderCourtSpeedBadge = (score?: number | null, edge?: number | null) => {
   const tier = getCourtSpeedTier(score);
   if (!tier) return <span className="text-slate-500">-</span>;
+  const edgeTitle =
+    typeof edge === "number" && Number.isFinite(edge)
+      ? edge >= 0
+        ? `${Math.round(edge * 100)}% mejor que su media de carrera en pistas de esta velocidad`
+        : `${Math.round(Math.abs(edge) * 100)}% peor que su media de carrera en pistas de esta velocidad`
+      : undefined;
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" title={edgeTitle}>
       <div className="flex gap-1">
         {Array.from({ length: 5 }).map((_, idx) => {
           const active = idx < tier.stars;
@@ -1021,6 +1049,16 @@ const renderNextTournamentBadge = (nt?: PlayerPrematchStats["next_tournament"]) 
       <span className="leading-tight">
         Semana que viene{tourneyLabel}: {reasons.join(", ")}.
       </span>
+    </div>
+  );
+};
+
+const renderTournamentHistoryBadge = (th?: PlayerPrematchStats["tournament_history"]) => {
+  if (!th || !th.label) return null;
+  return (
+    <div className="mt-2 flex items-start gap-2 rounded-md border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-xs text-violet-100">
+      <History className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span className="leading-tight">{th.label}</span>
     </div>
   );
 };
@@ -1537,6 +1575,7 @@ const highlight = useMemo(() => {
                         })()}
                         {renderAlertBadges(playerAAlerts.rest)}
                         {renderNextTournamentBadge(summary?.playerA?.next_tournament)}
+                        {renderTournamentHistoryBadge(summary?.playerA?.tournament_history)}
                       </div>
                       <div className="flex flex-col items-center gap-2">
                         {renderOddsBox(summary?.odds, "playerB", oddsB, probability != null ? 1 - probability : null)}
@@ -1600,6 +1639,7 @@ const highlight = useMemo(() => {
                         })()}
                         {renderAlertBadges(playerBAlerts.rest)}
                         {renderNextTournamentBadge(summary?.playerB?.next_tournament)}
+                        {renderTournamentHistoryBadge(summary?.playerB?.tournament_history)}
                       </div>
                     </div>
                   </div>
@@ -1666,8 +1706,8 @@ const highlight = useMemo(() => {
                       </div>
                       <StatRow
                         label="Court speed score"
-                        playerA={renderCourtSpeedBadge(summary.playerA.court_speed_score)}
-                        playerB={renderCourtSpeedBadge(summary.playerB.court_speed_score)}
+                        playerA={renderCourtSpeedBadge(summary.playerA.court_speed_score, summary.playerA.court_speed_edge)}
+                        playerB={renderCourtSpeedBadge(summary.playerB.court_speed_score, summary.playerB.court_speed_edge)}
                         alignPlayerB="left"
                       />
                       <StatRow

@@ -11,6 +11,14 @@ type NextTournamentSummary = {
   is_home: boolean;
 };
 
+type TournamentHistorySummary = {
+  times_played: number | null;
+  titles: number | null;
+  finals_reached: number | null;
+  semis_reached: number | null;
+  label: string | null;
+};
+
 type PlayerSummary = {
   win_pct_year: number | null;
   win_pct_surface: number | null;
@@ -22,6 +30,7 @@ type PlayerSummary = {
   win_pct_vs_top10: number | null;
   win_pct_fifth_set: number | null;
   court_speed_score: number | null;
+  court_speed_edge?: number | null;
   win_score: number | null;
   win_probability: number | null;
   defends_round?: string | null;
@@ -35,6 +44,7 @@ type PlayerSummary = {
   points_delta?: number | null;
   last_results?: string[] | null;
   next_tournament?: NextTournamentSummary | null;
+  tournament_history?: TournamentHistorySummary | null;
 };
 
 type TournamentSummary = {
@@ -1160,6 +1170,11 @@ const buildPlayer = (
         `court_speed_rating_${prefix}`,
       ]),
     );
+  const courtSpeedEdge =
+    pickNumber(playerRecord, ["court_speed_edge"]) ??
+    getFromPrefixes((source, prefix) =>
+      pickNumber(source, [`${prefix}_court_speed_edge`, `court_speed_edge_${prefix}`]),
+    );
   const winScore =
     pickNumber(playerRecord, ["win_score", "win_rating", "win_index"]) ??
     getFromPrefixes((source, prefix) =>
@@ -1296,6 +1311,17 @@ const buildPlayer = (
       }
     : null;
 
+  const tournamentHistoryRecord = asRecord(playerRecord?.["tournament_history"]);
+  const tournamentHistory: TournamentHistorySummary | null = tournamentHistoryRecord
+    ? {
+        times_played: asNumber(tournamentHistoryRecord["times_played"]),
+        titles: asNumber(tournamentHistoryRecord["titles"]),
+        finals_reached: asNumber(tournamentHistoryRecord["finals_reached"]),
+        semis_reached: asNumber(tournamentHistoryRecord["semis_reached"]),
+        label: asString(tournamentHistoryRecord["label"]),
+      }
+    : null;
+
   return {
     win_pct_year: winPctYear,
     win_pct_surface: winPctSurface,
@@ -1307,6 +1333,7 @@ const buildPlayer = (
     win_pct_vs_top10: winPctVsTop10,
     win_pct_fifth_set: winPctFifthSet,
     court_speed_score: courtSpeedScore,
+    court_speed_edge: courtSpeedEdge,
     win_score: winScore,
    win_probability: winProbability,
     defends_round: defendsRound,
@@ -1320,6 +1347,7 @@ const buildPlayer = (
     alerts,
     last_results: normalizedLastResults && normalizedLastResults.length > 0 ? normalizedLastResults : undefined,
     next_tournament: nextTournament,
+    tournament_history: tournamentHistory,
   };
 };
 

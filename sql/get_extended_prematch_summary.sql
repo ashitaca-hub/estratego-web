@@ -114,6 +114,18 @@ DECLARE
   next_is_upgrade_b BOOLEAN := FALSE;
   next_is_home_a BOOLEAN := FALSE;
   next_is_home_b BOOLEAN := FALSE;
+
+  -- Especializacion relativa por velocidad de pista (court_speed_edge) y
+  -- rendimiento historico del jugador en ESTE torneo a traves de los años
+  -- (tournament_history).
+  win_pct_career_a FLOAT;
+  win_pct_career_b FLOAT;
+  court_speed_edge_a FLOAT;
+  court_speed_edge_b FLOAT;
+  tourney_hist_a RECORD;
+  tourney_hist_b RECORD;
+  tourney_hist_label_a TEXT := NULL;
+  tourney_hist_label_b TEXT := NULL;
 BEGIN
   -- Win % in current year
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins,
@@ -532,6 +544,41 @@ BEGIN
     WHERE (winner_id = player_b_id OR loser_id = player_b_id)
       AND cs.speed_rank BETWEEN tourney_speed_rank - 10 AND tourney_speed_rank + 10;
 
+  -- court_speed_score es un % de victorias absoluto en pistas de velocidad
+  -- similar; no distingue "juega bien en general" de "esta es su
+  -- especialidad". court_speed_edge compara ese % contra su % de victorias
+  -- de carrera (todas las superficies/velocidades) para medir la diferencia
+  -- relativa. No se usa en el bucle de ponderacion, es solo informativo.
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_pct_career_a
+    FROM estratego_v1.matches_full
+    WHERE winner_id = player_a_id OR loser_id = player_a_id;
+
+  SELECT COUNT(*) FILTER (WHERE winner_id = player_b_id)::FLOAT / NULLIF(COUNT(*), 0)
+    INTO win_pct_career_b
+    FROM estratego_v1.matches_full
+    WHERE winner_id = player_b_id OR loser_id = player_b_id;
+
+  IF court_speed_score_a IS NOT NULL AND win_pct_career_a IS NOT NULL THEN
+    court_speed_edge_a := court_speed_score_a - win_pct_career_a;
+  END IF;
+
+  IF court_speed_score_b IS NOT NULL AND win_pct_career_b IS NOT NULL THEN
+    court_speed_edge_b := court_speed_score_b - win_pct_career_b;
+  END IF;
+
+  IF court_speed_edge_a IS NOT NULL AND court_speed_edge_a >= 0.20 THEN
+    alerts_a := array_append(alerts_a, format('Rinde un %s%% mejor de lo habitual en pistas de esta velocidad; posible especialidad.', ROUND((court_speed_edge_a * 100)::NUMERIC, 0)));
+  ELSIF court_speed_edge_a IS NOT NULL AND court_speed_edge_a <= -0.20 THEN
+    alerts_a := array_append(alerts_a, format('Rinde un %s%% peor de lo habitual en pistas de esta velocidad; posible punto debil.', ROUND((ABS(court_speed_edge_a) * 100)::NUMERIC, 0)));
+  END IF;
+
+  IF court_speed_edge_b IS NOT NULL AND court_speed_edge_b >= 0.20 THEN
+    alerts_b := array_append(alerts_b, format('Rinde un %s%% mejor de lo habitual en pistas de esta velocidad; posible especialidad.', ROUND((court_speed_edge_b * 100)::NUMERIC, 0)));
+  ELSIF court_speed_edge_b IS NOT NULL AND court_speed_edge_b <= -0.20 THEN
+    alerts_b := array_append(alerts_b, format('Rinde un %s%% peor de lo habitual en pistas de esta velocidad; posible punto debil.', ROUND((ABS(court_speed_edge_b) * 100)::NUMERIC, 0)));
+  END IF;
+
   -- Defends-round / motivation_score se calculan ANTES del bucle de
   -- ponderacion (mas abajo). Antes se calculaban despues, con lo cual el
   -- bucle siempre usaba motivation_score_a/b = 0 (su valor inicial
@@ -612,6 +659,24 @@ BEGIN
 
   IF points_current_b IS NOT NULL AND points_prev_b IS NOT NULL THEN
     points_delta_b := points_current_b - points_prev_b;
+  END IF;
+
+  -- Aviso cuando el jugador tiene menos puntos ahora que en esta misma
+  -- edicion el año pasado: puede indicar que busca recuperar puntos en
+  -- torneos de categoria inferior. Silencio si no jugo la edicion anterior
+  -- (points_delta queda NULL), igual que el resto de avisos de esta funcion.
+  IF points_delta_a IS NOT NULL AND points_delta_a < 0 THEN
+    alerts_a := array_append(alerts_a, format(
+      'Tiene %s puntos menos que hace un ano en este torneo; podria buscar recuperar puntos en categorias inferiores.',
+      ABS(points_delta_a)
+    ));
+  END IF;
+
+  IF points_delta_b IS NOT NULL AND points_delta_b < 0 THEN
+    alerts_b := array_append(alerts_b, format(
+      'Tiene %s puntos menos que hace un ano en este torneo; podria buscar recuperar puntos en categorias inferiores.',
+      ABS(points_delta_b)
+    ));
   END IF;
 
   SELECT CASE
@@ -706,6 +771,99 @@ BEGIN
 
   motivation_score_a := LEAST(1.0, defend_component_a);
   motivation_score_b := LEAST(1.0, defend_component_b);
+
+  -- Historial del jugador en ESTE torneo especifico, a traves de TODOS los
+  -- años (no solo el año pasado como round_last_a/b). Reusa tourney_base_int
+  -- ya calculado arriba. lost_first_match detecta ediciones donde el
+  -- jugador solo disputo un partido (y lo perdio) en esa edicion. Las
+  -- queries se ejecutan siempre (sin IF tourney_base_int IS NOT NULL):
+  -- si tourney_base_int es NULL, el join nunca casa (NULL = x es NULL) y
+  -- devuelve 0 filas, con lo cual times_played/titles/etc. quedan en 0 en
+  -- vez de dejar tourney_hist_a/b como un RECORD sin asignar (lo cual
+  -- rompería el "tourney_hist_a.titles >= 1" de mas abajo con un error).
+    SELECT
+      COUNT(*) AS times_played,
+      COUNT(*) FILTER (WHERE is_champion) AS titles,
+      COUNT(*) FILTER (WHERE reached_final) AS finals_reached,
+      COUNT(*) FILTER (WHERE reached_semis) AS semis_reached,
+      COUNT(*) FILTER (WHERE lost_first_match) AS first_match_exits
+      INTO tourney_hist_a
+      FROM (
+        SELECT
+          pm.tourney_id,
+          BOOL_OR(pm.won AND pm.round_rank = 7) AS is_champion,
+          BOOL_OR(pm.round_rank = 7) AS reached_final,
+          BOOL_OR(pm.round_rank >= 6) AS reached_semis,
+          (COUNT(*) = 1 AND BOOL_AND(NOT pm.won)) AS lost_first_match
+        FROM (
+          SELECT
+            mf.tourney_id,
+            (mf.winner_id = player_a_id) AS won,
+            CASE UPPER(mf.round)
+              WHEN 'F' THEN 7 WHEN 'SF' THEN 6 WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4 WHEN 'R32' THEN 3 WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1 ELSE 0
+            END AS round_rank
+          FROM estratego_v1.matches_full mf
+          JOIN estratego_v1.tournaments t ON t.tourney_id = mf.tourney_id
+           AND split_part(t.tourney_id, '-', 2) ~ '^\d+$'
+           AND split_part(t.tourney_id, '-', 2)::INT = tourney_base_int
+          WHERE mf.winner_id = player_a_id OR mf.loser_id = player_a_id
+        ) pm
+        GROUP BY pm.tourney_id
+      ) per_edition_a;
+
+    SELECT
+      COUNT(*) AS times_played,
+      COUNT(*) FILTER (WHERE is_champion) AS titles,
+      COUNT(*) FILTER (WHERE reached_final) AS finals_reached,
+      COUNT(*) FILTER (WHERE reached_semis) AS semis_reached,
+      COUNT(*) FILTER (WHERE lost_first_match) AS first_match_exits
+      INTO tourney_hist_b
+      FROM (
+        SELECT
+          pm.tourney_id,
+          BOOL_OR(pm.won AND pm.round_rank = 7) AS is_champion,
+          BOOL_OR(pm.round_rank = 7) AS reached_final,
+          BOOL_OR(pm.round_rank >= 6) AS reached_semis,
+          (COUNT(*) = 1 AND BOOL_AND(NOT pm.won)) AS lost_first_match
+        FROM (
+          SELECT
+            mf.tourney_id,
+            (mf.winner_id = player_b_id) AS won,
+            CASE UPPER(mf.round)
+              WHEN 'F' THEN 7 WHEN 'SF' THEN 6 WHEN 'QF' THEN 5
+              WHEN 'R16' THEN 4 WHEN 'R32' THEN 3 WHEN 'R64' THEN 2
+              WHEN 'R128' THEN 1 ELSE 0
+            END AS round_rank
+          FROM estratego_v1.matches_full mf
+          JOIN estratego_v1.tournaments t ON t.tourney_id = mf.tourney_id
+           AND split_part(t.tourney_id, '-', 2) ~ '^\d+$'
+           AND split_part(t.tourney_id, '-', 2)::INT = tourney_base_int
+          WHERE mf.winner_id = player_b_id OR mf.loser_id = player_b_id
+        ) pm
+        GROUP BY pm.tourney_id
+      ) per_edition_b;
+
+  IF tourney_hist_a.titles >= 1 THEN
+    tourney_hist_label_a := format('Ha ganado este torneo %s vez(es).', tourney_hist_a.titles);
+  ELSIF tourney_hist_a.finals_reached >= 1 THEN
+    tourney_hist_label_a := format('Ha llegado a %s final(es) de este torneo.', tourney_hist_a.finals_reached);
+  ELSIF tourney_hist_a.semis_reached >= 1 THEN
+    tourney_hist_label_a := format('Ha llegado a %s semifinal(es) de este torneo.', tourney_hist_a.semis_reached);
+  ELSIF tourney_hist_a.times_played >= 2 AND tourney_hist_a.first_match_exits = tourney_hist_a.times_played THEN
+    tourney_hist_label_a := format('En %s participaciones nunca ha pasado de primera ronda en este torneo.', tourney_hist_a.times_played);
+  END IF;
+
+  IF tourney_hist_b.titles >= 1 THEN
+    tourney_hist_label_b := format('Ha ganado este torneo %s vez(es).', tourney_hist_b.titles);
+  ELSIF tourney_hist_b.finals_reached >= 1 THEN
+    tourney_hist_label_b := format('Ha llegado a %s final(es) de este torneo.', tourney_hist_b.finals_reached);
+  ELSIF tourney_hist_b.semis_reached >= 1 THEN
+    tourney_hist_label_b := format('Ha llegado a %s semifinal(es) de este torneo.', tourney_hist_b.semis_reached);
+  ELSIF tourney_hist_b.times_played >= 2 AND tourney_hist_b.first_match_exits = tourney_hist_b.times_played THEN
+    tourney_hist_label_b := format('En %s participaciones nunca ha pasado de primera ronda en este torneo.', tourney_hist_b.times_played);
+  END IF;
 
   -- Proximo torneo: el que cada jugador disputo el año pasado justo despues
   -- de la edicion anterior de ESTE torneo (dato real de matches_full, no una
@@ -895,6 +1053,7 @@ BEGIN
       'win_pct_vs_top10', win_vs_rankband_a,
       'win_pct_fifth_set', win_pct_fifth_set_a,
       'court_speed_score', court_speed_score_a,
+      'court_speed_edge', court_speed_edge_a,
       'win_score', win_score_a,
       'win_probability', prob_a,
       'last_year_round', round_last_a,
@@ -912,6 +1071,13 @@ BEGIN
         'last_year_round', next_tourney_result_a,
         'is_category_upgrade', next_is_upgrade_a,
         'is_home', next_is_home_a
+      ) END,
+      'tournament_history', CASE WHEN tourney_hist_a.times_played IS NULL OR tourney_hist_a.times_played = 0 OR tourney_hist_label_a IS NULL THEN NULL ELSE jsonb_build_object(
+        'times_played', tourney_hist_a.times_played,
+        'titles', tourney_hist_a.titles,
+        'finals_reached', tourney_hist_a.finals_reached,
+        'semis_reached', tourney_hist_a.semis_reached,
+        'label', tourney_hist_label_a
       ) END
     ),
     'playerB', jsonb_build_object(
@@ -928,6 +1094,7 @@ BEGIN
       'win_pct_vs_top10', win_vs_rankband_b,
       'win_pct_fifth_set', win_pct_fifth_set_b,
       'court_speed_score', court_speed_score_b,
+      'court_speed_edge', court_speed_edge_b,
       'win_score', win_score_b,
       'win_probability', prob_b,
       'last_year_round', round_last_b,
@@ -945,6 +1112,13 @@ BEGIN
         'last_year_round', next_tourney_result_b,
         'is_category_upgrade', next_is_upgrade_b,
         'is_home', next_is_home_b
+      ) END,
+      'tournament_history', CASE WHEN tourney_hist_b.times_played IS NULL OR tourney_hist_b.times_played = 0 OR tourney_hist_label_b IS NULL THEN NULL ELSE jsonb_build_object(
+        'times_played', tourney_hist_b.times_played,
+        'titles', tourney_hist_b.titles,
+        'finals_reached', tourney_hist_b.finals_reached,
+        'semis_reached', tourney_hist_b.semis_reached,
+        'label', tourney_hist_label_b
       ) END
     ),
     'h2h', jsonb_build_object(
