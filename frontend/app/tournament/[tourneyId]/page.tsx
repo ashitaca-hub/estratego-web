@@ -1830,82 +1830,71 @@ function PlayerStatsDialog({
   const tournamentName = bracket?.event ?? data?.filters.tourney_id ?? null;
   const roundLabel = match?.round ?? null;
 
-  const metrics: Array<{
-    key: keyof PlayerStatsMetrics;
+  type StatColumnKey = "best_of_3" | "same_surface" | "previous_tournament" | "opponent";
+
+  const columns: Array<{ key: StatColumnKey; label: string }> = [
+    { key: "best_of_3", label: "Bo3 (2 años)" },
+    { key: "same_surface", label: "Misma superficie" },
+    { key: "previous_tournament", label: "Torneo anterior" },
+    { key: "opponent", label: "Rival (Bo3+superficie)" },
+  ];
+
+  const rows: Array<{
+    key: "aces" | "double_faults";
     label: string;
-    sampleKey: keyof PlayerStatsSamples;
-    diffKey?: keyof PlayerStatsMetrics;
-    diffLabel?: string;
+    metricKeys: Record<StatColumnKey, keyof PlayerStatsMetrics>;
+    sampleKeys: Record<StatColumnKey, keyof PlayerStatsSamples>;
+    diffKeys: Partial<Record<StatColumnKey, keyof PlayerStatsMetrics>>;
   }> = [
     {
-      key: "aces_previous_tournament",
-      label: "Media de aces en el torneo del año anterior",
-      sampleKey: "aces_previous_tournament",
-      diffKey: "aces_previous_minus_best_of_3",
-      diffLabel: "vs media 3 sets",
+      key: "aces",
+      label: "Aces",
+      metricKeys: {
+        best_of_3: "aces_best_of_3",
+        same_surface: "aces_same_surface",
+        previous_tournament: "aces_previous_tournament",
+        opponent: "opponent_aces_best_of_3_same_surface",
+      },
+      sampleKeys: {
+        best_of_3: "aces_best_of_3",
+        same_surface: "aces_same_surface",
+        previous_tournament: "aces_previous_tournament",
+        opponent: "opponent_aces_best_of_3_same_surface",
+      },
+      diffKeys: { previous_tournament: "aces_previous_minus_best_of_3" },
     },
     {
-      key: "double_faults_previous_tournament",
-      label: "Media de dobles faltas en el torneo del año anterior",
-      sampleKey: "double_faults_previous_tournament",
-      diffKey: "double_faults_previous_minus_best_of_3",
-      diffLabel: "vs media 3 sets",
-    },
-    {
-      key: "aces_best_of_3",
-      label: "Media de aces (partidos a 3 sets)",
-      sampleKey: "aces_best_of_3",
-    },
-    {
-      key: "aces_same_surface",
-      label: "Media de aces (misma superficie del torneo actual)",
-      sampleKey: "aces_same_surface",
-    },
-    {
-      key: "double_faults_best_of_3",
-      label: "Media de dobles faltas (partidos a 3 sets)",
-      sampleKey: "double_faults_best_of_3",
-    },
-    {
-      key: "double_faults_same_surface",
-      label: "Media de dobles faltas (misma superficie del torneo actual)",
-      sampleKey: "double_faults_same_surface",
-    },
-    {
-      key: "opponent_aces_best_of_3_same_surface",
-      label: "Aces recibidos (partidos a 3 sets, misma superficie)",
-      sampleKey: "opponent_aces_best_of_3_same_surface",
-    },
-    {
-      key: "opponent_double_faults_best_of_3_same_surface",
-      label:
-        "Dobles faltas cometidas por el rival (partidos a 3 sets, misma superficie)",
-      sampleKey: "opponent_double_faults_best_of_3_same_surface",
+      key: "double_faults",
+      label: "Dobles faltas",
+      metricKeys: {
+        best_of_3: "double_faults_best_of_3",
+        same_surface: "double_faults_same_surface",
+        previous_tournament: "double_faults_previous_tournament",
+        opponent: "opponent_double_faults_best_of_3_same_surface",
+      },
+      sampleKeys: {
+        best_of_3: "double_faults_best_of_3",
+        same_surface: "double_faults_same_surface",
+        previous_tournament: "double_faults_previous_tournament",
+        opponent: "opponent_double_faults_best_of_3_same_surface",
+      },
+      diffKeys: { previous_tournament: "double_faults_previous_minus_best_of_3" },
     },
   ];
 
-  const formatValue = (value: number | null): string =>
-    value === null ? "Sin datos" : value.toFixed(2);
-
-  const renderSamples = (sampleKey: keyof PlayerStatsSamples): string => {
-    const sample = data?.samples?.[sampleKey] ?? 0;
-    return sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "Sin datos";
-  };
-
-  const renderDiff = (value: number | null, label: string): { text: string; className: string } | null => {
-    if (value === null) return null;
-    const formatted = value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
-    const prefix = label.trim() ? `Delta ${label}:` : "Delta:";
-    if (value === 0) {
-      return {
-        text: `${prefix} ${formatted}`,
-        className: "text-slate-400",
-      };
-    }
-    return {
-      text: `${prefix} ${formatted}`,
-      className: value > 0 ? "text-emerald-400" : "text-red-400",
-    };
+  // Intensidad de color segun el valor DENTRO de la misma fila (Aces y
+  // Dobles faltas tienen escalas muy distintas, asi que cada fila se
+  // normaliza con su propio min/max) - mismo esquema de color (verde,
+  // rampa de alpha) que la tabla de Analytics.
+  const colorForValueInRow = (value: number | null, rowValues: Array<number | null>): string => {
+    if (value === null) return "transparent";
+    const nums = rowValues.filter((v): v is number => v !== null);
+    if (nums.length === 0) return "transparent";
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    const ratio = max === min ? 0.5 : (value - min) / (max - min);
+    const alpha = 0.08 + ratio * 0.55;
+    return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
   };
 
   return (
@@ -1960,34 +1949,53 @@ function PlayerStatsDialog({
               <span>{error}</span>
             </div>
           ) : data ? (
-            <div className="grid gap-3">
-              {metrics.map(({ key, label, sampleKey, diffKey, diffLabel }) => {
-                const value = data.stats?.[key] ?? null;
-                const diffInfo = diffKey
-                  ? renderDiff(data.stats?.[diffKey] ?? null, diffLabel ?? "")
-                  : null;
-                return (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
-                  >
-                    <div className="max-w-xs text-sm text-slate-200">{label}</div>
-                    <div className="text-right space-y-1">
-                      <div className="text-lg font-semibold text-white">
-                        {formatValue(value)}
-                      </div>
-                      {diffInfo && (
-                        <div className={`text-xs font-medium ${diffInfo.className}`}>
-                          {diffInfo.text}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-500">
-                        Muestras: {renderSamples(sampleKey)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+              <table className="min-w-full divide-y divide-slate-800 text-sm">
+                <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Métrica</th>
+                    {columns.map((col) => (
+                      <th key={col.key} className="px-4 py-3 text-right font-semibold">
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {rows.map((row) => {
+                    const rowValues = columns.map((col) => data.stats?.[row.metricKeys[col.key]] ?? null);
+                    return (
+                      <tr key={row.key}>
+                        <td className="px-4 py-3 font-medium text-slate-200">{row.label}</td>
+                        {columns.map((col, idx) => {
+                          const value = rowValues[idx];
+                          const sample = data.samples?.[row.sampleKeys[col.key]] ?? 0;
+                          const diffKey = row.diffKeys[col.key];
+                          const diffValue = diffKey ? data.stats?.[diffKey] ?? null : null;
+                          const titleParts = [
+                            `Muestras: ${sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "sin datos"}`,
+                          ];
+                          if (diffValue !== null) {
+                            titleParts.push(
+                              `Delta vs Bo3: ${diffValue > 0 ? "+" : ""}${diffValue.toFixed(2)}`,
+                            );
+                          }
+                          return (
+                            <td
+                              key={col.key}
+                              className="px-4 py-3 text-right tabular-nums font-semibold text-slate-100"
+                              style={{ backgroundColor: colorForValueInRow(value, rowValues) }}
+                              title={titleParts.join(" · ")}
+                            >
+                              {value !== null ? value.toFixed(1) : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400">
@@ -1996,9 +2004,11 @@ function PlayerStatsDialog({
           )}
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-500">
-            Los promedios se calculan a partir de <code>estratego_v1.matches</code>,
-            considerando <span className="font-medium">best_of = 3</span> y la
-            superficie indicada cuando aplica. Los valores nulos no influyen en la media.
+            Los promedios se calculan a partir de <code>estratego_v1.matches_full</code>,
+            considerando <span className="font-medium">best_of = 3</span> y los
+            últimos 2 años (salvo "Torneo anterior", que se refiere siempre a esa
+            edición concreta). Pasa el ratón sobre cada celda para ver muestras y
+            variación. Los valores nulos no influyen en la media.
           </div>
         </div>
 
