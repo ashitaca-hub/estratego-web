@@ -1882,24 +1882,55 @@ function PlayerStatsDialog({
     },
   ];
 
-  // Intensidad de color segun el valor DENTRO de la misma fila (Aces y
-  // Dobles faltas tienen escalas muy distintas, asi que cada fila se
-  // normaliza con su propio min/max) - mismo esquema de color (verde,
-  // rampa de alpha) que la tabla de Analytics.
-  const colorForValueInRow = (value: number | null, rowValues: Array<number | null>): string => {
+  // Rampa "frio -> caliente" (azul -> ambar -> rojo) para las columnas de
+  // magnitud (Bo3 / Misma superficie / Rival). Se normaliza con el min/max
+  // DENTRO de la misma fila (Aces y Dobles faltas tienen escalas distintas),
+  // igual que antes, pero ahora "Torneo anterior" queda fuera de este pool
+  // porque su color se decide por el signo de la delta (ver colorForDelta).
+  const MAGNITUDE_COLOR_STOPS: Array<[number, number, number]> = [
+    [59, 130, 246], // blue-500 (frio, pocos aces/DF)
+    [245, 158, 11], // amber-500 (medio)
+    [239, 68, 68], // red-500 (caliente, muchos aces/DF)
+  ];
+
+  const mixColor = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+
+  const colorForMagnitudeInRow = (value: number | null, rowValues: Array<number | null>): string => {
     if (value === null) return "transparent";
     const nums = rowValues.filter((v): v is number => v !== null);
     if (nums.length === 0) return "transparent";
     const min = Math.min(...nums);
     const max = Math.max(...nums);
     const ratio = max === min ? 0.5 : (value - min) / (max - min);
-    const alpha = 0.08 + ratio * 0.55;
-    return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
+    const [from, to] = ratio <= 0.5
+      ? [MAGNITUDE_COLOR_STOPS[0], MAGNITUDE_COLOR_STOPS[1]]
+      : [MAGNITUDE_COLOR_STOPS[1], MAGNITUDE_COLOR_STOPS[2]];
+    const localT = ratio <= 0.5 ? ratio / 0.5 : (ratio - 0.5) / 0.5;
+    const [r, g, b] = mixColor(from, to, localT);
+    const alpha = 0.18 + ratio * 0.45;
+    return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(3)})`;
+  };
+
+  // Color de la celda "Torneo anterior": verde si el jugador esta por
+  // encima de su propia media Bo3 (delta > 0), rojo si esta por debajo,
+  // neutro si no hay delta. La saturacion escala con la magnitud de la
+  // delta (tope en +/-3, un rango razonable para aces/dobles faltas).
+  const colorForDelta = (delta: number | null): string => {
+    if (delta === null || delta === 0) return "rgba(100, 116, 139, 0.15)";
+    const intensity = Math.min(1, Math.abs(delta) / 3);
+    const alpha = 0.15 + intensity * 0.45;
+    return delta > 0
+      ? `rgba(34, 197, 94, ${alpha.toFixed(3)})`
+      : `rgba(239, 68, 68, ${alpha.toFixed(3)})`;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
           <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-100">
             <BarChart3 className="h-5 w-5 text-emerald-400" />
@@ -1949,53 +1980,93 @@ function PlayerStatsDialog({
               <span>{error}</span>
             </div>
           ) : data ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
-              <table className="min-w-full divide-y divide-slate-800 text-sm">
-                <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">Métrica</th>
-                    {columns.map((col) => (
-                      <th key={col.key} className="px-4 py-3 text-right font-semibold">
-                        {col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {rows.map((row) => {
-                    const rowValues = columns.map((col) => data.stats?.[row.metricKeys[col.key]] ?? null);
-                    return (
-                      <tr key={row.key}>
-                        <td className="px-4 py-3 font-medium text-slate-200">{row.label}</td>
-                        {columns.map((col, idx) => {
-                          const value = rowValues[idx];
-                          const sample = data.samples?.[row.sampleKeys[col.key]] ?? 0;
-                          const diffKey = row.diffKeys[col.key];
-                          const diffValue = diffKey ? data.stats?.[diffKey] ?? null : null;
-                          const titleParts = [
-                            `Muestras: ${sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "sin datos"}`,
-                          ];
-                          if (diffValue !== null) {
-                            titleParts.push(
-                              `Delta vs Bo3: ${diffValue > 0 ? "+" : ""}${diffValue.toFixed(2)}`,
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <table className="min-w-full divide-y divide-slate-800 text-sm">
+                  <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th className="whitespace-nowrap px-3 py-3 text-left font-semibold">Métrica</th>
+                      {columns.map((col) => (
+                        <th key={col.key} className="whitespace-nowrap px-3 py-3 text-right font-semibold">
+                          {col.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {rows.map((row) => {
+                      const magnitudeValues = columns
+                        .filter((col) => col.key !== "previous_tournament")
+                        .map((col) => data.stats?.[row.metricKeys[col.key]] ?? null);
+                      return (
+                        <tr key={row.key}>
+                          <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-200">{row.label}</td>
+                          {columns.map((col) => {
+                            const value = data.stats?.[row.metricKeys[col.key]] ?? null;
+                            const sample = data.samples?.[row.sampleKeys[col.key]] ?? 0;
+                            const sampleTitle = `Muestras: ${sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "sin datos"}`;
+
+                            if (col.key === "previous_tournament") {
+                              const diffKey = row.diffKeys[col.key];
+                              const diffValue = diffKey ? data.stats?.[diffKey] ?? null : null;
+                              const diffClass =
+                                diffValue === null || diffValue === 0
+                                  ? "text-slate-400"
+                                  : diffValue > 0
+                                    ? "text-emerald-300"
+                                    : "text-red-300";
+                              return (
+                                <td
+                                  key={col.key}
+                                  className="whitespace-nowrap px-3 py-3 text-right tabular-nums font-semibold text-slate-100"
+                                  style={{ backgroundColor: colorForDelta(diffValue) }}
+                                  title={sampleTitle}
+                                >
+                                  {value !== null ? value.toFixed(1) : "—"}
+                                  {diffValue !== null && (
+                                    <span className={`ml-1.5 text-xs font-bold ${diffClass}`}>
+                                      {diffValue > 0 ? "+" : ""}
+                                      {diffValue.toFixed(1)}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            }
+
+                            return (
+                              <td
+                                key={col.key}
+                                className="whitespace-nowrap px-3 py-3 text-right tabular-nums font-semibold text-slate-100"
+                                style={{ backgroundColor: colorForMagnitudeInRow(value, magnitudeValues) }}
+                                title={sampleTitle}
+                              >
+                                {value !== null ? value.toFixed(1) : "—"}
+                              </td>
                             );
-                          }
-                          return (
-                            <td
-                              key={col.key}
-                              className="px-4 py-3 text-right tabular-nums font-semibold text-slate-100"
-                              style={{ backgroundColor: colorForValueInRow(value, rowValues) }}
-                              title={titleParts.join(" · ")}
-                            >
-                              {value !== null ? value.toFixed(1) : "—"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-1 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2">
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <span>Pocos</span>
+                  <div
+                    className="h-2 flex-1 rounded-full"
+                    style={{
+                      background: "linear-gradient(90deg, rgb(59,130,246) 0%, rgb(245,158,11) 50%, rgb(239,68,68) 100%)",
+                    }}
+                  />
+                  <span>Muchos</span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Bo3 / Misma superficie / Rival: color de frío a caliente según el valor dentro de cada fila.
+                  Torneo anterior: verde = por encima de su media Bo3, rojo = por debajo.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400">
@@ -2007,8 +2078,8 @@ function PlayerStatsDialog({
             Los promedios se calculan a partir de <code>estratego_v1.matches_full</code>,
             considerando <span className="font-medium">best_of = 3</span> y los
             últimos 2 años (salvo "Torneo anterior", que se refiere siempre a esa
-            edición concreta). Pasa el ratón sobre cada celda para ver muestras y
-            variación. Los valores nulos no influyen en la media.
+            edición concreta). Pasa el ratón sobre cada celda para ver el número de
+            muestras. Los valores nulos no influyen en la media.
           </div>
         </div>
 
