@@ -38,6 +38,7 @@ export type QuarterTabsProps = {
   onOpenPrematch?: (m: Match) => void;
   onOpenPlayerStats?: (m: Match, player: Player) => void;
   savingMatchId?: string | null;
+  acesDeltaByPlayerId?: Record<string, number | null>;
 };
 
 type TabKey = "Q1" | "Q2" | "Q3" | "Q4" | "Finales";

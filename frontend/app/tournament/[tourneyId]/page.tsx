@@ -23,6 +23,7 @@ const ADMIN_API_HEADERS: Record<string, string> = process.env.NEXT_PUBLIC_ADMIN_
   : {};
 
 import type { Player, Match, Bracket } from "@/lib/bracket-types";
+import { acesDeltaColorClass } from "@/lib/stats-color";
 
 const byRound = (matches: Match[], round: Match["round"]) =>
   matches.filter((m) => m.round === round);
@@ -42,6 +43,7 @@ function MatchCard({
   disableSelection,
   isSaving,
   onOpenPlayerStats,
+  acesDeltaByPlayerId,
 }: {
   m: Match;
   onClick?: (m: Match) => void;
@@ -49,6 +51,7 @@ function MatchCard({
   disableSelection?: boolean;
   isSaving?: boolean;
   onOpenPlayerStats?: (m: Match, player: Player) => void;
+  acesDeltaByPlayerId?: Record<string, number | null>;
 }) {
   const isTopWinner = m.winnerId === m.top.id;
   const isBottomWinner = m.winnerId === m.bottom.id;
@@ -112,16 +115,24 @@ function MatchCard({
             {player.name}
             {player.seed ? ` (${player.seed})` : ""}
           </span>
-          {statsAvailable && (
-            <button
-              type="button"
-              aria-label={`Ver estadísticas de ${player.name}`}
-              className="text-slate-500 transition hover:text-slate-200 focus-visible:outline-none"
-              onClick={onStatsClick}
-            >
-              <BarChart3 className="h-4 w-4" />
-            </button>
-          )}
+          {statsAvailable && (() => {
+            const acesDelta = acesDeltaByPlayerId?.[String(player.id)];
+            const acesDeltaTitle =
+              acesDelta != null
+                ? `Aces vs misma superficie: ${acesDelta > 0 ? "+" : ""}${acesDelta.toFixed(1)}`
+                : undefined;
+            return (
+              <button
+                type="button"
+                aria-label={`Ver estadísticas de ${player.name}`}
+                title={acesDeltaTitle}
+                className={`transition focus-visible:outline-none ${acesDeltaColorClass(acesDelta)}`}
+                onClick={onStatsClick}
+              >
+                <BarChart3 className="h-4 w-4" />
+              </button>
+            );
+          })()}
         </div>
         {isWinner && !isSaving && (
           <span className="text-xs font-medium text-emerald-400">Ganador</span>
@@ -543,8 +554,8 @@ type PlayerStatsMetrics = {
   double_faults_best_of_3: number | null;
   double_faults_same_surface: number | null;
   double_faults_previous_tournament: number | null;
-  aces_previous_minus_best_of_3: number | null;
-  double_faults_previous_minus_best_of_3: number | null;
+  aces_previous_minus_same_surface: number | null;
+  double_faults_previous_minus_same_surface: number | null;
   opponent_aces_best_of_3_same_surface: number | null;
   opponent_double_faults_best_of_3_same_surface: number | null;
 };
@@ -1865,7 +1876,7 @@ function PlayerStatsDialog({
         previous_tournament: "aces_previous_tournament",
         opponent: "opponent_aces_best_of_3_same_surface",
       },
-      diffKeys: { previous_tournament: "aces_previous_minus_best_of_3" },
+      diffKeys: { previous_tournament: "aces_previous_minus_same_surface" },
     },
     {
       key: "double_faults",
@@ -1882,7 +1893,7 @@ function PlayerStatsDialog({
         previous_tournament: "double_faults_previous_tournament",
         opponent: "opponent_double_faults_best_of_3_same_surface",
       },
-      diffKeys: { previous_tournament: "double_faults_previous_minus_best_of_3" },
+      diffKeys: { previous_tournament: "double_faults_previous_minus_same_surface" },
     },
   ];
 
@@ -2383,6 +2394,13 @@ function TournamentBracketPage() {
   const [lastPrematchMatch, setLastPrematchMatch] = useState<Match | null>(null);
   const [simulationRunCount, setSimulationRunCount] = useState<number | null>(null);
   const [simulationStatusLoading, setSimulationStatusLoading] = useState(false);
+  // Delta de aces (torneo anterior vs misma superficie) por jugador, para
+  // colorear el boton de "ver estadisticas" en el cuadro sin esperar a que
+  // el usuario lo abra. Se precarga una vez por jugador (no por partido, ya
+  // que un mismo jugador aparece en varias rondas) y se limpia al cambiar
+  // de torneo, porque el valor depende de tourney_id/superficie.
+  const [playerAcesDelta, setPlayerAcesDelta] = useState<Record<string, number | null>>({});
+  const fetchedAcesDeltaIdsRef = React.useRef<Set<string>>(new Set());
 
   const refreshSimulationStatus = useCallback(
     async (signal?: AbortSignal) => {
@@ -2448,6 +2466,66 @@ function TournamentBracketPage() {
     };
     load();
   }, [tParam]);
+
+  // El delta de aces depende de tourney_id/superficie: al cambiar de torneo
+  // se limpia el cache para no arrastrar valores de otro torneo.
+  useEffect(() => {
+    fetchedAcesDeltaIdsRef.current = new Set();
+    setPlayerAcesDelta({});
+  }, [tParam]);
+
+  useEffect(() => {
+    if (!bracket) return;
+
+    const isValidId = (value: unknown) => {
+      if (value === null || value === undefined) return false;
+      const text = typeof value === "string" ? value : String(value);
+      const normalized = text.trim().toUpperCase();
+      if (!normalized) return false;
+      return normalized !== "TBD" && normalized !== "BYE";
+    };
+
+    const ids = new Set<string>();
+    for (const m of bracket.matches) {
+      if (isValidId(m.top?.id)) ids.add(String(m.top.id).trim());
+      if (isValidId(m.bottom?.id)) ids.add(String(m.bottom.id).trim());
+    }
+
+    const missing = Array.from(ids).filter((id) => !fetchedAcesDeltaIdsRef.current.has(id));
+    if (missing.length === 0) return;
+
+    const controller = new AbortController();
+
+    (async () => {
+      const entries = await Promise.all(
+        missing.map(async (id) => {
+          try {
+            const response = await fetch("/api/player/stats", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                player_id: id,
+                surface: bracket.surface ?? null,
+                tourney_id: bracket.tourney_id ?? null,
+              }),
+              signal: controller.signal,
+            });
+            if (!response.ok) return [id, null] as const;
+            const json = (await response.json()) as PlayerStatsResponse;
+            return [id, json.stats?.aces_previous_minus_same_surface ?? null] as const;
+          } catch {
+            return [id, null] as const;
+          }
+        }),
+      );
+
+      if (controller.signal.aborted) return;
+      entries.forEach(([id]) => fetchedAcesDeltaIdsRef.current.add(id));
+      setPlayerAcesDelta((current) => ({ ...current, ...Object.fromEntries(entries) }));
+    })();
+
+    return () => controller.abort();
+  }, [bracket]);
 
   const rounds: Match["round"][] = useMemo(
     () => ["R128", "R64", "R32", "R16", "QF", "SF", "F"],
@@ -3260,6 +3338,7 @@ function TournamentBracketPage() {
                       onOpenPlayerStats={onOpenPlayerStats}
                       disableSelection={Boolean(savingMatchId) && savingMatchId !== m.id}
                       isSaving={savingMatchId === m.id}
+                      acesDeltaByPlayerId={playerAcesDelta}
                     />
                   ))
                 ) : (
@@ -3284,6 +3363,7 @@ function TournamentBracketPage() {
           onOpenPrematch={onOpenPrematch}
           onOpenPlayerStats={onOpenPlayerStats}
           savingMatchId={savingMatchId}
+          acesDeltaByPlayerId={playerAcesDelta}
         />
       </div>
 

@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { Check, Loader2, BarChart3 } from "lucide-react";
 import type { Match, Player } from "@/lib/bracket-types";
+import { acesDeltaColorClass } from "@/lib/stats-color";
 
 const ROW_UNIT = 56; // vertical slot per match, sized off the densest (first) round
 const CARD_HEIGHT = 44;
@@ -37,6 +38,7 @@ function CompactMatchCard({
   onOpenPlayerStats,
   disableSelection,
   isSaving,
+  acesDeltaByPlayerId,
 }: {
   m: Match;
   onSelectWinner?: (m: Match, winner: "top" | "bottom") => void;
@@ -44,6 +46,7 @@ function CompactMatchCard({
   onOpenPlayerStats?: (m: Match, player: Player) => void;
   disableSelection: boolean;
   isSaving: boolean;
+  acesDeltaByPlayerId?: Record<string, number | null>;
 }) {
   const isTopWinner = m.winnerId === m.top.id;
   const isBottomWinner = m.winnerId === m.bottom.id;
@@ -51,6 +54,11 @@ function CompactMatchCard({
   const renderRow = (player: Player, slot: "top" | "bottom", isWinner: boolean) => {
     const selectable = isValidPlayer(player?.id);
     const statsAvailable = selectable && typeof onOpenPlayerStats === "function";
+    const acesDelta = acesDeltaByPlayerId?.[String(player?.id)];
+    const acesDeltaTitle =
+      acesDelta != null
+        ? `Aces vs misma superficie: ${acesDelta > 0 ? "+" : ""}${acesDelta.toFixed(1)}`
+        : undefined;
 
     return (
       <div
@@ -88,7 +96,8 @@ function CompactMatchCard({
           <button
             type="button"
             aria-label={`Ver estadísticas de ${player.name}`}
-            className="shrink-0 text-slate-500 transition hover:text-slate-200"
+            title={acesDeltaTitle}
+            className={`shrink-0 transition ${acesDeltaColorClass(acesDelta)}`}
             onClick={(event) => {
               event.stopPropagation();
               onOpenPlayerStats?.(m, player);
@@ -126,6 +135,7 @@ export type BracketTreeProps = {
   onOpenPrematch?: (m: Match) => void;
   onOpenPlayerStats?: (m: Match, player: Player) => void;
   savingMatchId?: string | null;
+  acesDeltaByPlayerId?: Record<string, number | null>;
 };
 
 export function BracketTree({
@@ -135,6 +145,7 @@ export function BracketTree({
   onOpenPrematch,
   onOpenPlayerStats,
   savingMatchId,
+  acesDeltaByPlayerId,
 }: BracketTreeProps) {
   const columns = useMemo(
     () =>
@@ -208,6 +219,7 @@ export function BracketTree({
                     onOpenPlayerStats={onOpenPlayerStats}
                     disableSelection={Boolean(savingMatchId) && savingMatchId !== m.id}
                     isSaving={savingMatchId === m.id}
+                    acesDeltaByPlayerId={acesDeltaByPlayerId}
                   />
                 ))}
               </div>
