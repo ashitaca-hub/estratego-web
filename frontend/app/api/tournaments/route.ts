@@ -9,6 +9,11 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 500);
   const today = new Date();
 
+  // tourney_date valido: entre 1900 y 2100. Filtra basura como el placeholder
+  // "202601" (year+month sin dia, 6 digitos) que new Date() interpreta como
+  // un año extendido (202600) en vez de rechazarlo.
+  const isSaneYear = (year: number) => year >= 1900 && year <= 2100;
+
   const parseDate = (value: unknown): Date | null => {
     if (value === null || value === undefined) return null;
     const raw = String(value).trim();
@@ -19,13 +24,19 @@ export async function GET(req: Request) {
     if (yyyymmdd) {
       const iso = `${yyyymmdd[1]}-${yyyymmdd[2]}-${yyyymmdd[3]}`;
       const parsed = new Date(iso);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
+      if (Number.isNaN(parsed.getTime()) || !isSaneYear(parsed.getUTCFullYear())) return null;
+      return parsed;
     }
+
+    // Numero puro que no sea YYYYMMDD (p.ej. "202601"): no es un formato de
+    // fecha reconocido, no intentar adivinar.
+    if (/^\d+$/.test(raw)) return null;
 
     // ISO parcial YYYY-MM-DD...
     const isoCandidate = raw.length >= 10 ? raw.slice(0, 10) : raw;
     const parsed = new Date(isoCandidate);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    if (Number.isNaN(parsed.getTime()) || !isSaneYear(parsed.getUTCFullYear())) return null;
+    return parsed;
   };
 
   // 1) Obtener todos los tourney_id presentes en draw_matches.
