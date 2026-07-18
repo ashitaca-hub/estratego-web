@@ -1830,21 +1830,25 @@ function PlayerStatsDialog({
   const tournamentName = bracket?.event ?? data?.filters.tourney_id ?? null;
   const roundLabel = match?.round ?? null;
 
-  type StatColumnKey = "best_of_3" | "same_surface" | "previous_tournament" | "opponent";
+  // Categorias (filas) x Aces/Dobles faltas (columnas) - con solo 2 columnas
+  // de datos la tabla nunca necesita cortarse, sea cual sea el ancho del
+  // dialogo, y "Torneo anterior" (la fila que mas importa) queda igual de
+  // legible que el resto.
+  type StatCategoryKey = "best_of_3" | "same_surface" | "previous_tournament" | "opponent";
 
-  const columns: Array<{ key: StatColumnKey; label: string }> = [
+  const categories: Array<{ key: StatCategoryKey; label: string }> = [
     { key: "best_of_3", label: "Bo3 (2 años)" },
     { key: "same_surface", label: "Misma superficie" },
     { key: "previous_tournament", label: "Torneo anterior" },
     { key: "opponent", label: "Rival (Bo3+superficie)" },
   ];
 
-  const rows: Array<{
+  const statColumns: Array<{
     key: "aces" | "double_faults";
     label: string;
-    metricKeys: Record<StatColumnKey, keyof PlayerStatsMetrics>;
-    sampleKeys: Record<StatColumnKey, keyof PlayerStatsSamples>;
-    diffKeys: Partial<Record<StatColumnKey, keyof PlayerStatsMetrics>>;
+    metricKeys: Record<StatCategoryKey, keyof PlayerStatsMetrics>;
+    sampleKeys: Record<StatCategoryKey, keyof PlayerStatsSamples>;
+    diffKeys: Partial<Record<StatCategoryKey, keyof PlayerStatsMetrics>>;
   }> = [
     {
       key: "aces",
@@ -1882,43 +1886,11 @@ function PlayerStatsDialog({
     },
   ];
 
-  // Rampa "frio -> caliente" (azul -> ambar -> rojo) para las columnas de
-  // magnitud (Bo3 / Misma superficie / Rival). Se normaliza con el min/max
-  // DENTRO de la misma fila (Aces y Dobles faltas tienen escalas distintas),
-  // igual que antes, pero ahora "Torneo anterior" queda fuera de este pool
-  // porque su color se decide por el signo de la delta (ver colorForDelta).
-  const MAGNITUDE_COLOR_STOPS: Array<[number, number, number]> = [
-    [59, 130, 246], // blue-500 (frio, pocos aces/DF)
-    [245, 158, 11], // amber-500 (medio)
-    [239, 68, 68], // red-500 (caliente, muchos aces/DF)
-  ];
-
-  const mixColor = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
-    a[0] + (b[0] - a[0]) * t,
-    a[1] + (b[1] - a[1]) * t,
-    a[2] + (b[2] - a[2]) * t,
-  ];
-
-  const colorForMagnitudeInRow = (value: number | null, rowValues: Array<number | null>): string => {
-    if (value === null) return "transparent";
-    const nums = rowValues.filter((v): v is number => v !== null);
-    if (nums.length === 0) return "transparent";
-    const min = Math.min(...nums);
-    const max = Math.max(...nums);
-    const ratio = max === min ? 0.5 : (value - min) / (max - min);
-    const [from, to] = ratio <= 0.5
-      ? [MAGNITUDE_COLOR_STOPS[0], MAGNITUDE_COLOR_STOPS[1]]
-      : [MAGNITUDE_COLOR_STOPS[1], MAGNITUDE_COLOR_STOPS[2]];
-    const localT = ratio <= 0.5 ? ratio / 0.5 : (ratio - 0.5) / 0.5;
-    const [r, g, b] = mixColor(from, to, localT);
-    const alpha = 0.18 + ratio * 0.45;
-    return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(3)})`;
-  };
-
-  // Color de la celda "Torneo anterior": verde si el jugador esta por
+  // Color de la fila "Torneo anterior": verde si el jugador esta por
   // encima de su propia media Bo3 (delta > 0), rojo si esta por debajo,
   // neutro si no hay delta. La saturacion escala con la magnitud de la
-  // delta (tope en +/-3, un rango razonable para aces/dobles faltas).
+  // delta (tope en +/-3, un rango razonable para aces/dobles faltas). Es la
+  // unica fila con color: las demas se dejan en texto plano.
   const colorForDelta = (delta: number | null): string => {
     if (delta === null || delta === 0) return "rgba(100, 116, 139, 0.15)";
     const intensity = Math.min(1, Math.abs(delta) / 3);
@@ -1930,7 +1902,7 @@ function PlayerStatsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl rounded-2xl border border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
           <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-100">
             <BarChart3 className="h-5 w-5 text-emerald-400" />
@@ -1980,93 +1952,81 @@ function PlayerStatsDialog({
               <span>{error}</span>
             </div>
           ) : data ? (
-            <div className="space-y-3">
-              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
-                <table className="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th className="whitespace-nowrap px-3 py-3 text-left font-semibold">Métrica</th>
-                      {columns.map((col) => (
-                        <th key={col.key} className="whitespace-nowrap px-3 py-3 text-right font-semibold">
-                          {col.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {rows.map((row) => {
-                      const magnitudeValues = columns
-                        .filter((col) => col.key !== "previous_tournament")
-                        .map((col) => data.stats?.[row.metricKeys[col.key]] ?? null);
-                      return (
-                        <tr key={row.key}>
-                          <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-200">{row.label}</td>
-                          {columns.map((col) => {
-                            const value = data.stats?.[row.metricKeys[col.key]] ?? null;
-                            const sample = data.samples?.[row.sampleKeys[col.key]] ?? 0;
-                            const sampleTitle = `Muestras: ${sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "sin datos"}`;
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+              <table className="min-w-full divide-y divide-slate-800 text-sm">
+                <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="whitespace-nowrap px-3 py-3 text-left font-semibold">Métrica</th>
+                    {statColumns.map((col) => (
+                      <th key={col.key} className="whitespace-nowrap px-3 py-3 text-right font-semibold">
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {categories.map((cat) => {
+                    const isPrevious = cat.key === "previous_tournament";
+                    return (
+                      <tr key={cat.key} className={isPrevious ? "bg-slate-900/40" : undefined}>
+                        <td
+                          className={`whitespace-nowrap px-3 py-3 font-medium ${
+                            isPrevious ? "text-slate-100" : "text-slate-300"
+                          }`}
+                        >
+                          {cat.label}
+                        </td>
+                        {statColumns.map((col) => {
+                          const value = data.stats?.[col.metricKeys[cat.key]] ?? null;
+                          const sample = data.samples?.[col.sampleKeys[cat.key]] ?? 0;
+                          const sampleTitle = `Muestras: ${sample > 0 ? `${sample} partido${sample === 1 ? "" : "s"}` : "sin datos"}`;
 
-                            if (col.key === "previous_tournament") {
-                              const diffKey = row.diffKeys[col.key];
-                              const diffValue = diffKey ? data.stats?.[diffKey] ?? null : null;
-                              const diffClass =
-                                diffValue === null || diffValue === 0
-                                  ? "text-slate-400"
-                                  : diffValue > 0
-                                    ? "text-emerald-300"
-                                    : "text-red-300";
-                              return (
-                                <td
-                                  key={col.key}
-                                  className="whitespace-nowrap px-3 py-3 text-right tabular-nums font-semibold text-slate-100"
-                                  style={{ backgroundColor: colorForDelta(diffValue) }}
-                                  title={sampleTitle}
-                                >
-                                  {value !== null ? value.toFixed(1) : "—"}
+                          if (isPrevious) {
+                            const diffKey = col.diffKeys[cat.key];
+                            const diffValue = diffKey ? data.stats?.[diffKey] ?? null : null;
+                            const diffClass =
+                              diffValue === null || diffValue === 0
+                                ? "text-slate-400"
+                                : diffValue > 0
+                                  ? "text-emerald-300"
+                                  : "text-red-300";
+                            return (
+                              <td
+                                key={col.key}
+                                className="px-3 py-2 text-right tabular-nums"
+                                style={{ backgroundColor: colorForDelta(diffValue) }}
+                                title={sampleTitle}
+                              >
+                                <div className="flex flex-col items-end leading-tight">
+                                  <span className="text-base font-semibold text-slate-100">
+                                    {value !== null ? value.toFixed(1) : "—"}
+                                  </span>
                                   {diffValue !== null && (
-                                    <span className={`ml-1.5 text-xs font-bold ${diffClass}`}>
+                                    <span className={`text-sm font-bold ${diffClass}`}>
                                       {diffValue > 0 ? "+" : ""}
                                       {diffValue.toFixed(1)}
                                     </span>
                                   )}
-                                </td>
-                              );
-                            }
-
-                            return (
-                              <td
-                                key={col.key}
-                                className="whitespace-nowrap px-3 py-3 text-right tabular-nums font-semibold text-slate-100"
-                                style={{ backgroundColor: colorForMagnitudeInRow(value, magnitudeValues) }}
-                                title={sampleTitle}
-                              >
-                                {value !== null ? value.toFixed(1) : "—"}
+                                </div>
                               </td>
                             );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          }
 
-              <div className="space-y-1 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2">
-                <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <span>Pocos</span>
-                  <div
-                    className="h-2 flex-1 rounded-full"
-                    style={{
-                      background: "linear-gradient(90deg, rgb(59,130,246) 0%, rgb(245,158,11) 50%, rgb(239,68,68) 100%)",
-                    }}
-                  />
-                  <span>Muchos</span>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Bo3 / Misma superficie / Rival: color de frío a caliente según el valor dentro de cada fila.
-                  Torneo anterior: verde = por encima de su media Bo3, rojo = por debajo.
-                </p>
-              </div>
+                          return (
+                            <td
+                              key={col.key}
+                              className="whitespace-nowrap px-3 py-3 text-right tabular-nums font-semibold text-slate-100"
+                              title={sampleTitle}
+                            >
+                              {value !== null ? value.toFixed(1) : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400">
