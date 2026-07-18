@@ -48,6 +48,16 @@ const colorForPercent = (percent: number): string => {
   const alpha = 0.08 + (clamped / 100) * 0.55;
   return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
 };
+
+// Cuota justa (decimal) implicita en el % simulado: 1 / probabilidad.
+// Solo tiene sentido mostrarla para Campeon/Final/Semifinal, que es donde
+// interesa comparar contra las cuotas reales del mercado.
+const ODDS_ROUNDS = new Set(["W", "F", "SF"]);
+
+const fairOddsForPercent = (percent: number): string | null => {
+  if (percent <= 0) return null;
+  return (100 / percent).toFixed(2);
+};
 export default function SimulationAnalyticsPage() {
   const params = useParams<{ tourneyId: string }>();
   const router = useRouter();
@@ -356,13 +366,25 @@ export default function SimulationAnalyticsPage() {
                       const percentLabel = percent.toLocaleString("es-ES", {
                         maximumFractionDigits: percent > 0 && percent < 100 ? 1 : 0,
                       });
+                      const fairOdds = ODDS_ROUNDS.has(round) ? fairOddsForPercent(percent) : null;
                       return (
                         <td
                           key={round}
                           className="px-4 py-2 text-right tabular-nums font-medium text-slate-100"
                           style={{ backgroundColor: colorForPercent(percent) }}
                         >
-                          {percent > 0 ? `${percentLabel}%` : "—"}
+                          {percent > 0 ? (
+                            fairOdds ? (
+                              <div className="flex flex-col items-end leading-tight">
+                                <span>{percentLabel}%</span>
+                                <span className="text-xs font-normal text-slate-400">@{fairOdds}</span>
+                              </div>
+                            ) : (
+                              `${percentLabel}%`
+                            )
+                          ) : (
+                            "—"
+                          )}
                         </td>
                       );
                     })}
