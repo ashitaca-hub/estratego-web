@@ -21,6 +21,8 @@ DECLARE
   win_pct_surface_b FLOAT;
   win_month_a FLOAT;
   win_month_b FLOAT;
+  monthly_win_pct_a JSONB;
+  monthly_win_pct_b JSONB;
   win_vs_rankband_a FLOAT;
   win_vs_rankband_b FLOAT;
   win_pct_fifth_set_a FLOAT;
@@ -455,6 +457,45 @@ BEGIN
     WHERE EXTRACT(MONTH FROM tourney_date)::INT = tourney_month
       AND (winner_id = player_b_id OR loser_id = player_b_id);
 
+  -- Estacionalidad: % de victorias en cada mes natural (mismo criterio de
+  -- carrera completa que win_month, pero para los 12 meses). win_pct va en
+  -- escala 0-100 explicita; NULL si el jugador no tiene partidos ese mes.
+  SELECT jsonb_agg(
+           jsonb_build_object(
+             'month', gs.month,
+             'win_pct', CASE WHEN s.total > 0 THEN ROUND(s.wins * 100.0 / s.total, 1) ELSE NULL END,
+             'matches', COALESCE(s.total, 0)
+           ) ORDER BY gs.month
+         )
+    INTO monthly_win_pct_a
+    FROM generate_series(1, 12) AS gs(month)
+    LEFT JOIN (
+      SELECT EXTRACT(MONTH FROM tourney_date)::INT AS month,
+             COUNT(*) FILTER (WHERE winner_id = player_a_id) AS wins,
+             COUNT(*) AS total
+        FROM estratego_v1.matches_full
+        WHERE winner_id = player_a_id OR loser_id = player_a_id
+        GROUP BY 1
+    ) s ON s.month = gs.month;
+
+  SELECT jsonb_agg(
+           jsonb_build_object(
+             'month', gs.month,
+             'win_pct', CASE WHEN s.total > 0 THEN ROUND(s.wins * 100.0 / s.total, 1) ELSE NULL END,
+             'matches', COALESCE(s.total, 0)
+           ) ORDER BY gs.month
+         )
+    INTO monthly_win_pct_b
+    FROM generate_series(1, 12) AS gs(month)
+    LEFT JOIN (
+      SELECT EXTRACT(MONTH FROM tourney_date)::INT AS month,
+             COUNT(*) FILTER (WHERE winner_id = player_b_id) AS wins,
+             COUNT(*) AS total
+        FROM estratego_v1.matches_full
+        WHERE winner_id = player_b_id OR loser_id = player_b_id
+        GROUP BY 1
+    ) s ON s.month = gs.month;
+
   -- Win % vs Top-10 opponents
   SELECT COUNT(*) FILTER (WHERE winner_id = player_a_id)::FLOAT / NULLIF(COUNT(*), 0)
     INTO win_vs_rankband_a
@@ -677,14 +718,14 @@ BEGIN
   -- (points_delta queda NULL), igual que el resto de avisos de esta funcion.
   IF points_delta_a IS NOT NULL AND points_delta_a < 0 THEN
     alerts_a := array_append(alerts_a, format(
-      'Tiene %s puntos menos que hace un ano en este torneo; podria buscar recuperar puntos en categorias inferiores.',
+      'Tiene %s puntos menos que hace un ano en este torneo.',
       ABS(points_delta_a)
     ));
   END IF;
 
   IF points_delta_b IS NOT NULL AND points_delta_b < 0 THEN
     alerts_b := array_append(alerts_b, format(
-      'Tiene %s puntos menos que hace un ano en este torneo; podria buscar recuperar puntos en categorias inferiores.',
+      'Tiene %s puntos menos que hace un ano en este torneo.',
       ABS(points_delta_b)
     ));
   END IF;
@@ -1060,6 +1101,7 @@ BEGIN
       'home_advantage', home_advantage_a,
       'surface_change', surface_change_a,
       'win_pct_month', win_month_a,
+      'monthly_win_pct', monthly_win_pct_a,
       'win_pct_vs_top10', win_vs_rankband_a,
       'win_pct_fifth_set', win_pct_fifth_set_a,
       'court_speed_score', court_speed_score_a,
@@ -1101,6 +1143,7 @@ BEGIN
       'home_advantage', home_advantage_b,
       'surface_change', surface_change_b,
       'win_pct_month', win_month_b,
+      'monthly_win_pct', monthly_win_pct_b,
       'win_pct_vs_top10', win_vs_rankband_b,
       'win_pct_fifth_set', win_pct_fifth_set_b,
       'court_speed_score', court_speed_score_b,

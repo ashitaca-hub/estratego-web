@@ -19,6 +19,12 @@ type TournamentHistorySummary = {
   label: string | null;
 };
 
+type MonthlyWinPct = {
+  month: number;
+  win_pct: number | null;
+  matches: number | null;
+};
+
 type PlayerSummary = {
   win_pct_year: number | null;
   win_pct_surface: number | null;
@@ -45,6 +51,7 @@ type PlayerSummary = {
   last_results?: string[] | null;
   next_tournament?: NextTournamentSummary | null;
   tournament_history?: TournamentHistorySummary | null;
+  monthly_win_pct?: MonthlyWinPct[] | null;
 };
 
 type TournamentSummary = {
@@ -1314,6 +1321,22 @@ const buildPlayer = (
       }
     : null;
 
+  const rawMonthly = playerRecord?.["monthly_win_pct"];
+  const monthlyWinPct: MonthlyWinPct[] | null = Array.isArray(rawMonthly)
+    ? rawMonthly
+        .map((entry) => {
+          const record = asRecord(entry);
+          const month = asNumber(record?.["month"]);
+          if (month == null) return null;
+          return {
+            month,
+            win_pct: asNumber(record?.["win_pct"]),
+            matches: asNumber(record?.["matches"]),
+          };
+        })
+        .filter((entry): entry is MonthlyWinPct => entry != null)
+    : null;
+
   const tournamentHistoryRecord = asRecord(playerRecord?.["tournament_history"]);
   const tournamentHistory: TournamentHistorySummary | null = tournamentHistoryRecord
     ? {
@@ -1351,6 +1374,7 @@ const buildPlayer = (
     last_results: normalizedLastResults && normalizedLastResults.length > 0 ? normalizedLastResults : undefined,
     next_tournament: nextTournament,
     tournament_history: tournamentHistory,
+    monthly_win_pct: monthlyWinPct,
   };
 };
 

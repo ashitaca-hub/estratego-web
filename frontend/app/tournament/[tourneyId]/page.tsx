@@ -214,6 +214,11 @@ type PlayerPrematchStats = {
     semis_reached: number | null;
     label: string | null;
   } | null;
+  monthly_win_pct?: {
+    month: number;
+    win_pct: number | null;
+    matches: number | null;
+  }[] | null;
 };
 
 type OddsPlayerSummary = {
@@ -426,6 +431,22 @@ const normalizePrematchSummary = (raw: unknown): PrematchSummary => {
         semis_reached: asNumber(th.semis_reached),
         label,
       };
+    })(),
+    monthly_win_pct: (() => {
+      if (!Array.isArray(p?.monthly_win_pct)) return undefined;
+      const entries = (p.monthly_win_pct as unknown[])
+        .map((item) => {
+          const record = asRecord(item);
+          const month = asNumber(record?.month);
+          if (month == null) return null;
+          return {
+            month,
+            win_pct: asNumber(record?.win_pct),
+            matches: asNumber(record?.matches),
+          };
+        })
+        .filter((item): item is { month: number; win_pct: number | null; matches: number | null } => item != null);
+      return entries.length ? entries : undefined;
     })(),
   });
 
@@ -646,6 +667,15 @@ function formatPct(value: number | null) {
   return `${ratio.toFixed(1)}%`;
 }
 
+// Verde para el favorito (mayor probabilidad), rojo para el otro; neutro si
+// faltan datos o estan empatados.
+function winProbabilityColorClass(own: number | null, other: number | null): string {
+  if (own == null || other == null) return "text-slate-300";
+  if (own > other) return "text-emerald-400";
+  if (own < other) return "text-rose-400";
+  return "text-slate-300";
+}
+
 function formatFloat(value: number | null, decimals = 1) {
   if (value == null) return "N/A";
   return `${Number(value).toFixed(decimals)}`;
@@ -825,37 +855,6 @@ const renderCourtSpeedDetail = (
     </div>
   );
 };
-
-// Colores extremo-a-extremo (flojo -> fuerte) segun la superficie, para la
-// barra de % de victorias por superficie: arcilla/terracota para clay, verde
-// para grass, azul para hard. Mismo criterio de matching que renderSurfaceChip.
-const surfaceGradientColors = (surface?: string | null): [string, string] => {
-  const lower = (surface ?? "").toLowerCase();
-  if (lower.includes("grass")) return ["#e3f4df", "#166534"];
-  if (lower.includes("clay") || lower.includes("terra") || lower.includes("arcilla")) {
-    return ["#f1dcb8", "#a2571f"];
-  }
-  if (lower.includes("hard")) return ["#dbeafe", "#1d4ed8"];
-  return ["#e2e8f0", "#475569"];
-};
-
-// La barra representa 0-100%: el color visible va del extremo "flojo" al
-// extremo "fuerte" del degradado segun cuanto avance el relleno, no un color
-// fijo. Por eso el degradado ocupa siempre el 100% del track y solo se tapa
-// (con un panel del color de fondo) la parte que supera el % del jugador.
-function SurfaceWinBar({ value, surface }: { value: number | null; surface?: string | null }) {
-  const pct = normalizeRatio01(value) * 100;
-  const [from, to] = surfaceGradientColors(surface);
-  return (
-    <div className="relative h-2.5 w-full overflow-hidden rounded-full border border-slate-800 bg-slate-900">
-      <div
-        className="absolute inset-y-0 left-0 w-full"
-        style={{ background: `linear-gradient(90deg, ${from} 0%, ${to} 100%)` }}
-      />
-      <div className="absolute inset-y-0 right-0 bg-slate-900" style={{ width: `${100 - pct}%` }} />
-    </div>
-  );
-}
 
 // Posicion del torneo en el espectro de velocidad de pista de todos los
 // torneos (rank bajo = pista rapida, ver describeCourtSpeed). Izquierda =
@@ -1190,77 +1189,6 @@ const isBestOfFiveTournament = (
   return known.some((name) => raw.includes(name));
 };
 
-// Diferencia (en puntos porcentuales) entre dos métricas comparadas: cuanto mayor
-// la brecha, más "caliente" el color, independientemente de quién esté arriba.
-function diffBand(diffPp: number): "blue" | "green" | "orange" | "red" {
-  const d = Math.abs(diffPp);
-  if (d >= 30) return "red";
-  if (d >= 15) return "orange";
-  if (d >= 5) return "green";
-  return "blue";
-}
-
-function styleForBand(band: "blue" | "green" | "orange" | "red", intensity01: number) {
-  const map: Record<string, { start: [number, number, number]; end: [number, number, number] }> = {
-    blue: { start: [96, 165, 250], end: [37, 99, 235] },
-    green: { start: [34, 197, 94], end: [22, 163, 74] },
-    orange: { start: [245, 158, 11], end: [217, 119, 6] },
-    red: { start: [239, 68, 68], end: [220, 38, 38] },
-  };
-  const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
-  const alpha = clamp(0.35 + 0.65 * intensity01, 0.2, 0.95);
-  const headAlpha = clamp(0.25 + 0.55 * intensity01, 0.2, 0.95);
-  const toRgba = (rgb: [number, number, number], a: number) => `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`;
-  const sw = map[band];
-  const start = toRgba(sw.start, alpha);
-  const end = toRgba(sw.end, alpha);
-  const head = toRgba(sw.start, headAlpha);
-  const border = toRgba(sw.end, 0.6);
-  return { start, end, head, border };
-}
-
-// Barra única desde el centro: apunta hacia quien va mejor en esta métrica,
-// con largo proporcional a la diferencia y color según cuán significativa es.
-function DiffBar({ valueA, valueB }: { valueA: number | null; valueB: number | null }) {
-  const rA = normalizeRatio01(valueA);
-  const rB = normalizeRatio01(valueB);
-  const diffPp = (rB - rA) * 100;
-  const towardB = diffPp > 0;
-  const magnitude = Math.min(46, Math.abs(diffPp));
-  const band = diffBand(diffPp);
-  const sw = styleForBand(band, magnitude / 50);
-
-  return (
-    <div className="relative h-10 overflow-hidden rounded-md border border-slate-800 bg-slate-950/40">
-      <div className="absolute left-1/2 top-1/2 h-[2px] w-full -translate-x-1/2 -translate-y-1/2 bg-slate-700/30" />
-      {magnitude > 0.5 && (
-        <div
-          className={
-            towardB
-              ? "absolute left-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-r-full"
-              : "absolute right-1/2 top-1/2 h-[3px] -translate-y-1/2 rounded-l-full"
-          }
-          style={{
-            width: `${magnitude}%`,
-            background: `linear-gradient(90deg, ${sw.start} 0%, ${sw.end} 100%)`,
-          }}
-        />
-      )}
-      <div
-        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-        style={{ left: towardB ? `calc(50% + ${magnitude}%)` : `calc(50% - ${magnitude}%)` }}
-      >
-        <div
-          className="h-4 w-4 rounded-full"
-          style={{
-            border: `1px solid ${sw.border}`,
-            background: `radial-gradient(circle, ${sw.head} 0%, rgba(15,23,42,0.2) 70%, transparent 100%)`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function rankBadge(rank: number | null) {
   if (rank == null || !Number.isFinite(rank)) {
@@ -1336,26 +1264,188 @@ function decimalOdds(prob: number | null): string {
   return d.toFixed(2);
 }
 
-function StatRow({
-  label,
-  playerA,
-  playerB,
-  alignPlayerA = "left",
-  alignPlayerB = "right",
-}: {
+type ComparisonCategory = {
   label: string;
-  playerA: React.ReactNode;
-  playerB: React.ReactNode;
-  alignPlayerA?: "left" | "right";
-  alignPlayerB?: "left" | "right";
-}) {
+  valueA: number | null;
+  valueB: number | null;
+};
+
+const COMPARISON_CHART_COLOR_A = "#60a5fa";
+const COMPARISON_CHART_COLOR_B = "#f87171";
+
+// Grafico de lineas: eje X = metricas, eje Y = porcentaje 0-100. Una linea por
+// jugador con area translucida bajo la curva; se solapan cuando ambos son
+// altos. Las categorias con valor null no dibujan punto, pero la linea une los
+// puntos definidos a ambos lados del hueco para no dejar puntos sueltos.
+function PlayerComparisonChart({ categories }: { categories: ComparisonCategory[] }) {
+  const width = 520;
+  const height = 200;
+  const paddingX = 36;
+  const paddingTop = 20;
+  const paddingBottom = 28;
+  const plotWidth = width - paddingX * 2;
+  const plotHeight = height - paddingTop - paddingBottom;
+
+  const xFor = (index: number) =>
+    categories.length > 1
+      ? paddingX + (plotWidth * index) / (categories.length - 1)
+      : paddingX + plotWidth / 2;
+  const yFor = (value: number) => paddingTop + plotHeight * (1 - Math.min(100, Math.max(0, value)) / 100);
+
+  type Point = { x: number; y: number; value: number };
+
+  const buildSeries = (pick: (c: ComparisonCategory) => number | null) => {
+    // El RPC mezcla escalas (win_pct_year llega 0-100, win_pct_month llega
+    // 0-1): normalizamos con el mismo criterio que formatPct antes de dibujar.
+    const points: (Point | null)[] = categories.map((c, i) => {
+      const raw = pick(c);
+      if (raw == null) return null;
+      const value = normalizeRatio01(raw) * 100;
+      return { x: xFor(i), y: yFor(value), value };
+    });
+
+    const defined = points.filter((p): p is Point => p != null);
+
+    const linePath = defined
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+      .join(" ");
+
+    return { points, defined, linePath };
+  };
+
+  const seriesA = buildSeries((c) => c.valueA);
+  const seriesB = buildSeries((c) => c.valueB);
+
+  const areaPath = (defined: Point[]) => {
+    if (!defined.length) return "";
+    const forward = defined.map((p) => `${p.x} ${p.y}`).join(" L ");
+    const baseline = `${defined[defined.length - 1].x} ${yFor(0)} L ${defined[0].x} ${yFor(0)}`;
+    return `M ${forward} L ${baseline} Z`;
+  };
+
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-1.5 text-sm text-slate-200">
-      <div className={alignPlayerA === "right" ? "text-right" : "text-left"}>{playerA}</div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 text-center">
-        {label}
+    <div className="px-4 py-3">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="Comparativa de jugadores">
+        {[0, 50, 100].map((tick) => (
+          <g key={tick}>
+            <line
+              x1={paddingX}
+              x2={width - paddingX}
+              y1={yFor(tick)}
+              y2={yFor(tick)}
+              stroke="rgb(51 65 85)"
+              strokeWidth={1}
+              strokeDasharray={tick === 0 ? undefined : "3 3"}
+            />
+            <text x={4} y={yFor(tick) + 3} fontSize={9} fill="rgb(100 116 139)">
+              {tick}
+            </text>
+          </g>
+        ))}
+
+        {[seriesA, seriesB].map((series, idx) => {
+          const color = idx === 0 ? COMPARISON_CHART_COLOR_A : COMPARISON_CHART_COLOR_B;
+          return (
+            <g key={idx}>
+              <path d={areaPath(series.defined)} fill={color} fillOpacity={0.15} stroke="none" />
+              <path d={series.linePath} fill="none" stroke={color} strokeWidth={2} />
+              {series.points.map((p, i) =>
+                p ? (
+                  <g key={i}>
+                    <circle cx={p.x} cy={p.y} r={3} fill={color}>
+                      <title>{`${categories[i].label}: ${p.value.toFixed(1)}%`}</title>
+                    </circle>
+                    <text
+                      x={p.x}
+                      y={idx === 0 ? p.y - 8 : p.y + 14}
+                      fontSize={9}
+                      textAnchor="middle"
+                      fill={color}
+                    >
+                      {p.value.toFixed(0)}%
+                    </text>
+                  </g>
+                ) : null,
+              )}
+            </g>
+          );
+        })}
+
+        {categories.map((c, i) => (
+          <text
+            key={c.label}
+            x={xFor(i)}
+            y={height - 6}
+            fontSize={10}
+            textAnchor="middle"
+            fill="rgb(148 163 184)"
+          >
+            {c.label}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+const MONTH_INITIALS = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const MONTH_NAMES_ES = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+
+type MonthlyWinPctEntry = {
+  month: number;
+  win_pct: number | null;
+  matches: number | null;
+};
+
+// Estacionalidad de un jugador: 12 barras (una por mes natural), altura y
+// intensidad de color segun su % de victorias historico en ese mes. Meses sin
+// partidos quedan vacios.
+function SeasonalityBars({
+  monthly,
+  color,
+}: {
+  monthly?: MonthlyWinPctEntry[] | null;
+  color: string;
+}) {
+  const byMonth = new Map<number, MonthlyWinPctEntry>();
+  for (const entry of monthly ?? []) byMonth.set(entry.month, entry);
+
+  return (
+    <div>
+      <div className="flex h-16 items-end gap-[3px]">
+        {MONTH_INITIALS.map((_, i) => {
+          const entry = byMonth.get(i + 1);
+          const pct = entry?.win_pct ?? null;
+          const title =
+            pct != null
+              ? `${MONTH_NAMES_ES[i]}: ${pct.toFixed(1)}%${entry?.matches != null ? ` (${entry.matches} partidos)` : ""}`
+              : `${MONTH_NAMES_ES[i]}: sin partidos`;
+          return (
+            <div key={i} className="relative flex-1 self-stretch" title={title}>
+              <div className="absolute inset-x-0 bottom-0 h-px bg-slate-700/60" />
+              {pct != null && (
+                <div
+                  className="absolute inset-x-0 bottom-0 rounded-t-sm"
+                  style={{
+                    height: `${Math.min(100, Math.max(2, pct))}%`,
+                    background: color,
+                    opacity: 0.3 + 0.7 * (Math.min(100, pct) / 100),
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className={alignPlayerB === "left" ? "text-left" : "text-right"}>{playerB}</div>
+      <div className="mt-0.5 flex gap-[3px] text-center text-[9px] text-slate-500">
+        {MONTH_INITIALS.map((initial, i) => (
+          <div key={i} className="flex-1">
+            {initial}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1717,65 +1807,77 @@ const highlight = useMemo(() => {
                     <div className="border-b border-slate-800/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Comparativa de jugadores
                     </div>
-                    <div className="divide-y divide-slate-800/60">
-                      <StatRow
-                        label="YTD"
-                        playerA={formatPct(summary.playerA.win_pct_year)}
-                        playerB={formatPct(summary.playerB.win_pct_year)}
-                      />
-                      <div className="px-4 pb-1.5">
-                        <DiffBar valueA={summary.playerA.win_pct_year} valueB={summary.playerB.win_pct_year} />
+                    <div className="flex items-center justify-center gap-3 px-4 pt-1 text-xs text-slate-400">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: COMPARISON_CHART_COLOR_A }} />
+                        {match?.top?.name ?? "Jugador A"}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: COMPARISON_CHART_COLOR_B }} />
+                        {match?.bottom?.name ?? "Jugador B"}
+                      </span>
+                    </div>
+                    <PlayerComparisonChart
+                      categories={[
+                        { label: "YTD", valueA: summary.playerA.win_pct_year, valueB: summary.playerB.win_pct_year },
+                        { label: "% mes", valueA: summary.playerA.win_pct_month, valueB: summary.playerB.win_pct_month },
+                        {
+                          label: "% superficie",
+                          valueA: summary.playerA.win_pct_surface,
+                          valueB: summary.playerB.win_pct_surface,
+                        },
+                        {
+                          label: "% vs Top 10",
+                          valueA: summary.playerA.win_pct_vs_top10,
+                          valueB: summary.playerB.win_pct_vs_top10,
+                        },
+                        ...(showFifthSetStat
+                          ? [
+                              {
+                                label: "% 5to set",
+                                valueA: summary.playerA.win_pct_fifth_set,
+                                valueB: summary.playerB.win_pct_fifth_set,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                    <div className="border-t border-slate-800/60 px-4 py-4">
+                      <div className="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Estacionalidad (% victorias por mes)
                       </div>
-                      <StatRow
-                        label="% mes"
-                        playerA={formatPct(summary.playerA.win_pct_month)}
-                        playerB={formatPct(summary.playerB.win_pct_month)}
-                      />
-                      <div className="px-4 pb-1.5">
-                        <DiffBar valueA={summary.playerA.win_pct_month} valueB={summary.playerB.win_pct_month} />
-                      </div>
-                      <StatRow
-                        label="% superficie"
-                        playerA={formatPct(summary.playerA.win_pct_surface)}
-                        playerB={formatPct(summary.playerB.win_pct_surface)}
-                      />
-                      <div className="px-4 pb-1.5">
-                        <DiffBar valueA={summary.playerA.win_pct_surface} valueB={summary.playerB.win_pct_surface} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 px-4 pb-1.5">
-                        <SurfaceWinBar
-                          value={summary.playerA.win_pct_surface}
-                          surface={summary.surface ?? summary.surface_reported ?? summary.tournament?.surface}
+                      <div className="grid grid-cols-2 gap-6">
+                        <SeasonalityBars
+                          monthly={summary.playerA.monthly_win_pct}
+                          color={COMPARISON_CHART_COLOR_A}
                         />
-                        <SurfaceWinBar
-                          value={summary.playerB.win_pct_surface}
-                          surface={summary.surface ?? summary.surface_reported ?? summary.tournament?.surface}
+                        <SeasonalityBars
+                          monthly={summary.playerB.monthly_win_pct}
+                          color={COMPARISON_CHART_COLOR_B}
                         />
                       </div>
-                      <StatRow
-                        label="% vs Top 10"
-                        playerA={formatPct(summary.playerA.win_pct_vs_top10)}
-                        playerB={formatPct(summary.playerB.win_pct_vs_top10)}
-                      />
-                      <div className="px-4 pb-1.5">
-                        <DiffBar valueA={summary.playerA.win_pct_vs_top10} valueB={summary.playerB.win_pct_vs_top10} />
+                    </div>
+                    <div className="border-t border-slate-800/60 px-4 py-4">
+                      <div className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Prob. victoria
                       </div>
-                      {showFifthSetStat && (
-                        <>
-                          <StatRow
-                            label="% 5to set"
-                            playerA={formatPct(summary.playerA.win_pct_fifth_set)}
-                            playerB={formatPct(summary.playerB.win_pct_fifth_set)}
-                          />
-                          <div className="px-4 pb-1.5">
-                            <DiffBar valueA={summary.playerA.win_pct_fifth_set} valueB={summary.playerB.win_pct_fifth_set} />
-                          </div>
-                        </>
-                      )}
-
-                      <StatRow label="Prob. victoria" playerA={formatPct(summary.playerA.win_probability)} playerB={formatPct(summary.playerB.win_probability)} />
-                      <div className="px-4 pb-1.5">
-                        <DiffBar valueA={summary.playerA.win_probability} valueB={summary.playerB.win_probability} />
+                      <div className="grid grid-cols-2 items-center gap-4 text-center">
+                        <div
+                          className={`text-3xl font-bold ${winProbabilityColorClass(
+                            summary.playerA.win_probability,
+                            summary.playerB.win_probability,
+                          )}`}
+                        >
+                          {formatPct(summary.playerA.win_probability)}
+                        </div>
+                        <div
+                          className={`text-3xl font-bold ${winProbabilityColorClass(
+                            summary.playerB.win_probability,
+                            summary.playerA.win_probability,
+                          )}`}
+                        >
+                          {formatPct(summary.playerB.win_probability)}
+                        </div>
                       </div>
                     </div>
                     <div className="border-t border-slate-800/60 px-4 py-4">
