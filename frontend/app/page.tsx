@@ -16,7 +16,28 @@ type UITournament = {
   month?: number | null;
   is_live?: boolean;
   is_upcoming?: boolean;
+  category?: string | null;
+  prize_money_local?: number | null;
+  prize_money_currency?: string | null;
+  category_rank?: number | null;
+  category_total?: number | null;
 };
+
+const CURRENCY_SYMBOLS: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
+
+function formatPrizeMoney(tournament: UITournament): string | null {
+  if (!tournament.category || tournament.prize_money_local == null) return null;
+  const amount = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(
+    tournament.prize_money_local,
+  );
+  const currency = tournament.prize_money_currency ?? "";
+  const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
+  const rankLabel =
+    tournament.category_rank != null && tournament.category_total != null
+      ? ` · rank ${tournament.category_rank} de ${tournament.category_total}`
+      : "";
+  return `${tournament.category} · ${amount} ${symbol}${rankLabel}`;
+}
 
 const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -43,6 +64,7 @@ function TournamentChip({
   onClick: () => void;
 }) {
   const dateLabel = formatDateRange(tournament.date, tournament.end_date);
+  const prizeLabel = formatPrizeMoney(tournament);
   const baseClasses =
     variant === "live"
       ? "border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-500/70 hover:bg-emerald-500/20"
@@ -61,6 +83,7 @@ function TournamentChip({
         {tournament.surface ? <span>· {tournament.surface}</span> : null}
         {tournament.draw_size ? <span>· {tournament.draw_size}</span> : null}
       </span>
+      {prizeLabel && <span className="text-[11px] text-amber-300/90">{prizeLabel}</span>}
     </button>
   );
 }

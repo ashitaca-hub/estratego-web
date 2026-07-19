@@ -79,34 +79,30 @@ export async function GET(req: Request) {
 
   // 2) Cargar metadatos desde tournaments para esos ids
   const baseFields = "tourney_id,name,surface,draw_size";
+  const prizeFields = "category,prize_money_local,prize_money_currency,prize_money_usd";
   const dateFields = "tourney_date,start_date,end_date";
 
-  // Intentar con todas las columnas de fecha; si falla, probar con tourney_date; luego sin fechas.
+  // Intentar con el select mas completo y ir recortando columnas si fallan
+  // (start_date/end_date no existen hoy; prize_money_* son nuevas y pueden no
+  // existir aun si no se ha corrido la migracion en Supabase).
+  const fieldTiers = [
+    `${baseFields},${prizeFields},${dateFields}`,
+    `${baseFields},${prizeFields},tourney_date`,
+    `${baseFields},tourney_date`,
+    baseFields,
+  ];
+
   let tmeta: any[] | null = null;
   let tErr: any = null;
 
-  const resFull = await supabase
-    .from("tournaments")
-    .select(`${baseFields},${dateFields}`)
-    .in("tourney_id", ids);
-
-  if (!resFull.error) {
-    tmeta = resFull.data as any[] | null;
-    tErr = null;
-  } else {
-    const resDateOnly = await supabase
-      .from("tournaments")
-      .select(`${baseFields},tourney_date`)
-      .in("tourney_id", ids);
-
-    if (!resDateOnly.error) {
-      tmeta = resDateOnly.data as any[] | null;
+  for (const fields of fieldTiers) {
+    const res = await supabase.from("tournaments").select(fields).in("tourney_id", ids);
+    if (!res.error) {
+      tmeta = res.data as any[] | null;
       tErr = null;
-    } else {
-      const fallback = await supabase.from("tournaments").select(baseFields).in("tourney_id", ids);
-      tmeta = fallback.data as any[] | null;
-      tErr = fallback.error;
+      break;
     }
+    tErr = res.error;
   }
 
   if (tErr) {
@@ -159,6 +155,15 @@ export async function GET(req: Request) {
       const dateStr = startDate ? startDate.toISOString().slice(0, 10) : null;
       const endDateStr = endDate ? endDate.toISOString().slice(0, 10) : null;
 
+      const category = typeof m?.category === "string" && m.category.trim() ? m.category.trim() : null;
+      const prizeMoneyLocal =
+        typeof m?.prize_money_local === "number" ? m.prize_money_local : null;
+      const prizeMoneyCurrency =
+        typeof m?.prize_money_currency === "string" && m.prize_money_currency.trim()
+          ? m.prize_money_currency.trim()
+          : null;
+      const prizeMoneyUsd = typeof m?.prize_money_usd === "number" ? m.prize_money_usd : null;
+
       return {
         tourney_id: id,
         name: m?.name ?? null,
@@ -170,6 +175,12 @@ export async function GET(req: Request) {
         month,
         is_live: isLive,
         is_upcoming: isUpcoming,
+        category,
+        prize_money_local: prizeMoneyLocal,
+        prize_money_currency: prizeMoneyCurrency,
+        prize_money_usd: prizeMoneyUsd,
+        category_rank: null as number | null,
+        category_total: null as number | null,
       };
     })
     // Orden por fecha desc y luego id desc
@@ -179,6 +190,27 @@ export async function GET(req: Request) {
       if (db !== da) return db - da;
       return a.tourney_id < b.tourney_id ? 1 : a.tourney_id > b.tourney_id ? -1 : 0;
     });
+
+  // Rank dentro de la categoria (misma temporada): entre los torneos que
+  // tengan category + prize_money_usd, ordenar desc por prize_money_usd y
+  // asignar la posicion. Se hace en memoria (no en BD) porque el dataset ya
+  // esta cargado completo en cada request y es pequeño (~decenas de filas).
+  {
+    const groups = new Map<string, typeof enriched>();
+    for (const t of enriched) {
+      if (!t.category || t.prize_money_usd == null || t.year == null) continue;
+      const key = `${t.year}|${t.category}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(t);
+    }
+    for (const group of groups.values()) {
+      group.sort((a, b) => (b.prize_money_usd ?? 0) - (a.prize_money_usd ?? 0));
+      group.forEach((t, i) => {
+        t.category_rank = i + 1;
+        t.category_total = group.length;
+      });
+    }
+  }
 
   const needle = (q || "").trim().toLowerCase();
   const filtered = needle
