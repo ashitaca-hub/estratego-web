@@ -49,9 +49,14 @@ export async function GET(req: Request) {
     const pageSize = 1000;
     let start = 0;
     while (true) {
+      // order() es imprescindible: sin el, Postgres no garantiza un orden
+      // estable entre paginas y .range() puede saltarse filas enteras (se
+      // detecto asi, de forma intermitente, con torneos que desaparecian
+      // del listado sin motivo aparente).
       const { data: page, error: dmErr } = await supabase
         .from("draw_matches")
         .select("tourney_id")
+        .order("tourney_id", { ascending: true })
         .range(start, start + pageSize - 1);
 
       if (dmErr) {
